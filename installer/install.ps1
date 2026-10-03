@@ -68,8 +68,9 @@ function Download($url, $file) {
     Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing
 }
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-if (-not $Local -and (Test-Path (Join-Path $ScriptDir "files\BepInEx"))) {
+# Empty when run straight from the web (irm ... | iex).
+$ScriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { "" }
+if (-not $Local -and $ScriptDir -and (Test-Path (Join-Path $ScriptDir "files\BepInEx"))) {
     $Local = $ScriptDir
 }
 
@@ -105,18 +106,10 @@ if ($Uninstall) {
 $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("CastleStoryPlus-" + [Guid]::NewGuid())
 New-Item -ItemType Directory -Path $Tmp | Out-Null
 try {
-    # 1. BepInEx
-    if (-not (Test-Path (Join-Path $GameDir "BepInEx\core\BepInEx.Preloader.dll"))) {
-        $arch = Get-GameArch $Exe
-        Log "installing BepInEx $BepInExVersion ($arch)..."
-        $zip = Join-Path $Tmp "bepinex.zip"
-        Download "https://github.com/BepInEx/BepInEx/releases/download/v$BepInExVersion/BepInEx_win_${arch}_$BepInExVersion.zip" $zip
-        Expand-Archive -Path $zip -DestinationPath $GameDir -Force
-    }
-
-    # 2. Castle Story Plus
+    # 1. Castle Story Plus release (the Windows package bundles BepInEx x64 in bepinex\)
     $versionFile = Join-Path $GameDir "$PluginDir\version.txt"
     $installed = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { "" }
+    $hasBepInEx = Test-Path (Join-Path $GameDir "BepInEx\core\BepInEx.Preloader.dll")
     $source = $null
     if ($Local) {
         $source = $Local
@@ -127,9 +120,13 @@ try {
         $api = if ($Tag) { "https://api.github.com/repos/$Repo/releases/tags/$Tag" } else { "https://api.github.com/repos/$Repo/releases/latest" }
         $release = Invoke-RestMethod -Uri $api -Headers @{ Accept = "application/vnd.github+json" }
         $version = $release.tag_name
-        $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*.zip" } | Select-Object -First 1
-        if (-not $version -or -not $asset) { Fail "release $api has no CastleStoryPlus zip" }
-        if (-not $Force -and $installed -eq $version) {
+        # Windows package; releases before 0.2.1 had one zip for both systems.
+        $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*-windows.zip" } | Select-Object -First 1
+        if (-not $asset) {
+            $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*.zip" -and $_.name -notlike "*-linux.zip" } | Select-Object -First 1
+        }
+        if (-not $version -or -not $asset) { Fail "release $api has no Castle Story Plus package for Windows" }
+        if (-not $Force -and $installed -eq $version -and $hasBepInEx) {
             Log "Castle Story Plus $version is already installed."
         }
         else {
@@ -140,6 +137,21 @@ try {
             $files = Get-ChildItem -Path (Join-Path $Tmp "mod") -Directory -Recurse -Filter "files" | Select-Object -First 1
             if (-not $files) { Fail "unexpected release layout" }
             $source = $files.Parent.FullName
+        }
+    }
+
+    # 2. BepInEx, from the package when it fits the game (x64), else from the BepInEx releases.
+    if (-not $hasBepInEx) {
+        $arch = Get-GameArch $Exe
+        Log "installing BepInEx $BepInExVersion ($arch)..."
+        $bundled = if ($source) { Join-Path $source "bepinex" } else { "" }
+        if ($arch -eq "x64" -and $bundled -and (Test-Path (Join-Path $bundled "BepInEx"))) {
+            Copy-Item -Recurse -Force (Join-Path $bundled "*") $GameDir
+        }
+        else {
+            $zip = Join-Path $Tmp "bepinex.zip"
+            Download "https://github.com/BepInEx/BepInEx/releases/download/v$BepInExVersion/BepInEx_win_${arch}_$BepInExVersion.zip" $zip
+            Expand-Archive -Path $zip -DestinationPath $GameDir -Force
         }
     }
 

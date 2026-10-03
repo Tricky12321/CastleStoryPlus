@@ -36,18 +36,21 @@ See [CHANGELOG.md](CHANGELOG.md) for details.
 
 ## Installation
 
-Download `CastleStoryPlus-<version>.zip` from the [latest release](https://github.com/Tricky12321/CastleStoryPlus/releases/latest), unpack it and run the installer:
+The installer finds Castle Story in your Steam libraries, installs BepInEx 5.4.23.5 if it is missing, installs the latest Castle Story Plus and points BepInEx at the bootstrap. Run it again at any time to update.
 
-- **Linux:** `./install.sh`
-- **Windows:** double-click `install.bat`
-
-The installer finds Castle Story in your Steam libraries and installs BepInEx 5.4.23.5 if it is missing. It then installs Castle Story Plus and points BepInEx at the bootstrap. Run it again at any time to update to the latest release.
-
-**Linux, one time only:** set Castle Story's Steam launch option (right-click the game > Properties > Launch Options) to:
+**Windows:** download [`install.bat`](https://github.com/Tricky12321/CastleStoryPlus/releases/latest/download/install.bat) and double-click it. Or paste this into PowerShell:
+```powershell
+& ([scriptblock]::Create((New-Object Net.WebClient).DownloadString('https://github.com/Tricky12321/CastleStoryPlus/releases/latest/download/install.ps1')))
 ```
-./run_bepinex.sh %command%
+BepInEx loads by itself on Windows (`winhttp.dll`).
+
+**Linux:** run this in a terminal:
+```bash
+curl -fsSL https://github.com/Tricky12321/CastleStoryPlus/releases/latest/download/install.sh | bash
 ```
-On Windows BepInEx loads by itself (`winhttp.dll`).
+The game also needs the Steam launch option `./run_bepinex.sh %command%`. If Steam is closed while the installer runs, it sets the option itself, in every Steam user's `localconfig.vdf`, and keeps a `.castlestoryplus.bak` backup. Otherwise set it once yourself: right-click Castle Story > Properties > Launch Options.
+
+**Offline:** download the package for your system from the [latest release](https://github.com/Tricky12321/CastleStoryPlus/releases/latest): `CastleStoryPlus-<version>-windows.zip` or `CastleStoryPlus-<version>-linux.zip`. Both include BepInEx. Unpack it and run `install.bat` (Windows) or `bash install.sh` (Linux) from that folder.
 
 Installer options (`install.sh` / `install.bat`):
 
@@ -60,7 +63,9 @@ Installer options (`install.sh` / `install.bat`):
 
 ### Updates
 
-At startup the plugin asks GitHub for the latest release. When a newer one exists, the main menu shows a notice with **Update and restart**. That runs the installer shipped with the plugin (`BepInEx/plugins/CastleStoryPlus/installer/`): it waits for the game to close, installs the release and starts the game again through Steam. The installer's output goes to `BepInEx/CastleStoryPlus.Update.log`. Turn the check off with `[Features] UpdateCheck = false`.
+Every release is a version tag (`v0.2.1`). At startup the plugin asks GitHub for the releases. It picks the newest published release (not a draft or pre-release) that has a package for your system. If that release is newer than the installed plugin, the main menu shows a notice with **Update and restart**.
+
+Update and restart first downloads that release's own installer, falling back to the one shipped in `BepInEx/plugins/CastleStoryPlus/installer/`. The installer waits for the game to close, installs exactly that tag and starts the game again through Steam. The installer's output goes to `BepInEx/CastleStoryPlus.Update.log`. Turn the check off with `[Features] UpdateCheck = false`.
 
 ### Manual installation
 
@@ -111,7 +116,11 @@ dotnet build -c Release -p:GameDir="/path/to/Castle Story/"
 ### Releasing
 
 1. Bump `Version` in `CastleStoryPlus/Plugin.cs`, update `CHANGELOG.md` and commit.
-2. Run `tools/release.sh`. It builds and packs `dist/CastleStoryPlus-v<version>.zip` (`tools/package.sh`), tags `v<version>` and creates the GitHub release with the [GitHub CLI](https://cli.github.com/).
+2. Run `tools/release.sh`. It builds the plugin once and packs one package per system with `tools/package.sh`:
+   - `dist/CastleStoryPlus-v<version>-linux.zip`: `install.sh` and BepInEx linux_x64;
+   - `dist/CastleStoryPlus-v<version>-windows.zip`: `install.bat`, `install.ps1` and BepInEx win_x64.
+
+   It then tags `v<version>` and creates the GitHub release with the [GitHub CLI](https://cli.github.com/). The release gets both packages, the stand-alone installers and the install instructions from `tools/release-notes.md`.
 
 Releases are built locally, because the build needs the game's own assemblies, which cannot go into the repository or CI.
 
@@ -129,7 +138,7 @@ CastleStoryPlus/
   Lua/                 Lua UI files added by the mod (the mod's own code only)
   Assets/              artwork (logo.png, plus.png), rendered by tools/make_logo.py
 installer/             install.sh (Linux), install.ps1 + install.bat (Windows): install and update from GitHub releases
-tools/                 package.sh (release zip), release.sh (tag + GitHub release), make_logo.py
+tools/                 package.sh (Linux + Windows packages), release.sh (tag + GitHub release), release-notes.md, make_logo.py
 CHANGELOG.md           all changes, in English
 Directory.Build.props  shared build settings (target framework, game path)
 ```

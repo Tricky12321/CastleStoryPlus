@@ -3,18 +3,20 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Text.RegularExpressions;
 using CastleStoryPlus.Core;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace CastleStoryPlus.Updates;
 
-// Asks GitHub for the latest Castle Story Plus release at startup. When it is newer than this plugin,
-// the main menu shows a notice with "Update and restart": that runs the installer shipped in
-// plugins/CastleStoryPlus/installer/, which waits for the game to close, installs the release and
-// starts the game again through Steam. Uses Unity's WWW, because the game's Mono 2.6 cannot do TLS 1.2.
+// Asks GitHub for Castle Story Plus releases at startup. Every release is a version tag (v0.2.1) made by
+// tools/release.sh. The newest published (not draft, not pre-release) tag that is newer than this plugin and
+// has a package for this system is offered in the main menu with "Update and restart": that downloads the
+// release's own installer (falling back to the one shipped in plugins/CastleStoryPlus/installer/), which waits
+// for the game to close, installs that tag and starts the game again through Steam.
+// Uses Unity's WWW, because the game's Mono 2.6 cannot do TLS 1.2.
 [Feature(Features.UpdateCheck, Features.UpdateCheckInfo)]
 internal class UpdateCheck : MonoBehaviour
 {
@@ -22,13 +24,19 @@ internal class UpdateCheck : MonoBehaviour
 
 	private const string MenuScene = "SceneMenu";
 
-	private static readonly Regex TagPattern = new Regex("\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
-
 	private string _latest;
+
+	private string _installerUrl;
 
 	private GameObject _notice;
 
 	private bool _dismissed;
+
+	private bool _updating;
+
+	private static bool IsWindows => Application.platform == RuntimePlatform.WindowsPlayer;
+
+	private static string InstallerName => IsWindows ? "install.ps1" : "install.sh";
 
 	private static void Enable()
 	{
@@ -38,40 +46,95 @@ internal class UpdateCheck : MonoBehaviour
 	private IEnumerator Start()
 	{
 		SceneManager.sceneLoaded += (Scene scene, LoadSceneMode mode) => ShowIfMenu();
-		Dictionary<string, string> headers = new Dictionary<string, string> { { "Accept", "application/vnd.github+json" } };
-		WWW www = new WWW("https://api.github.com/repos/" + Repo + "/releases/latest", null, headers);
+		WWW www = new WWW("https://api.github.com/repos/" + Repo + "/releases?per_page=30", null, GitHubHeaders());
 		yield return www;
 		if (!string.IsNullOrEmpty(www.error))
 		{
 			Plugin.Log.LogInfo("Update check failed: " + www.error);
 			yield break;
 		}
-		Match match = TagPattern.Match(www.text);
-		if (!match.Success)
+		string best = null;
+		string installer = null;
+		try
 		{
+			foreach (JToken release in JArray.Parse(www.text))
+			{
+				string tag = (string)release["tag_name"];
+				if (tag == null || (bool?)release["draft"] == true || (bool?)release["prerelease"] == true || ParseVersion(tag) == null)
+				{
+					continue;
+				}
+				bool hasPackage = false;
+				string installerUrl = null;
+				foreach (JToken asset in release["assets"] ?? new JArray())
+				{
+					string name = (string)asset["name"] ?? "";
+					if (IsPackageForThisSystem(name))
+					{
+						hasPackage = true;
+					}
+					else if (name == InstallerName)
+					{
+						installerUrl = (string)asset["browser_download_url"];
+					}
+				}
+				if (hasPackage && (best == null || ParseVersion(tag) > ParseVersion(best)))
+				{
+					best = tag;
+					installer = installerUrl;
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogInfo("Update check failed: " + ex.Message);
 			yield break;
 		}
-		string tag = match.Groups[1].Value;
-		if (!IsNewer(tag, Plugin.Version))
+		if (best == null || !IsNewer(best, Plugin.Version))
 		{
-			Plugin.Log.LogInfo("Castle Story Plus is up to date (latest release " + tag + ")");
+			Plugin.Log.LogInfo("Castle Story Plus is up to date (installed v" + Plugin.Version + ", newest release " + (best ?? "none") + ")");
 			yield break;
 		}
-		Plugin.Log.LogInfo("Castle Story Plus " + tag + " is available (installed " + Plugin.Version + ")");
-		_latest = tag;
+		Plugin.Log.LogInfo("Castle Story Plus " + best + " is available (installed v" + Plugin.Version + ")");
+		_latest = best;
+		_installerUrl = installer;
 		ShowIfMenu();
+	}
+
+	private static Dictionary<string, string> GitHubHeaders()
+	{
+		return new Dictionary<string, string> { { "Accept", "application/vnd.github+json" } };
+	}
+
+	// CastleStoryPlus-v0.2.1-windows.zip / -linux.zip; v0.2.0 had one zip for both systems.
+	private static bool IsPackageForThisSystem(string name)
+	{
+		if (!name.StartsWith("CastleStoryPlus-") || !name.EndsWith(".zip"))
+		{
+			return false;
+		}
+		string mine = IsWindows ? "-windows.zip" : "-linux.zip";
+		string other = IsWindows ? "-linux.zip" : "-windows.zip";
+		return name.EndsWith(mine) || !name.EndsWith(other);
+	}
+
+	private static Version ParseVersion(string tag)
+	{
+		try
+		{
+			return new Version(tag.TrimStart('v', 'V'));
+		}
+		catch (Exception)
+		{
+			return null;
+		}
 	}
 
 	internal static bool IsNewer(string tag, string current)
 	{
-		try
-		{
-			return new Version(tag.TrimStart('v', 'V')) > new Version(current.TrimStart('v', 'V'));
-		}
-		catch (Exception)
-		{
-			return false;
-		}
+		Version latest = ParseVersion(tag);
+		Version installed = ParseVersion(current);
+		return latest != null && installed != null && latest > installed;
 	}
 
 	private void ShowIfMenu()
@@ -111,7 +174,15 @@ internal class UpdateCheck : MonoBehaviour
 		Text body = NewText(panel, font, "You have v" + Plugin.Version + ". The update closes the game, installs and starts it again.", 15, FontStyle.Normal, new Color(0.85f, 0.85f, 0.85f));
 		Place(body.rectTransform, 16f, -44f, 408f, 40f);
 
-		NewButton(panel, font, "Update and restart", new Color(0.85f, 0.6f, 0.05f), 16f, 200f, RunUpdate);
+		NewButton(panel, font, "Update and restart", new Color(0.85f, 0.6f, 0.05f), 16f, 200f, () =>
+		{
+			if (!_updating)
+			{
+				_updating = true;
+				body.text = "Downloading the installer...";
+				StartCoroutine(RunUpdate());
+			}
+		});
 		NewButton(panel, font, "Later", new Color(0.3f, 0.3f, 0.33f), 228f, 120f, () =>
 		{
 			_dismissed = true;
@@ -120,19 +191,43 @@ internal class UpdateCheck : MonoBehaviour
 		return root;
 	}
 
-	private void RunUpdate()
+	private IEnumerator RunUpdate()
 	{
-		string installer = Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "installer"), Application.platform == RuntimePlatform.WindowsPlayer ? "install.ps1" : "install.sh");
+		// Prefer the installer of the release being installed, so installer fixes apply to this update already.
+		string installer = Path.Combine(Path.Combine(Path.GetDirectoryName(typeof(Plugin).Assembly.Location), "installer"), InstallerName);
+		if (_installerUrl != null)
+		{
+			WWW www = new WWW(_installerUrl);
+			yield return www;
+			if (string.IsNullOrEmpty(www.error) && www.bytes != null && www.bytes.Length > 0)
+			{
+				string downloaded = Path.Combine(BepInEx.Paths.BepInExRootPath, "CastleStoryPlus.Updater" + Path.GetExtension(InstallerName));
+				try
+				{
+					File.WriteAllBytes(downloaded, www.bytes);
+					installer = downloaded;
+				}
+				catch (Exception ex)
+				{
+					Plugin.Log.LogWarning("Could not save the downloaded installer: " + ex.Message);
+				}
+			}
+			else
+			{
+				Plugin.Log.LogWarning("Could not download the " + _latest + " installer (" + www.error + "); using the shipped one");
+			}
+		}
 		if (!File.Exists(installer))
 		{
-			Application.OpenURL("https://github.com/" + Repo + "/releases/latest");
-			return;
+			Application.OpenURL("https://github.com/" + Repo + "/releases/tag/" + _latest);
+			_updating = false;
+			yield break;
 		}
 		string gameDir = BepInEx.Paths.GameRootPath;
 		int pid = Process.GetCurrentProcess().Id;
 		string log = Path.Combine(BepInEx.Paths.BepInExRootPath, "CastleStoryPlus.Update.log");
 		ProcessStartInfo start;
-		if (Application.platform == RuntimePlatform.WindowsPlayer)
+		if (IsWindows)
 		{
 			start = new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + installer + "\" -Tag " + _latest + " -GameDir \"" + gameDir + "\" -WaitPid " + pid + " -Restart");
 			start.UseShellExecute = true;
@@ -151,10 +246,11 @@ internal class UpdateCheck : MonoBehaviour
 		catch (Exception ex)
 		{
 			Plugin.Log.LogError("Could not start the updater: " + ex);
-			Application.OpenURL("https://github.com/" + Repo + "/releases/latest");
-			return;
+			Application.OpenURL("https://github.com/" + Repo + "/releases/tag/" + _latest);
+			_updating = false;
+			yield break;
 		}
-		Plugin.Log.LogInfo("Updating to " + _latest + "; closing the game");
+		Plugin.Log.LogInfo("Updating to " + _latest + " with " + installer + "; closing the game");
 		Application.Quit();
 	}
 

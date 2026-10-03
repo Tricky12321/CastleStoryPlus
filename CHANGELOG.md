@@ -3,6 +3,15 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## 0.2.1 — 2026-10-03
+
+- [ADD] **Release packages:** separate packages per system, `CastleStoryPlus-<version>-linux.zip` (`install.sh`, BepInEx linux_x64) and `CastleStoryPlus-<version>-windows.zip` (`install.bat` + `install.ps1`, BepInEx win_x64). BepInEx is bundled, so a fresh install needs no second download; the Windows installer still downloads BepInEx x86 for a 32-bit game.
+- [CHANGE] **Installer:** picks the package for its own system from a release, falling back to the single zip of 0.2.0. It installs the release first and then BepInEx from the package, and it reinstalls when BepInEx is missing even if the plugin is up to date.
+- [ADD] **Installer:** one-line install from the latest release: `curl -fsSL .../releases/latest/download/install.sh | bash` on Linux, and on Windows a stand-alone `install.bat` (it fetches `install.ps1` from GitHub when it is not next to it) or a PowerShell one-liner. Every release carries `install.sh`, `install.ps1` and `install.bat` as separate files, plus install instructions (`tools/release-notes.md`).
+- [ADD] **Installer:** on Linux, the installer sets the Steam launch option `./run_bepinex.sh %command%` itself when Steam is closed. It edits only `Software/Valve/Steam/apps/227860/LaunchOptions` in every Steam user's `localconfig.vdf`, keeps existing options around `%command%`, and writes a `.castlestoryplus.bak` backup first.
+- [CHANGE] **UpdateCheck:** reads the release list and offers the newest published version tag (not a draft or pre-release) that has a package for this system, instead of only GitHub's "latest" release.
+- [CHANGE] **UpdateCheck:** "Update and restart" downloads that release's own `install.sh`/`install.ps1` first, so installer fixes already apply to the update, and falls back to the installer shipped with the plugin. The button cannot start two updates.
+
 ## 0.2.0 — 2026-10-03 — CastleStoryPlus plugin (BepInEx 5 + HarmonyX)
 
 The mods are moved out of the edited game DLLs into a BepInEx plugin, so the original game files stay untouched. Each feature has an on/off switch in `[Features]` of `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Installation: see README.md.
