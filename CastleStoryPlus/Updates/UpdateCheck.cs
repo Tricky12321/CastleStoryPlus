@@ -14,7 +14,7 @@ namespace CastleStoryPlus.Updates;
 // Asks GitHub for Castle Story Plus releases at startup. Every release is a version tag (v0.2.1) made by
 // tools/release.sh. The newest published (not draft, not pre-release) tag that is newer than this plugin and
 // has a package for this system is offered in the main menu with "Update and restart": that downloads the
-// release's own installer (falling back to the one shipped in plugins/CastleStoryPlus/installer/), which waits
+// installer from that tag's source (falling back to the one shipped in plugins/CastleStoryPlus/installer/), which waits
 // for the game to close, installs that tag and starts the game again through Steam.
 // Uses Unity's WWW, because the game's Mono 2.6 cannot do TLS 1.2.
 [Feature(Features.UpdateCheck, Features.UpdateCheckInfo)]
@@ -54,7 +54,6 @@ internal class UpdateCheck : MonoBehaviour
 			yield break;
 		}
 		string best = null;
-		string installer = null;
 		try
 		{
 			foreach (JToken release in JArray.Parse(www.text))
@@ -65,23 +64,16 @@ internal class UpdateCheck : MonoBehaviour
 					continue;
 				}
 				bool hasPackage = false;
-				string installerUrl = null;
 				foreach (JToken asset in release["assets"] ?? new JArray())
 				{
-					string name = (string)asset["name"] ?? "";
-					if (IsPackageForThisSystem(name))
+					if (IsPackageForThisSystem((string)asset["name"] ?? ""))
 					{
 						hasPackage = true;
-					}
-					else if (name == InstallerName)
-					{
-						installerUrl = (string)asset["browser_download_url"];
 					}
 				}
 				if (hasPackage && (best == null || ParseVersion(tag) > ParseVersion(best)))
 				{
 					best = tag;
-					installer = installerUrl;
 				}
 			}
 		}
@@ -97,7 +89,8 @@ internal class UpdateCheck : MonoBehaviour
 		}
 		Plugin.Log.LogInfo("Castle Story Plus " + best + " is available (installed v" + Plugin.Version + ")");
 		_latest = best;
-		_installerUrl = installer;
+		// The installer as it is in that tag's source, so installer fixes already apply to this update.
+		_installerUrl = "https://raw.githubusercontent.com/" + Repo + "/" + best + "/installer/" + InstallerName;
 		ShowIfMenu();
 	}
 

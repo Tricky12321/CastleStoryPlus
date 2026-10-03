@@ -3,6 +3,12 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [CHANGE] **Release packages:** a release now has exactly two downloads, one complete package per system (`-linux.zip`, `-windows.zip`), with no separate installer files.
+- [CHANGE] **Installer:** the one-line installs and the stand-alone `install.bat` fetch the installer from the repository (`raw.githubusercontent.com/.../main/installer/`) instead of from release files.
+- [CHANGE] **UpdateCheck:** "Update and restart" downloads the installer from the offered tag's source (`raw.githubusercontent.com/.../<tag>/installer/`) instead of from a release file.
+
 ## 0.2.1 — 2026-10-03
 
 - [ADD] **Release packages:** separate packages per system, `CastleStoryPlus-<version>-linux.zip` (`install.sh`, BepInEx linux_x64) and `CastleStoryPlus-<version>-windows.zip` (`install.bat` + `install.ps1`, BepInEx win_x64). BepInEx is bundled, so a fresh install needs no second download; the Windows installer still downloads BepInEx x86 for a 32-bit game.

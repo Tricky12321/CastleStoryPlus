@@ -5,7 +5,7 @@
 # Castle Story folder. Run it again to update. The game uses it too ("Update" in the main menu).
 #
 #   ./install.sh                  install or update to the latest release
-#   curl -fsSL https://github.com/Tricky12321/CastleStoryPlus/releases/latest/download/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Tricky12321/CastleStoryPlus/main/installer/install.sh | bash
 #   ./install.sh --tag v0.3.0     install a specific release
 #   ./install.sh --local DIR      install from an unpacked release folder (contains files/)
 #   ./install.sh --uninstall      remove Castle Story Plus (BepInEx and its config stay)
