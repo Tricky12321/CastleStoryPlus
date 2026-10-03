@@ -120,11 +120,7 @@ try {
         $api = if ($Tag) { "https://api.github.com/repos/$Repo/releases/tags/$Tag" } else { "https://api.github.com/repos/$Repo/releases/latest" }
         $release = Invoke-RestMethod -Uri $api -Headers @{ Accept = "application/vnd.github+json" }
         $version = $release.tag_name
-        # Windows package; releases before 0.2.1 had one zip for both systems.
         $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*-windows.zip" } | Select-Object -First 1
-        if (-not $asset) {
-            $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*.zip" -and $_.name -notlike "*-linux.zip" } | Select-Object -First 1
-        }
         if (-not $version -or -not $asset) { Fail "release $api has no Castle Story Plus package for Windows" }
         if (-not $Force -and $installed -eq $version -and $hasBepInEx) {
             Log "Castle Story Plus $version is already installed."

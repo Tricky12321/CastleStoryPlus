@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace CastleStoryPlus.Updates;
 
-// Asks GitHub for Castle Story Plus releases at startup. Every release is a version tag (v0.2.1) made by
+// Asks GitHub for Castle Story Plus releases at startup. Every release is a version tag (v0.1.0) made by
 // tools/release.sh. The newest published (not draft, not pre-release) tag that is newer than this plugin and
 // has a package for this system is offered in the main menu with "Update and restart": that downloads the
 // installer from that tag's source (falling back to the one shipped in plugins/CastleStoryPlus/installer/), which waits
@@ -99,16 +99,10 @@ internal class UpdateCheck : MonoBehaviour
 		return new Dictionary<string, string> { { "Accept", "application/vnd.github+json" } };
 	}
 
-	// CastleStoryPlus-v0.2.1-windows.zip / -linux.zip; v0.2.0 had one zip for both systems.
+	// CastleStoryPlus-v0.1.0-windows.zip / -linux.zip
 	private static bool IsPackageForThisSystem(string name)
 	{
-		if (!name.StartsWith("CastleStoryPlus-") || !name.EndsWith(".zip"))
-		{
-			return false;
-		}
-		string mine = IsWindows ? "-windows.zip" : "-linux.zip";
-		string other = IsWindows ? "-linux.zip" : "-windows.zip";
-		return name.EndsWith(mine) || !name.EndsWith(other);
+		return name.StartsWith("CastleStoryPlus-") && name.EndsWith(IsWindows ? "-windows.zip" : "-linux.zip");
 	}
 
 	private static Version ParseVersion(string tag)

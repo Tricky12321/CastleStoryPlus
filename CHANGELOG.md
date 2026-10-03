@@ -3,22 +3,7 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
-## Unreleased
-
-- [CHANGE] **Release packages:** a release now has exactly two downloads, one complete package per system (`-linux.zip`, `-windows.zip`), with no separate installer files.
-- [CHANGE] **Installer:** the one-line installs and the stand-alone `install.bat` fetch the installer from the repository (`raw.githubusercontent.com/.../main/installer/`) instead of from release files.
-- [CHANGE] **UpdateCheck:** "Update and restart" downloads the installer from the offered tag's source (`raw.githubusercontent.com/.../<tag>/installer/`) instead of from a release file.
-
-## 0.2.1 — 2026-10-03
-
-- [ADD] **Release packages:** separate packages per system, `CastleStoryPlus-<version>-linux.zip` (`install.sh`, BepInEx linux_x64) and `CastleStoryPlus-<version>-windows.zip` (`install.bat` + `install.ps1`, BepInEx win_x64). BepInEx is bundled, so a fresh install needs no second download; the Windows installer still downloads BepInEx x86 for a 32-bit game.
-- [CHANGE] **Installer:** picks the package for its own system from a release, falling back to the single zip of 0.2.0. It installs the release first and then BepInEx from the package, and it reinstalls when BepInEx is missing even if the plugin is up to date.
-- [ADD] **Installer:** one-line install from the latest release: `curl -fsSL .../releases/latest/download/install.sh | bash` on Linux, and on Windows a stand-alone `install.bat` (it fetches `install.ps1` from GitHub when it is not next to it) or a PowerShell one-liner. Every release carries `install.sh`, `install.ps1` and `install.bat` as separate files, plus install instructions (`tools/release-notes.md`).
-- [ADD] **Installer:** on Linux, the installer sets the Steam launch option `./run_bepinex.sh %command%` itself when Steam is closed. It edits only `Software/Valve/Steam/apps/227860/LaunchOptions` in every Steam user's `localconfig.vdf`, keeps existing options around `%command%`, and writes a `.castlestoryplus.bak` backup first.
-- [CHANGE] **UpdateCheck:** reads the release list and offers the newest published version tag (not a draft or pre-release) that has a package for this system, instead of only GitHub's "latest" release.
-- [CHANGE] **UpdateCheck:** "Update and restart" downloads that release's own `install.sh`/`install.ps1` first, so installer fixes already apply to the update, and falls back to the installer shipped with the plugin. The button cannot start two updates.
-
-## 0.2.0 — 2026-10-03 — CastleStoryPlus plugin (BepInEx 5 + HarmonyX)
+## 0.1.0 — 2026-10-03 — CastleStoryPlus plugin (BepInEx 5 + HarmonyX)
 
 The mods are moved out of the edited game DLLs into a BepInEx plugin, so the original game files stay untouched. Each feature has an on/off switch in `[Features]` of `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Installation: see README.md.
 
@@ -27,9 +12,11 @@ The mods are moved out of the edited game DLLs into a BepInEx plugin, so the ori
 - [ADD] **MoveStructure:** hold **M** (`[Building] MoveStructureKey`) and left-click one of your buildings (workshops, stockpiles, tool racks, nests; not wall blocks). Its blueprint follows the cursor like a normal blueprint; click to place, Esc cancels. The target cannot overlap the old building.
 - [ADD] **MoveStructure:** the new blueprint and an anti-blueprint on the old building go into the selected build project. Workers demolish the old building, which drops its contents and the materials it cost, and build the new one, so a move costs work but no materials. Known limit: after a save and reload before the demolition, the materials are not dropped.
 - [ADD] **MoveStructure:** new network command `CmdMoveStructure` (hand-registered, hash 1129595220).
-- [ADD] **Installer:** `installer/install.sh` (Linux) and `installer/install.ps1` + `install.bat` (Windows) find Castle Story in the Steam libraries, install BepInEx 5.4.23.5 if missing, install the latest GitHub release (or `--tag`/`-Tag`) and point BepInEx at the bootstrap. Running them again updates; `--uninstall`/`-Uninstall` removes the mod. The installed version is written to `plugins/CastleStoryPlus/version.txt`.
-- [ADD] **UpdateCheck:** at startup the plugin asks the GitHub API for the latest release (through Unity's `WWW`, since Mono 2.6 cannot do TLS 1.2). If it is newer, the main menu shows a notice with **Update and restart**, which runs the shipped installer: it waits for the game to close, installs the release and starts the game again through Steam (log in `BepInEx/CastleStoryPlus.Update.log`).
-- [ADD] `tools/package.sh` packs `dist/CastleStoryPlus-v<version>.zip` (installers plus `files/BepInEx/...`); `tools/release.sh` tags the version and creates the GitHub release.
+- [ADD] **Release packages:** each release has exactly two downloads, one complete package per system: `CastleStoryPlus-<version>-linux.zip` (`install.sh`, BepInEx linux_x64, plugin) and `CastleStoryPlus-<version>-windows.zip` (`install.bat` + `install.ps1`, BepInEx win_x64, plugin). `tools/package.sh` builds once and packs both; `tools/release.sh` tags the version and creates the GitHub release with the install instructions from `tools/release-notes.md`.
+- [ADD] **Installer:** `install.sh` (Linux) and `install.bat` / `install.ps1` (Windows) find Castle Story in the Steam libraries, install the package for their system (latest release, or `--tag`/`-Tag`), install BepInEx from it when the game has none (the Windows installer downloads BepInEx x86 for a 32-bit game) and point BepInEx at the bootstrap. Running them again updates; `--uninstall`/`-Uninstall` removes the mod. The installed version is written to `plugins/CastleStoryPlus/version.txt`.
+- [ADD] **Installer:** can also run straight from the repository: `curl -fsSL https://raw.githubusercontent.com/Tricky12321/CastleStoryPlus/main/installer/install.sh | bash`, a PowerShell one-liner, or `install.bat` on its own (it fetches `install.ps1` when it is not next to it).
+- [ADD] **Installer:** on Linux, the installer sets the Steam launch option `./run_bepinex.sh %command%` itself when Steam is closed. It edits only `Software/Valve/Steam/apps/227860/LaunchOptions` in every Steam user's `localconfig.vdf`, keeps existing options around `%command%`, and writes a `.castlestoryplus.bak` backup first.
+- [ADD] **UpdateCheck:** at startup the plugin reads the GitHub release list (through Unity's `WWW`, since Mono 2.6 cannot do TLS 1.2) and offers the newest published version tag (not a draft or pre-release) that has a package for this system. If it is newer, the main menu shows a notice with **Update and restart**: it downloads the installer from that tag's source (falling back to the one shipped with the plugin), which waits for the game to close, installs that tag and starts the game again through Steam (log in `BepInEx/CastleStoryPlus.Update.log`).
 - [ADD] **PlusLogo:** a yellow "PLUS" badge next to every copy of the game logo in the main menu, in the style of the game logo (Luckiest Guy font, Apache 2.0, rendered by `tools/make_logo.py`).
 - [ADD] **PlusLogo:** the full Castle Story Plus logo under the Unity logo on the splash screen, fading with it (`Assets/logo.png`, since the game logo is not loaded yet then).
 - [ADD] **PlusLogo:** the game logo with the badge on the loading screen's top curtain, above "Loading", sliding with the curtain. The game logo is not redistributed: its texture is reused at runtime. The artwork uses mipmaps and trilinear filtering, so it stays smooth when scaled down.
@@ -41,7 +28,7 @@ The mods are moved out of the edited game DLLs into a BepInEx plugin, so the ori
 - [ADD] **Per-worker data without new fields:** XP and call to arms role live in a side table keyed by `CharacterState`, are saved as extra JSON properties on that component (`workXp`, `combatXp`, `callToArmsRole`, same names as the prototype) and are synced by appending to `CharacterState.OnSerialize`/`OnDeserialize`.
 - [ADD] New project `CastleStoryPlus/`, built against the original assemblies (`Managed.orig`) with the BepInEx assembly publicizer for access to private members. A build copies the plugin into the game.
 - [ADD] New project `CastleStoryPlus.Bootstrap`, the doorstop target, which makes HarmonyX work on Castle Story's Mono 2.6. Without it every patch failed with a `NullReferenceException` in `NativeDetour`: MonoMod's libc platform needs `Environment.SystemPageSize`, which Mono 2.6 lacks, and BepInEx's XTermFix resets `DetourHelper.Native` to `null`. The bootstrap installs an `mprotect`-based native platform, keeps it through a hook on the setter and then starts the BepInEx preloader. Works with doorstop 3 and 4.
-- [CHANGE] The bootstrap only installs its libc detour platform on Linux/macOS, so it can also run on Windows.
+- [ADD] The bootstrap only installs its libc detour platform on Linux/macOS, so it also runs on Windows.
 - [CHANGE] Plugin GUID is now `com.tricky12321.castlestoryplus` (config file renamed to match).
 - [CHANGE] The game runs on its original DLLs and Lua files again; all prototype features are ported to the plugin (next entries).
 - [CHANGE] **Economy:** `EnergyMultiplier` (default 1.3).

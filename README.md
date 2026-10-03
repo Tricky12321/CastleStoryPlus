@@ -60,7 +60,7 @@ Installer options (`install.sh` / `install.bat`):
 
 ### Updates
 
-Every release is a version tag (`v0.2.1`). At startup the plugin asks GitHub for the releases. It picks the newest published release (not a draft or pre-release) that has a package for your system. If that release is newer than the installed plugin, the main menu shows a notice with **Update and restart**.
+Every release is a version tag (`v0.1.0`). At startup the plugin asks GitHub for the releases. It picks the newest published release (not a draft or pre-release) that has a package for your system. If that release is newer than the installed plugin, the main menu shows a notice with **Update and restart**.
 
 Update and restart first downloads the installer from that tag's source (`installer/` in the repository), falling back to the one shipped in `BepInEx/plugins/CastleStoryPlus/installer/`. The installer waits for the game to close, installs exactly that tag and starts the game again through Steam. The installer's output goes to `BepInEx/CastleStoryPlus.Update.log`. Turn the check off with `[Features] UpdateCheck = false`.
 

@@ -145,11 +145,7 @@ else
     RELEASE="$(fetch "$API")" || fail "could not read the release from GitHub ($API)"
     VERSION="$(echo "$RELEASE" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
     ASSETS="$(echo "$RELEASE" | grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*CastleStoryPlus-[^"]*\.zip"' | sed 's/.*"\(https[^"]*\)"/\1/')"
-    # Linux package; releases before 0.2.1 had one zip for both systems.
     URL="$(echo "$ASSETS" | grep -- '-linux\.zip$' | head -1 || true)"
-    if [ -z "$URL" ]; then
-        URL="$(echo "$ASSETS" | grep -v -- '-windows\.zip$' | head -1 || true)"
-    fi
     [ -n "$VERSION" ] && [ -n "$URL" ] || fail "release $API has no Castle Story Plus package for Linux"
     if [ "$FORCE" = 0 ] && [ "$INSTALLED" = "$VERSION" ] && [ -f "$GAME_DIR/BepInEx/core/BepInEx.Preloader.dll" ]; then
         log "Castle Story Plus $VERSION is already installed."
