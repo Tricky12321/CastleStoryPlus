@@ -34,6 +34,25 @@ The mod is a  [BepInEx 5](https://github.com/BepInEx/BepInEx) plugin that uses [
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
+## Roadmap
+
+Castle Story Plus will keep growing beyond quality-of-life fixes. Planned next:
+
+- **New maps:** new islands and scenarios to build on and defend.
+- **More enemies:** new enemy types and invasion waves that call for different defences.
+- **New creatures that work for you:** new units that take on tasks such as hauling, gathering or building, next to the bricktrons.
+
+These plans can change. Ideas and wishes are welcome as [issues](https://github.com/Tricky12321/CastleStoryPlus/issues).
+
+## Reporting bugs
+
+This is a fan mod in early development, so bugs will happen. Please report them as [GitHub issues](https://github.com/Tricky12321/CastleStoryPlus/issues) and include:
+- your system (Windows or Linux) and the mod version;
+- what you did and what happened;
+- the log file `BepInEx/LogOutput.log` from the Castle Story folder.
+
+Please do not report problems caused by the mod to Sauropod Studio. Turn the mod off first to check whether a problem also happens in the normal game.
+
 ## Installation
 
 Download the package for your system from the [latest release](https://github.com/Tricky12321/CastleStoryPlus/releases/latest). Each package is complete: installer, BepInEx 5.4.23.5 and Castle Story Plus.

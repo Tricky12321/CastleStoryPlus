@@ -12,3 +12,6 @@ obj/
 # Decompiled game source (Sauropod Studio code): local reference only, never commit.
 GameSource/
 dist/
+
+# Promotion material (Steam posts, banners): local only.
+promo/
