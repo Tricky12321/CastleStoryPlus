@@ -16,7 +16,7 @@ public class Plugin : BaseUnityPlugin
 
 	public const string Name = "Castle Story Plus";
 
-	public const string Version = "0.1.0";
+	public const string Version = "0.2.0";
 
 	internal static ManualLogSource Log;
 
@@ -27,6 +27,11 @@ public class Plugin : BaseUnityPlugin
 
 	internal static ConfigEntry<float> EnergyMultiplier;
 
+	// The [Features] switches, and whether each feature was patched at startup (switches apply after a restart).
+	internal static readonly List<ConfigEntry<bool>> FeatureSwitches = new List<ConfigEntry<bool>>();
+
+	internal static readonly Dictionary<string, bool> LoadedFeatures = new Dictionary<string, bool>();
+
 	private void Awake()
 	{
 		Log = Logger;
@@ -34,7 +39,6 @@ public class Plugin : BaseUnityPlugin
 		Root = gameObject;
 		EnergyMultiplier = Config.Bind("Economy", "EnergyMultiplier", 1.3f, "Energy carried by each brewed firefly, relative to the blue crystal it costs. 1.3 = new workers arrive 30% faster.");
 		Harmony harmony = new Harmony(Guid);
-		Dictionary<string, bool> features = new Dictionary<string, bool>();
 		int patched = 0;
 		foreach (Type type in typeof(Plugin).Assembly.GetTypes())
 		{
@@ -45,10 +49,12 @@ public class Plugin : BaseUnityPlugin
 			}
 			// Infrastructure used by several features has no name and is always on.
 			bool enabled = true;
-			if (feature.Name != null && !features.TryGetValue(feature.Name, out enabled))
+			if (feature.Name != null && !LoadedFeatures.TryGetValue(feature.Name, out enabled))
 			{
-				enabled = Config.Bind("Features", feature.Name, true, feature.Description).Value;
-				features[feature.Name] = enabled;
+				ConfigEntry<bool> entry = Config.Bind("Features", feature.Name, true, feature.Description);
+				FeatureSwitches.Add(entry);
+				enabled = entry.Value;
+				LoadedFeatures[feature.Name] = enabled;
 			}
 			if (!enabled)
 			{

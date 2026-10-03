@@ -13,7 +13,8 @@ internal static class BuildNeeds
 {
 	public static int OtherWorkerCount(Goal goal, Labor labor)
 	{
-		return goal.workers.Count - (goal.workers.Contains(labor) ? 1 : 0);
+		// Workers that chose the goal but have not started on it yet count too (TaskReservation).
+		return goal.workers.Count - (goal.workers.Contains(labor) ? 1 : 0) + TaskReservation.OtherReservations(goal, labor);
 	}
 
 	public static int RemainingNeedFor(BuildGoal goal, GameObject item)

@@ -1,5 +1,6 @@
 using Brix.Game;
 using Brix.Game.AI;
+using CastleStoryPlus.Giant;
 using CastleStoryPlus.Workers;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -121,7 +122,7 @@ internal static class WorkerExperience
 		Animator animator = (locomotion != null) ? locomotion.animator : null;
 		if (animator != null)
 		{
-			animator.speed = working ? Multiplier(WorkLevel(labor)) : 1f;
+			animator.speed = GiantBricktron.SpeedFactor(labor) * (working ? Multiplier(WorkLevel(labor)) : 1f);
 		}
 	}
 

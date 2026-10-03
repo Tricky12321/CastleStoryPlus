@@ -4,11 +4,16 @@ using System.Text;
 using Brix.Engine;
 using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.Bricktron;
+using Brix.Game.Components;
 using Brix.Input;
 using Brix.UI.Icons;
+using CastleStoryPlus.Core;
+using CastleStoryPlus.Experience;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using static CastleStoryPlus.UI.UiKit;
 
 namespace CastleStoryPlus.Army;
 
@@ -32,23 +37,41 @@ internal class CallToArmsPanel : MonoBehaviour
 		public Text Label;
 	}
 
+	private class WorkerRow
+	{
+		public Labor Labor;
+
+		public Text Name;
+
+		public Text Job;
+
+		public Text Role;
+	}
+
 	private const float RefreshSeconds = 0.3f;
 
-	private static readonly Color Background = new Color(0.07f, 0.07f, 0.09f, 0.94f);
+	private const float WorkerRowHeight = 24f;
 
-	private static readonly Color Yellow = new Color(1f, 0.8f, 0.25f, 1f);
+	private const float WorkerListMaxHeight = 264f;
 
-	private static readonly Color Grey = new Color(0.6f, 0.6f, 0.6f, 1f);
-
-	private static readonly Color TextColor = new Color(0.88f, 0.88f, 0.88f, 1f);
+	// The order the < > buttons of the worker list step through.
+	private static readonly int[] RoleOrder = new int[8]
+	{
+		CallToArms.RoleAuto,
+		CallToArms.RoleStayAtWork,
+		(int)Occupation.Job.Knight,
+		(int)Occupation.Job.Halberdier,
+		(int)Occupation.Job.Archer,
+		(int)Occupation.Job.Arbalist,
+		(int)Occupation.Job.Alchemist,
+		(int)Occupation.Job.Artificer
+	};
 
 	private static readonly Color RangedColor = new Color(0.25f, 0.55f, 0.95f, 1f);
 
 	private static readonly Color MeleeColor = new Color(0.9f, 0.3f, 0.22f, 1f);
 
 	private static CallToArmsPanel _instance;
-
-	private Font _font;
 
 	private GameObject _window;
 
@@ -63,6 +86,12 @@ internal class CallToArmsPanel : MonoBehaviour
 	private readonly Dictionary<Occupation.Job, Button> _plusButtons = new Dictionary<Occupation.Job, Button>();
 
 	private readonly List<RoleButton> _roleButtons = new List<RoleButton>();
+
+	private readonly List<WorkerRow> _workerRows = new List<WorkerRow>();
+
+	private Transform _workerList;
+
+	private LayoutElement _workerListSize;
 
 	private Text _rangedStatus;
 
@@ -105,8 +134,6 @@ internal class CallToArmsPanel : MonoBehaviour
 
 	private void Awake()
 	{
-		Text any = FindObjectOfType<Text>();
-		_font = (any != null) ? any.font : Resources.GetBuiltinResource<Font>("Arial.ttf");
 		BuildCanvas();
 		_rangedMarker = CreateMarker("RANGED", RangedColor, IconKeys._UI_Bow);
 		_meleeMarker = CreateMarker("MELEE", MeleeColor, IconKeys._UI_Sword);
@@ -184,6 +211,125 @@ internal class CallToArmsPanel : MonoBehaviour
 				roleButton.Button.interactable = selected.Count > 0;
 			}
 		}
+		RefreshWorkerList();
+	}
+
+	// ---- worker list
+
+	private static List<Labor> AllWorkers()
+	{
+		List<Labor> result = new List<Labor>();
+		if (UIGameObserver.bricktrons == null)
+		{
+			return result;
+		}
+		foreach (Labor labor in UIGameObserver.bricktrons.CheckCreation())
+		{
+			if (labor != null)
+			{
+				result.Add(labor);
+			}
+		}
+		result.Sort((Labor a, Labor b) => string.Compare(WorkerName(a), WorkerName(b), StringComparison.OrdinalIgnoreCase));
+		return result;
+	}
+
+	private static string WorkerName(Labor labor)
+	{
+		Nom nom = labor.GetComponent<Nom>();
+		return (nom != null) ? nom.GetNom() : labor.name;
+	}
+
+	private void RefreshWorkerList()
+	{
+		List<Labor> workers = AllWorkers();
+		bool same = workers.Count == _workerRows.Count;
+		for (int i = 0; same && i < workers.Count; i++)
+		{
+			same = _workerRows[i].Labor == workers[i];
+		}
+		if (!same)
+		{
+			RebuildWorkerRows(workers);
+		}
+		bool showLevels = Plugin.LoadedFeatures.TryGetValue(Features.Experience, out bool experience) && experience;
+		foreach (WorkerRow row in _workerRows)
+		{
+			if (row.Labor.IsNullOrReleased())
+			{
+				continue;
+			}
+			string name = WorkerName(row.Labor);
+			if (showLevels)
+			{
+				name += "  <color=#999999>Lv " + WorkerExperience.WorkLevel(row.Labor) + "/" + WorkerExperience.CombatLevel(row.Labor) + "</color>";
+			}
+			row.Name.text = name;
+			row.Job.text = (row.Labor.Occupation != null) ? row.Labor.Occupation.CurrentOccupation.ToString() : string.Empty;
+			int role = CallToArms.RoleOf(row.Labor);
+			row.Role.text = RoleName(role);
+			row.Role.color = (role == CallToArms.RoleAuto) ? TextColor : Yellow;
+		}
+	}
+
+	private void RebuildWorkerRows(List<Labor> workers)
+	{
+		foreach (WorkerRow row in _workerRows)
+		{
+			Destroy(row.Name.transform.parent.gameObject);
+		}
+		_workerRows.Clear();
+		foreach (Labor labor in workers)
+		{
+			Transform rowTransform = CreateRow(_workerList, WorkerRowHeight);
+			Text name = CreateText(rowTransform, string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
+			name.supportRichText = true;
+			Flexible(name.gameObject);
+			Text job = CreateText(rowTransform, string.Empty, 11, Grey, TextAnchor.MiddleRight);
+			Fixed(job.gameObject, 70f, WorkerRowHeight);
+			Labor target = labor;
+			CreateButton(rowTransform, "<", 22f, () => CycleRole(target, -1));
+			Text role = CreateText(rowTransform, string.Empty, 13, Yellow, TextAnchor.MiddleCenter);
+			Fixed(role.gameObject, 84f, WorkerRowHeight);
+			CreateButton(rowTransform, ">", 22f, () => CycleRole(target, 1));
+			_workerRows.Add(new WorkerRow
+			{
+				Labor = labor,
+				Name = name,
+				Job = job,
+				Role = role
+			});
+		}
+		float height = Mathf.Min(workers.Count * (WorkerRowHeight + 2f) + 6f, WorkerListMaxHeight);
+		_workerListSize.minHeight = height;
+		_workerListSize.preferredHeight = height;
+	}
+
+	// Steps the worker's role forward or back, skipping classes without a free weapon/armour set.
+	private void CycleRole(Labor labor, int direction)
+	{
+		if (labor.IsNullOrReleased())
+		{
+			return;
+		}
+		int index = Array.IndexOf(RoleOrder, CallToArms.RoleOf(labor));
+		if (index < 0)
+		{
+			index = 0;
+		}
+		List<Labor> single = new List<Labor> { labor };
+		for (int step = 1; step < RoleOrder.Length; step++)
+		{
+			int role = RoleOrder[((index + direction * step) % RoleOrder.Length + RoleOrder.Length) % RoleOrder.Length];
+			if (CallToArms.AssignRole(single, role) > 0)
+			{
+				_feedbackText.text = WorkerName(labor) + " set to " + RoleName(role) + ".";
+				// The role arrives through the network, so refresh a little later.
+				_nextRefresh = Time.unscaledTime + 0.1f;
+				return;
+			}
+		}
+		_feedbackText.text = "No free sets for any class.";
 	}
 
 	private static HashSet<Labor> SelectedWorkers()
@@ -450,16 +596,7 @@ internal class CallToArmsPanel : MonoBehaviour
 
 	private void BuildCanvas()
 	{
-		GameObject canvasGo = new GameObject("CallToArmsCanvas", typeof(RectTransform));
-		canvasGo.transform.SetParent(transform, worldPositionStays: false);
-		Canvas canvas = canvasGo.AddComponent<Canvas>();
-		canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-		canvas.sortingOrder = 900;
-		CanvasScaler scaler = canvasGo.AddComponent<CanvasScaler>();
-		scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-		scaler.referenceResolution = new Vector2(1920f, 1080f);
-		scaler.matchWidthOrHeight = 1f;
-		canvasGo.AddComponent<GraphicRaycaster>();
+		GameObject canvasGo = CreateCanvas("CallToArmsCanvas", transform, 900);
 
 		_hint = CreatePanel("PlacingHint", canvasGo.transform);
 		RectTransform hintRect = _hint.GetComponent<RectTransform>();
@@ -469,22 +606,12 @@ internal class CallToArmsPanel : MonoBehaviour
 		SetRect(_hintText.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 		_hint.SetActive(false);
 
-		_window = CreatePanel("Window", canvasGo.transform);
+		_window = CreateWindow(canvasGo.transform, 380f);
 		RectTransform windowRect = _window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(1f, 0.5f);
 		windowRect.anchorMax = new Vector2(1f, 0.5f);
 		windowRect.pivot = new Vector2(1f, 0.5f);
 		windowRect.anchoredPosition = new Vector2(-64f, 0f);
-		windowRect.sizeDelta = new Vector2(380f, 0f);
-		VerticalLayoutGroup layout = _window.AddComponent<VerticalLayoutGroup>();
-		layout.padding = new RectOffset(14, 14, 10, 14);
-		layout.spacing = 4f;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = true;
-		layout.childForceExpandHeight = false;
-		ContentSizeFitter fitter = _window.AddComponent<ContentSizeFitter>();
-		fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
 		Transform header = CreateRow(_window.transform, 30f);
 		Text title = CreateText(header, "CALL TO ARMS", 18, Yellow, TextAnchor.MiddleLeft);
@@ -505,17 +632,7 @@ internal class CallToArmsPanel : MonoBehaviour
 
 		AddSection("ROLE OF SELECTED WORKERS");
 		_selectionText = AddNote(string.Empty);
-		int[] roles = new int[8]
-		{
-			CallToArms.RoleAuto,
-			CallToArms.RoleStayAtWork,
-			(int)Occupation.Job.Knight,
-			(int)Occupation.Job.Halberdier,
-			(int)Occupation.Job.Archer,
-			(int)Occupation.Job.Arbalist,
-			(int)Occupation.Job.Alchemist,
-			(int)Occupation.Job.Artificer
-		};
+		int[] roles = RoleOrder;
 		Transform row = null;
 		for (int i = 0; i < roles.Length; i++)
 		{
@@ -533,6 +650,11 @@ internal class CallToArmsPanel : MonoBehaviour
 				Label = button.GetComponentInChildren<Text>()
 			});
 		}
+
+		AddSection("ALL WORKERS");
+		AddNote("Set the call to arms role of each worker with < and >. Classes without a free weapon/armour set are skipped.");
+		_workerList = CreateScrollList(_window.transform, out _workerListSize);
+
 		_feedbackText = AddNote(string.Empty);
 		_feedbackText.color = Yellow;
 	}
@@ -585,114 +707,5 @@ internal class CallToArmsPanel : MonoBehaviour
 			Refresh();
 		});
 		return status;
-	}
-
-	// ---- uGUI helpers
-
-	private static RectTransform CreateRect(string name, Transform parent)
-	{
-		GameObject go = new GameObject(name, typeof(RectTransform));
-		go.transform.SetParent(parent, worldPositionStays: false);
-		return go.GetComponent<RectTransform>();
-	}
-
-	private static void SetRect(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax, Vector2 position, Vector2 size)
-	{
-		rect.anchorMin = anchorMin;
-		rect.anchorMax = anchorMax;
-		rect.anchoredPosition = position;
-		rect.sizeDelta = size;
-	}
-
-	private static GameObject CreatePanel(string name, Transform parent)
-	{
-		RectTransform rect = CreateRect(name, parent);
-		Image image = rect.gameObject.AddComponent<Image>();
-		image.color = Background;
-		return rect.gameObject;
-	}
-
-	private static Transform CreateRow(Transform parent, float height)
-	{
-		RectTransform rect = CreateRect("Row", parent);
-		HorizontalLayoutGroup layout = rect.gameObject.AddComponent<HorizontalLayoutGroup>();
-		layout.spacing = 6f;
-		layout.childAlignment = TextAnchor.MiddleLeft;
-		layout.childControlWidth = true;
-		layout.childControlHeight = true;
-		layout.childForceExpandWidth = false;
-		layout.childForceExpandHeight = false;
-		LayoutElement element = rect.gameObject.AddComponent<LayoutElement>();
-		element.minHeight = height;
-		element.preferredHeight = height;
-		return rect;
-	}
-
-	private Text CreateText(Transform parent, string text, int size, Color color, TextAnchor alignment)
-	{
-		Text label = CreateRect("Text", parent).gameObject.AddComponent<Text>();
-		label.font = _font;
-		label.fontSize = size;
-		label.color = color;
-		label.alignment = alignment;
-		label.text = text;
-		label.raycastTarget = false;
-		label.horizontalOverflow = HorizontalWrapMode.Overflow;
-		return label;
-	}
-
-	private Button CreateButton(Transform parent, string text, float width, Action onClick)
-	{
-		RectTransform rect = CreateRect("Button", parent);
-		Image image = rect.gameObject.AddComponent<Image>();
-		image.color = Color.white;
-		Button button = rect.gameObject.AddComponent<Button>();
-		ColorBlock colors = button.colors;
-		colors.normalColor = new Color(0.22f, 0.22f, 0.26f, 1f);
-		colors.highlightedColor = new Color(0.34f, 0.34f, 0.4f, 1f);
-		colors.pressedColor = new Color(0.5f, 0.42f, 0.18f, 1f);
-		colors.disabledColor = new Color(0.14f, 0.14f, 0.16f, 0.7f);
-		colors.colorMultiplier = 1f;
-		button.colors = colors;
-		button.targetGraphic = image;
-		button.onClick.AddListener(() => onClick());
-		Text label = CreateText(rect, text, 13, TextColor, TextAnchor.MiddleCenter);
-		SetRect(label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-		if (width > 0f)
-		{
-			Fixed(rect.gameObject, width, 24f);
-		}
-		else
-		{
-			LayoutElement element = rect.gameObject.AddComponent<LayoutElement>();
-			element.minHeight = 24f;
-			element.preferredHeight = 24f;
-		}
-		return button;
-	}
-
-	private static void Fixed(GameObject go, float width, float height)
-	{
-		LayoutElement element = go.GetComponent<LayoutElement>();
-		if (element == null)
-		{
-			element = go.AddComponent<LayoutElement>();
-		}
-		element.minWidth = width;
-		element.preferredWidth = width;
-		element.minHeight = height;
-		element.preferredHeight = height;
-		element.flexibleWidth = 0f;
-	}
-
-	private static void Flexible(GameObject go)
-	{
-		LayoutElement element = go.GetComponent<LayoutElement>();
-		if (element == null)
-		{
-			element = go.AddComponent<LayoutElement>();
-		}
-		element.flexibleWidth = 1f;
-		element.minWidth = 0f;
 	}
 }

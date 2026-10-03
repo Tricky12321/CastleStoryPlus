@@ -6,7 +6,6 @@ using Brix.UI.Builder.Menu;
 using CastleStoryPlus.Core;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace CastleStoryPlus.Menus;
 
@@ -21,7 +20,8 @@ internal static class ContinueButtonPatch
 	private static void Postfix(ContainerGenericPopulator __instance)
 	{
 		Container container = __instance.container;
-		if (container == null || SceneManager.GetActiveScene().name != "SceneMenu" || container.GetItem(MenuOperations.ContinueGame) != null)
+		// The menu scene is still loading here, so the active scene is the previous one: use the button's own scene.
+		if (container == null || __instance.gameObject.scene.name != "SceneMenu" || container.GetItem(MenuOperations.ContinueGame) != null)
 		{
 			return;
 		}
@@ -82,6 +82,7 @@ internal static class ContinueButtonPatch
 			}
 		}
 		container.items.Insert(playIdx + 1, item);
+		Plugin.Log.LogInfo("Continue button added to " + __instance.name);
 		if (play.isDynamic && container.isActiveAndEnabled)
 		{
 			container.Populate(isChain: false);

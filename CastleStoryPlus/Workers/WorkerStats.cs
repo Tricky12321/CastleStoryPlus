@@ -16,6 +16,9 @@ internal class WorkerStats
 	// Call to arms role, see CallToArms.Role*.
 	public int CallToArmsRole;
 
+	// 0 = normal bricktron, 1 = 3x bricktron (see GiantBricktron).
+	public int Tier;
+
 	// Raised on every peer when a bricktron's stats change (locally on the server, or received by a client).
 	public static event Action<CharacterState> Changed;
 
@@ -32,6 +35,8 @@ internal class WorkerStats
 		}
 		return stats;
 	}
+
+	public static IEnumerable<KeyValuePair<CharacterState, WorkerStats>> Entries => All;
 
 	public static WorkerStats Peek(CharacterState state)
 	{

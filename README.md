@@ -15,21 +15,30 @@ The mod is a  [BepInEx 5](https://github.com/BepInEx/BepInEx) plugin that uses [
 | Economy | New workers arrive faster: brewed fireflies carry more energy (default +30%, `[Economy] EnergyMultiplier`) | `Economy` |
 | Worker AI | Workers start work on their own, pick up their next task faster, and help other task groups when theirs is done | `WorkerAI` |
 | Worker AI | No duplicate build jobs, no carrying more material than a blueprint still needs | `BuildJobs` |
+| Worker AI | Faster task search in big task areas (mining, digging, many trees): no idle seconds after each block | `FasterTaskSearch` |
+| Worker AI | Task reservation: a worker reserves the task it chooses, so idle workers no longer walk to the same task together | `TaskReservation` |
 | Worker AI | Workers prefer the nearest stockpile | `StockpileChoice` |
 | Worker AI | Idle workers consolidate small stockpiles into the fullest one | `StockpileConsolidation` |
 | Pathfinding | Shorter routes, bigger search budgets, no pause after picking something up | `Pathfinding` |
 | Combat | Archers always hit visible targets, and arrows never hurt allies | `ArcherAccuracy` |
-| Call to arms | Soldiers per class (limited by the sets you own), ranged and melee rally points, a role for each worker | `CallToArms` |
+| Call to arms | Soldiers per class (limited by the sets you own), ranged and melee rally points, a role for each worker (for the selected workers, or per worker in a list of all workers) | `CallToArms` |
 | Experience | Separate work and combat XP, levels 1–10 with +5% per level, shown in the name tag with XP bars and a level-up effect | `Experience` |
+| Workers | 3x bricktrons: sacrifice one worker and pay 1.5x the energy of a new bricktron to upgrade another; twice as big, 3x speed for everything it does, 3x health, still counts as one bricktron; one per 5 bricktrons (`[GiantBricktron]`) | `GiantBricktron` |
 | Building | Eyedropper: middle-click a block or building to build a copy | `Eyedropper` |
 | Building | Pending blueprints are always visible | `BlueprintsVisible` |
 | Building | Move buildings: hold **M** and click a building, then place it; workers demolish the old one and build the new one from its materials (`[Building] MoveStructureKey`) | `MoveStructure` |
 | Building | Copy and paste: **Ctrl+C** and drag an area to copy its blocks, buildings and blueprints; **Ctrl+V** pastes them as blueprints (right-click rotates) (`[Building] CopyKey`, `PasteKey`) | `CopyPaste` |
 | UI | Resource list (icon, name, count) in the top-right corner; used-up resources stay listed in red, plus storage used and free | `ResourceList` |
+| UI | Minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units | `MinimapTerrain` |
+| UI | Invasion: big warning before the next wave at 30 and 15 seconds, countdown from 5 | `WaveWarning` |
 | UI | Respawn status under a dead worker's firefly (time left, missing energy) | `RespawnStatus` |
+| UI | Energy hint above your home crystal when the firefly of a killed enemy or worker arrives ("+N energy") | `EnergyHint` |
 | UI | Castle Story Plus logo on the splash screen, main menu and loading screen | `PlusLogo` |
 | Menus | **Continue** on the title screen loads the latest save | `ContinueButton` |
 | Menus | **Save & Leave** in the quit dialog | `SaveAndLeave` |
+| Menus | Game speed keys in single player: **1** normal, **2** 2x, **3** 3x (`[GameSpeed]`) | `SpeedKeys` |
+| Saving | Autosave every 2 minutes of play (`[Saving] AutosaveMinutes`, 0 = off), one autosave slot per map | `AutoSave` |
+| Menus | **Castle Story Plus settings** in the in-game Settings menu: autosave interval, firefly energy, 3x bricktron values, keys and feature switches | (always on) |
 | Loading | Faster map loading that keeps the window responsive | `FasterLoading` |
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
@@ -105,10 +114,14 @@ On Windows the bootstrap only starts BepInEx and changes nothing else.
 
 ## Configuration
 
-The first start creates `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Edit it while the game is closed.
+The first start creates `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Edit it while the game is closed, or use the in-game settings window.
 
 - `[Features]`: one `true`/`false` switch per feature (see the table above).
 - `[Economy] EnergyMultiplier` (default `1.3`): energy per brewed firefly, relative to the blue crystal it costs.
+- `[Saving] AutosaveMinutes` (default `2`): minutes of play between autosaves, `0` = off.
+- `[Building] MoveStructureKey`, `CopyKey`, `PasteKey`: keys for moving buildings and copy/paste.
+
+Most settings can also be changed in the game: **Settings > Castle Story Plus settings**. Changes there are written to the config file at once; `[Features]` switches apply after a restart.
 
 Call to arms settings (soldiers per class) are stored in the game's own player preferences. Rally points are set in-game and last for the current map.
 
@@ -149,7 +162,7 @@ CastleStoryPlus/
   Core/                feature attribute, Lua injection, IL helpers
   Workers/             per-worker data (XP, call to arms role): stored, saved and synced by the mod
   <Area>/              one folder per feature area (Army, Building, Combat, Economy, Experience,
-                       Loading, Menus, Pathfinding, Respawn, UI, Updates, WorkerAI)
+                       Giant, Loading, Menus, Pathfinding, Respawn, Saving, UI, Updates, WorkerAI)
   Diagnostics/         modding aids, off by default (SceneDump, WorkerTrace)
   Lua/                 Lua UI files added by the mod (the mod's own code only)
   Assets/              artwork (logo.png, plus.png), rendered by tools/make_logo.py

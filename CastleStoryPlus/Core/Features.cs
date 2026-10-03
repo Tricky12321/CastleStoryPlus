@@ -82,4 +82,36 @@ internal static class Features
 	public const string UpdateCheck = "UpdateCheck";
 
 	public const string UpdateCheckInfo = "Check GitHub for a new Castle Story Plus release at startup and offer to update from the main menu.";
+
+	public const string AutoSave = "AutoSave";
+
+	public const string AutoSaveInfo = "Save the game automatically every few minutes of play (see [Saving] AutosaveMinutes, or Settings > Castle Story Plus settings in the game). One autosave per map.";
+
+	public const string GiantBricktron = "GiantBricktron";
+
+	public const string GiantBricktronInfo = "3x bricktrons: select two workers and upgrade one (2x size, 3x speed for everything it does, 3x health) for 1.5x the energy of a new bricktron; the other is sacrificed. One 3x bricktron per 5 bricktrons.";
+
+	public const string EnergyHint = "EnergyHint";
+
+	public const string EnergyHintInfo = "When the firefly of a killed enemy or worker reaches your home crystal, the energy it brings rises above the crystal.";
+
+	public const string TaskReservation = "TaskReservation";
+
+	public const string TaskReservationInfo = "A worker reserves the task it chooses, so idle workers no longer walk to the same task together.";
+
+	public const string SpeedKeys = "SpeedKeys";
+
+	public const string SpeedKeysInfo = "Game speed keys in single player: 1 = normal, 2 = 2x, 3 = 3x (see [GameSpeed]).";
+
+	public const string MinimapTerrain = "MinimapTerrain";
+
+	public const string MinimapTerrainInfo = "The minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units, refreshed every 15 s.";
+
+	public const string FasterTaskSearch = "FasterTaskSearch";
+
+	public const string FasterTaskSearchInfo = "Workers find their next task faster in big task areas (mining, digging, many trees): the search uses a real-time budget per frame instead of pausing every few tasks.";
+
+	public const string WaveWarning = "WaveWarning";
+
+	public const string WaveWarningInfo = "Invasion: big warning before the next wave at 30 and 15 seconds, and a countdown for the last 5 seconds.";
 }
