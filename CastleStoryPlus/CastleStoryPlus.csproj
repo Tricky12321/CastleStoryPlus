@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- BepInEx 5 plugin. Builds against the ORIGINAL game assemblies (Managed.orig), never the modded ones. -->
+  <PropertyGroup>
+    <AssemblyName>CastleStoryPlus</AssemblyName>
+    <RootNamespace>CastleStoryPlus</RootNamespace>
+    <VanillaManagedDir>$(GameDir)Castle Story_Data/Managed.orig/</VanillaManagedDir>
+    <BepInExCoreDir>$(GameDir)BepInEx/core/</BepInExCoreDir>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Game code, publicized so patches can reach private members. -->
+    <Reference Include="Assembly-CSharp-firstpass" Publicize="true">
+      <HintPath>$(VanillaManagedDir)Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Brix.Core" Publicize="true">
+      <HintPath>$(VanillaManagedDir)Brix.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="brix-common">
+      <HintPath>$(VanillaManagedDir)brix-common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreDir)0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameManagedDir)UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.Networking" Publicize="true">
+      <HintPath>$(GameManagedDir)UnityEngine.Networking.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Core">
+      <HintPath>$(GameManagedDir)System.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GameManagedDir)Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="MoonSharp.Interpreter">
+      <HintPath>$(GameManagedDir)MoonSharp.Interpreter.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Smooth.Foundations">
+      <HintPath>$(GameManagedDir)Smooth.Foundations.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(GameManagedDir)Rewired_Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <!-- The mod's own Lua files (same layout as Info/Lua) ship next to the plugin. -->
+  <ItemGroup>
+    <None Include="Lua/**/*.lua" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets/**/*.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Copies the built plugin and its Lua files into the game's BepInEx/plugins folder. -->
+  <Target Name="InstallPlugin" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins')">
+    <ItemGroup>
+      <ModLua Include="Lua/**/*.lua" />
+      <ModAssets Include="Assets/**/*.png" />
+    </ItemGroup>
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)BepInEx/plugins/CastleStoryPlus/" />
+    <Copy SourceFiles="@(ModLua)" DestinationFiles="@(ModLua->'$(GameDir)BepInEx/plugins/CastleStoryPlus/Lua/%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(ModAssets)" DestinationFiles="@(ModAssets->'$(GameDir)BepInEx/plugins/CastleStoryPlus/Assets/%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+</Project>

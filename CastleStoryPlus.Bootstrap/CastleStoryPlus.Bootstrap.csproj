@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Doorstop entry point that makes HarmonyX work on Castle Story's Mono 2.6, then starts BepInEx. -->
+  <PropertyGroup>
+    <AssemblyName>CastleStoryPlus.Bootstrap</AssemblyName>
+    <RootNamespace>CastleStoryPlus.Bootstrap</RootNamespace>
+    <BepInExCoreDir>$(GameDir)BepInEx/core/</BepInExCoreDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="MonoMod.RuntimeDetour">
+      <HintPath>$(BepInExCoreDir)MonoMod.RuntimeDetour.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <!-- The bootstrap sits next to BepInEx.Preloader.dll; run_bepinex.sh points doorstop at it. -->
+  <Target Name="InstallBootstrap" AfterTargets="Build" Condition="Exists('$(BepInExCoreDir)')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExCoreDir)" />
+  </Target>
+</Project>

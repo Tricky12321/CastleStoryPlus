@@ -1,0 +1,14 @@
+bin/
+obj/
+.idea/
+.vs/
+*.user
+*.DotSettings.user
+# Never commit game code or game assemblies.
+*.dll
+*.pdb
+*.mdb
+
+# Decompiled game source (Sauropod Studio code): local reference only, never commit.
+GameSource/
+dist/

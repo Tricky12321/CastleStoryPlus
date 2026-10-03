@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- Castle Story install. Override with: dotnet build -p:GameDir=/path/to/Castle Story/ -->
+    <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Castle Story/</GameDir>
+    <GameManagedDir>$(GameDir)Castle Story_Data/Managed/</GameManagedDir>
+    <TargetFramework>net35</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+  </PropertyGroup>
+</Project>
