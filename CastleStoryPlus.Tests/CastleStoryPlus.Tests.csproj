@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests of the mod's pure logic (no running game): dotnet test CastleStoryPlus.Tests.
+       Only code that does not call into Unity's engine can run here; the in-game tests are in CastleStoryPlus.DevTools. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>CastleStoryPlus.Tests</AssemblyName>
+    <RootNamespace>CastleStoryPlus.Tests</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <VanillaManagedDir>$(GameDir)Castle Story_Data/Managed.orig/</VanillaManagedDir>
+    <!-- The mod is a .NET Framework 3.5 assembly; its pure code runs fine on .NET 8. -->
+    <NoWarn>$(NoWarn);NU1701;MSB3277</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CastleStoryPlus\CastleStoryPlus.csproj">
+      <SetTargetFramework>TargetFramework=net35</SetTargetFramework>
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+    </ProjectReference>
+  </ItemGroup>
+  <!-- The game assemblies the mod's types refer to, copied next to the tests so those types can load. -->
+  <ItemGroup>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(VanillaManagedDir)Assembly-CSharp-firstpass.dll</HintPath>
+    </Reference>
+    <Reference Include="Brix.Core">
+      <HintPath>$(VanillaManagedDir)Brix.Core.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -7,9 +7,10 @@ using UnityEngine;
 
 namespace CastleStoryPlus.Diagnostics;
 
-// Modding aid, off by default ([Debug] WorkerTrace): logs every state change of every worker (activity,
-// current task, availability, instruction queue, moving) with timestamps to BepInEx/workertrace.log, to
-// find where workers lose time between tasks.
+// Modding aid, off by default ([Debug] WorkerTrace, or the debug menu on F8 while playing): logs every state change
+// of every worker (activity, current task, availability, instruction queue, moving) with timestamps to
+// BepInEx/workertrace.log, to find where workers lose time between tasks. WorkerTraceDetails adds why: rejected
+// tasks, ended tasks, failed paths, failed searches for materials, and idle workers while there is work.
 [Feature]
 internal class WorkerTrace : MonoBehaviour
 {
@@ -17,31 +18,67 @@ internal class WorkerTrace : MonoBehaviour
 
 	private static StreamWriter _writer;
 
-	private readonly Dictionary<Labor, string> _states = new Dictionary<Labor, string>();
+	private static readonly Dictionary<Labor, string> _states = new Dictionary<Labor, string>();
 
 	private Labor[] _labors = new Labor[0];
 
 	private float _nextRefresh;
 
+	private static bool _started;
+
 	internal static bool Active => _writer != null;
 
 	private static void Enable()
 	{
-		if (!Plugin.Cfg.Bind("Debug", "WorkerTrace", false, "Log every worker state change to BepInEx/workertrace.log (modding aid).").Value)
+		GameSession.OnLeave(_states.Clear);
+		Plugin.Root.AddComponent<WorkerTrace>();
+		if (Plugin.Cfg.Bind("Debug", "WorkerTrace", false, "Log every worker state change, and why workers reject or fail tasks, to BepInEx/workertrace.log (modding aid; can also be switched on in the debug menu, F8).").Value)
+		{
+			Start();
+		}
+	}
+
+	// The first start of a session starts a new file; later starts add to it.
+	internal static void Start()
+	{
+		if (_writer != null)
 		{
 			return;
 		}
-		_writer = new StreamWriter(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "workertrace.log"), append: false) { AutoFlush = true };
-		Plugin.Root.AddComponent<WorkerTrace>();
+		_writer = new StreamWriter(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "workertrace.log"), append: _started) { AutoFlush = true };
+		_started = true;
+		_states.Clear();
+		_writer.WriteLine("---- trace started " + System.DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss"));
+	}
+
+	internal static void Stop()
+	{
+		if (_writer == null)
+		{
+			return;
+		}
+		_writer.WriteLine("---- trace stopped " + System.DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss"));
+		_writer.Dispose();
+		_writer = null;
 	}
 
 	internal static void Log(Labor labor, string message)
 	{
-		_writer?.WriteLine(Time.time.ToString("0.000") + " f" + Time.frameCount + " " + (labor != null ? labor.name : "?") + ": " + message);
+		Log(labor != null ? labor.name : "?", message);
+	}
+
+	internal static void Log(string who, string message)
+	{
+		_writer?.WriteLine(Time.time.ToString("0.000") + " f" + Time.frameCount + " " + who + ": " + message);
 	}
 
 	private void Update()
 	{
+		if (!Active)
+		{
+			return;
+		}
+		WorkerTraceDetails.Update();
 		if (Time.unscaledTime >= _nextRefresh)
 		{
 			_nextRefresh = Time.unscaledTime + RefreshSeconds;

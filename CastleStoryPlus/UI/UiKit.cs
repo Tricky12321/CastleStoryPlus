@@ -1,4 +1,6 @@
 using System;
+using Brix.Components;
+using Brix.Game.Utils;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,15 +19,20 @@ internal static class UiKit
 
 	private static Font _font;
 
-	// The game's UI font, taken from any Text in the scene.
+	// The game's UI font (Proxima Nova, as the game's own menus use). Not just any Text in the scene: in a game that
+	// can be a font that draws nothing at the mod's sizes, which left the call to arms window without any text.
 	public static Font Font
 	{
 		get
 		{
 			if (_font == null)
 			{
-				Text any = UnityEngine.Object.FindObjectOfType<Text>();
-				_font = (any != null) ? any.font : Resources.GetBuiltinResource<Font>("Arial.ttf");
+				LayoutPanelManager fonts = BrixSingleton<LayoutPanelManager>.Instance;
+				_font = (fonts != null) ? fonts.ProximaNovaRegular : null;
+				if (_font == null)
+				{
+					_font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+				}
 			}
 			return _font;
 		}
@@ -180,6 +187,29 @@ internal static class UiKit
 			element.preferredHeight = 24f;
 		}
 		return button;
+	}
+
+	// A one-line text field with a grey hint while it is empty.
+	public static InputField CreateInputField(Transform parent, string placeholder, float width)
+	{
+		RectTransform rect = CreateRect("InputField", parent);
+		Image image = rect.gameObject.AddComponent<Image>();
+		image.color = new Color(0.14f, 0.14f, 0.17f, 1f);
+		Text hint = CreateText(rect, placeholder, 14, Grey, TextAnchor.MiddleLeft);
+		hint.fontStyle = FontStyle.Italic;
+		SetRect(hint.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-12f, 0f));
+		Text text = CreateText(rect, string.Empty, 14, TextColor, TextAnchor.MiddleLeft);
+		text.supportRichText = false;
+		text.horizontalOverflow = HorizontalWrapMode.Wrap;
+		SetRect(text.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(-12f, 0f));
+		InputField field = rect.gameObject.AddComponent<InputField>();
+		field.targetGraphic = image;
+		field.textComponent = text;
+		field.placeholder = hint;
+		field.lineType = InputField.LineType.SingleLine;
+		field.caretColor = Yellow;
+		Fixed(rect.gameObject, width, 26f);
+		return field;
 	}
 
 	public static void Fixed(GameObject go, float width, float height)

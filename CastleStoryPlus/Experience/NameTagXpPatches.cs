@@ -32,6 +32,7 @@ internal static class OverheadXpPatch
 	private static void Enable()
 	{
 		WorkerStats.Changed += OnStatsChanged;
+		GameSession.OnLeave(Drivers.Clear);
 	}
 
 	private static void Postfix(BricktronOverheadDisplayDriver __instance)

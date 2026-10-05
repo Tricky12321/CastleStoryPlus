@@ -56,6 +56,15 @@ internal static class GiantSacrifice
 
 	private static readonly HashSet<Corpse> Corpses = new HashSet<Corpse>();
 
+	private static void Enable()
+	{
+		GameSession.OnLeave(() =>
+		{
+			Marked.Clear();
+			Corpses.Clear();
+		});
+	}
+
 	public static void Mark(GameObject labor)
 	{
 		Marked.Add(labor);

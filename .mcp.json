@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "castlestory": {
+      "command": "dotnet",
+      "args": ["CastleStoryPlus.Mcp/bin/Release/net8.0/CastleStoryPlus.Mcp.dll"],
+      "env": {
+        "CSP_API_PORT": "27860"
+      }
+    }
+  }
+}

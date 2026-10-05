@@ -18,6 +18,11 @@ internal static class HelpOtherGroupsPatch
 	// Task group a locked worker belongs to while it helps out in another group.
 	internal static readonly Dictionary<Labor, Project> HomeProjects = new Dictionary<Labor, Project>();
 
+	private static void Enable()
+	{
+		GameSession.OnLeave(HomeProjects.Clear);
+	}
+
 	internal static bool CanHelpOtherProjects(Labor labor)
 	{
 		return labor.Autonomy == AutonomyStatus.LockedToOperable && labor.Operable == null && labor.Project != null && !(labor.Project is IdleProject) && !(labor.Project is RaidProject2);

@@ -1,16 +1,22 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using BepInEx.Configuration;
 using Brix.Assets;
 using Brix.Engine;
 using Brix.Game;
 using Brix.Input;
+using Brix.IO.Serialization;
 using Brix.Network;
 using Brix.Utils;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Loading;
 using HarmonyLib;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
@@ -20,6 +26,9 @@ namespace CastleStoryPlus.Saving;
 // Saves the game every [Saving] AutosaveMinutes minutes of play (paused time and menus do not count).
 // Each map gets its own autosave ("<map> (Autosave)"), overwritten every time, so an autosave never
 // replaces a manual save or the autosave of another map. Any save made by the player restarts the countdown.
+// The slow part of a save is writing every game object as JSON, which the game does in one frame (a visible
+// hitch). An autosave does it a slice per frame instead, with the simulation paused meanwhile so all objects
+// are saved from the same moment, and hands the result to the game's normal save.
 [Feature(Features.AutoSave, Features.AutoSaveInfo)]
 internal class AutoSave : MonoBehaviour
 {
@@ -33,6 +42,17 @@ internal class AutoSave : MonoBehaviour
 	private static float _elapsed;
 
 	private static bool _saving;
+
+	// An autosave is being written (over several frames).
+	internal static bool IsSaving => _saving;
+
+	// Time per frame for writing game objects; the game keeps drawing in between.
+	private const long SliceMilliseconds = 8;
+
+	// Game objects written ahead by the autosave, used by the next GameObjectSerializer.GetJsonGameState call.
+	internal static string PreparedGameObjects;
+
+	private static int _lastGameObjectsLength;
 
 	private static void Enable()
 	{
@@ -65,10 +85,10 @@ internal class AutoSave : MonoBehaviour
 			return;
 		}
 		_elapsed += Time.unscaledDeltaTime;
-		if (_elapsed >= Minutes.Value * 60f)
+		if (_elapsed >= Minutes.Value * 60f && !_saving)
 		{
 			_elapsed = 0f;
-			Save();
+			StartCoroutine(Save());
 		}
 	}
 
@@ -86,9 +106,93 @@ internal class AutoSave : MonoBehaviour
 		return !Neo.IsMultiplayer || NetworkServer.active;
 	}
 
-	private static void Save()
+	private static IEnumerator Save()
 	{
 		_saving = true;
+		float timeScale = Time.timeScale;
+		Time.timeScale = 0f;
+		Stopwatch total = Stopwatch.StartNew();
+		int frames = 0;
+		string objects = null;
+		IEnumerator writing = WriteGameObjects(json => objects = json);
+		while (true)
+		{
+			bool more;
+			try
+			{
+				more = writing.MoveNext();
+			}
+			catch (Exception ex)
+			{
+				Plugin.Log.LogError("Autosave: writing game objects failed, using the game's own save: " + ex);
+				objects = null;
+				break;
+			}
+			if (!more)
+			{
+				break;
+			}
+			frames++;
+			yield return null;
+		}
+		long sliced = total.ElapsedMilliseconds;
+		Stopwatch write = Stopwatch.StartNew();
+		PreparedGameObjects = objects;
+		try
+		{
+			if (CanSave())
+			{
+				WriteSave();
+			}
+		}
+		finally
+		{
+			PreparedGameObjects = null;
+			if (Time.timeScale == 0f)
+			{
+				Time.timeScale = timeScale;
+			}
+			_saving = false;
+		}
+		Plugin.Log.LogInfo("Autosave timing: game objects " + sliced + " ms over " + (frames + 1) + " frames, rest of the save " + write.ElapsedMilliseconds + " ms in one frame");
+	}
+
+	// Same output as GameObjectSerializer.GetJsonGameState("save"), a slice per frame. One serializer and writer
+	// for all objects, so references between objects are written exactly as in one go.
+	private static IEnumerator WriteGameObjects(Action<string> done)
+	{
+		GameObjectSerializer gameObjects = UnityEngine.Object.FindObjectOfType<GameObjectSerializer>();
+		if (gameObjects == null)
+		{
+			yield break;
+		}
+		List<SerializationComponent> queue = new List<SerializationComponent>(gameObjects._saveQueue);
+		// Sized from the last save: growing a ~3 MB builder by doubling leaves ~10 MB of dead buffers per save.
+		StringBuilder text = new StringBuilder(Mathf.Max(1024, _lastGameObjectsLength + _lastGameObjectsLength / 8));
+		text.Append("[");
+		JsonSerializer serializer = JsonSerializer.Create(Io.GetSaveSerializerSettings("save"));
+		StringWriter writer = new StringWriter(text);
+		FrameBudget budget = new FrameBudget(SliceMilliseconds);
+		foreach (SerializationComponent item in queue)
+		{
+			if (item != null)
+			{
+				item.Save(writer, serializer);
+			}
+			if (budget.ExceededNow)
+			{
+				yield return null;
+				budget.Reset();
+			}
+		}
+		text.Remove(text.Length - 1, 1);
+		text.Append("]");
+		_lastGameObjectsLength = text.Length;
+		done(text.ToString());
+	}
+
+	private static void WriteSave()
+	{
 		try
 		{
 			Asset_Map loadedMap = GameParam.Map;
@@ -115,10 +219,6 @@ internal class AutoSave : MonoBehaviour
 		catch (Exception ex)
 		{
 			Plugin.Log.LogError("Autosave failed: " + ex);
-		}
-		finally
-		{
-			_saving = false;
 		}
 	}
 
@@ -177,5 +277,22 @@ internal static class AutoSaveResetPatch
 		{
 			AutoSave.ResetTimer();
 		}
+	}
+}
+
+// Hands the game objects written ahead by the autosave to the game's save.
+[Feature(Features.AutoSave, Features.AutoSaveInfo)]
+[HarmonyPatch(typeof(GameObjectSerializer), nameof(GameObjectSerializer.GetJsonGameState))]
+internal static class AutoSavePreparedObjectsPatch
+{
+	private static bool Prefix(string target, ref string __result)
+	{
+		if (AutoSave.PreparedGameObjects == null || target != "save")
+		{
+			return true;
+		}
+		__result = AutoSave.PreparedGameObjects;
+		AutoSave.PreparedGameObjects = null;
+		return false;
 	}
 }

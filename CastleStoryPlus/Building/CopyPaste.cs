@@ -72,6 +72,8 @@ internal static class CopyPaste
 
 	private static LineRenderer _outline;
 
+	private static Material _outlineMaterial;
+
 	// While true, the game's pickers are paused so the drag does not select units or place anything.
 	internal static bool Selecting;
 
@@ -84,6 +86,16 @@ internal static class CopyPaste
 			StopSelecting();
 			Clipboard.Clear();
 		};
+	}
+
+	// Ctrl with the copy or paste key: the game's own key actions on those keys (C is call to arms) stand by.
+	internal static bool IsShortcutHeld()
+	{
+		if (_copyKey == null || (!Input.GetKey(KeyCode.LeftControl) && !Input.GetKey(KeyCode.RightControl)))
+		{
+			return false;
+		}
+		return Input.GetKey(_copyKey.Value) || Input.GetKey(_pasteKey.Value);
 	}
 
 	// Every frame from InputModeController.Update.
@@ -325,10 +337,12 @@ internal static class CopyPaste
 		return false;
 	}
 
-	// Loose blocks lying around, and anything carried or stored, also have a MovableVolume.
+	// Loose blocks lying around, and anything carried or stored, also have a MovableVolume. The home crystal
+	// (firefly nest) has a blueprint too, but must never be copied or moved: demolishing it for a move left the
+	// faction without a crystal, and a save without one could not be loaded.
 	internal static bool IsPlacedBuilding(MovableVolume volume)
 	{
-		return volume.gameObject.layer != (int)UnityLayer.FreeBlocks && !volume.IsParentTracked;
+		return volume.gameObject.layer != (int)UnityLayer.FreeBlocks && !volume.IsParentTracked && volume.GetComponent<FireflyNest>() == null;
 	}
 
 	private static XYZ VoxelOf(GameObject go)
@@ -423,8 +437,13 @@ internal static class CopyPaste
 		{
 			GameObject go = new GameObject("CastleStoryPlusCopyArea");
 			_outline = go.AddComponent<LineRenderer>();
-			Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
-			_outline.material = new Material(shader);
+			// The outline is part of the game scene and made again every game; the material is kept for the session.
+			if (_outlineMaterial == null)
+			{
+				Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
+				_outlineMaterial = new Material(shader);
+			}
+			_outline.sharedMaterial = _outlineMaterial;
 			_outline.useWorldSpace = true;
 			_outline.startWidth = 0.1f;
 			_outline.endWidth = 0.1f;
@@ -467,6 +486,24 @@ internal static class CopyPasteInputPatch
 	private static void Prefix()
 	{
 		CopyPaste.Update();
+	}
+}
+
+// Key actions (call to arms on C, ...) do not fire for Ctrl+C and Ctrl+V.
+[Feature(Features.CopyPaste, Features.CopyPasteInfo)]
+[HarmonyPatch(typeof(Brix.Utils.UI.KeyBindingsUtility), nameof(Brix.Utils.UI.KeyBindingsUtility.RegisterAction))]
+internal static class CopyPasteKeyActionPatch
+{
+	private static void Prefix(ref System.Action<Rewired.InputActionEventData> action)
+	{
+		System.Action<Rewired.InputActionEventData> inner = action;
+		action = (Rewired.InputActionEventData data) =>
+		{
+			if (!CopyPaste.IsShortcutHeld())
+			{
+				inner(data);
+			}
+		};
 	}
 }
 

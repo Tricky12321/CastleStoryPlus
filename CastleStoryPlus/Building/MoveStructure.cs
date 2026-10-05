@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using BepInEx.Configuration;
+using Brix.Assets;
 using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game;
@@ -14,6 +17,7 @@ using Brix.Lifecycle.Pooling;
 using Brix.Transactions;
 using CastleStoryPlus.Core;
 using HarmonyLib;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
@@ -24,8 +28,8 @@ namespace CastleStoryPlus.Building;
 // Client: hold the move key and left-click a building; the game's own blueprint placement then shows the
 // building's blueprint at the cursor (rotate as usual) and the next placement click sends the move.
 // Server: spawns the new blueprint and an anti-blueprint on the old building into the selected build
-// project. Workers demolish the old one, which drops its contents plus the materials it cost, and build
-// the new one from them, so a move costs work but no materials.
+// project. Workers demolish the old one, which drops its contents; the materials it cost go straight into the
+// new blueprint (workers do not fetch loose items for a blueprint), so a move costs work but no materials.
 [Feature(Features.MoveStructure, Features.MoveStructureInfo)]
 internal static class MoveStructure
 {
@@ -36,8 +40,28 @@ internal static class MoveStructure
 	// Client: the building being moved while its blueprint is held.
 	internal static GameObject Source;
 
-	// Server: buildings waiting to be demolished by a move, with the materials to drop when they go.
-	private static readonly Dictionary<GameObject, Description> Pending = new Dictionary<GameObject, Description>();
+	// Server: a building waiting to be demolished by a move, the materials it cost and the blueprint they go to.
+	private class PendingMove
+	{
+		public Description Cost;
+
+		public Blueprint Target;
+	}
+
+	private static readonly Dictionary<GameObject, PendingMove> Pending = new Dictionary<GameObject, PendingMove>();
+
+	private class Demolished
+	{
+		public Factory.AssetKey BlueprintKey;
+
+		public Vector3 Position;
+
+		public float CheckAt;
+	}
+
+	// Server: places where a moved building was just demolished, checked a moment later for a demolish ghost
+	// (anti-blueprint) left behind.
+	private static readonly List<Demolished> ToCheck = new List<Demolished>();
 
 	private static void Enable()
 	{
@@ -46,13 +70,16 @@ internal static class MoveStructure
 		SceneManager.activeSceneChanged += (Scene from, Scene to) =>
 		{
 			Pending.Clear();
+			ToCheck.Clear();
 			Source = null;
 		};
+		GameSignals.Connect(GameSignals.LevelReady, RestorePending);
 	}
 
 	// Client, every frame from InputModeController.Update.
 	internal static void Update()
 	{
+		CheckDemolished();
 		if (Source != null && InputModeController._mode != InputMode.blueprint)
 		{
 			Source = null;
@@ -153,6 +180,33 @@ internal static class MoveStructure
 		Move((UNetBlueprint)obj, building, key, reader.ReadVector3(), reader.ReadQuaternion(), reader.ReadGameObject());
 	}
 
+	// Host, for the developer tools: the same move as the player's, of a building of the local player to a new
+	// position into a build project. Null when ordered, else why not.
+	internal static string MoveTo(GameObject building, Vector3 position, Quaternion rotation, GameObject buildProject)
+	{
+		if (!NetworkServer.active || User.LocalUser == null)
+		{
+			return "Only the host can move buildings";
+		}
+		MovableVolume volume = (building != null) ? building.GetComponent<MovableVolume>() : null;
+		FactoryImprint imprint = (building != null) ? building.GetComponent<FactoryImprint>() : null;
+		if (volume == null || imprint == null || !CopyPaste.IsPlacedBuilding(volume) || building.GetComponent<Blueprint>() != null)
+		{
+			return "Not a placed building that can be moved (no MovableVolume)";
+		}
+		Factory.AssetKey key = BlueprintAssetKeyResolver.Resolve(imprint.AssetKey);
+		if (key.IsNullOrInvalid())
+		{
+			return "The building has no blueprint to move it with";
+		}
+		if (Pending.ContainsKey(building))
+		{
+			return "The building is already being moved";
+		}
+		Move(User.LocalUser.GetComponent<UNetBlueprint>(), building, key, position, rotation, buildProject);
+		return Pending.ContainsKey(building) ? null : "The game refused the move (not the player's building, or no room for the blueprint)";
+	}
+
 	// Server.
 	private static void Move(UNetBlueprint cmd, GameObject building, Factory.AssetKey key, Vector3 position, Quaternion rotation, GameObject buildProject)
 	{
@@ -182,17 +236,201 @@ internal static class MoveStructure
 		}
 		anti.GetComponent<Blueprint>().Network_isAnti = true;
 		provider.AddObject(anti);
-		Pending[building] = cost;
+		Pending[building] = new PendingMove { Cost = cost, Target = blueprint };
 	}
 
-	// Server: a building demolished by a move drops its contents and the materials it cost.
-	internal static void OnRelease(GameObject building)
+	// The pending moves are saved next to the save's gameobjects.json, so a building whose move was ordered
+	// before a save still gives its materials back when it is demolished after loading it. A building is found
+	// again by its key and position.
+	private const string SaveFile = "castlestoryplus_moves.json";
+
+	// Server: called when the game has written a save into its folder.
+	internal static void WritePending(string folder)
 	{
-		if (!NetworkServer.active || !Pending.TryGetValue(building, out Description cost))
+		string file = System.IO.Path.Combine(folder, SaveFile);
+		JArray moves = new JArray();
+		foreach (KeyValuePair<GameObject, PendingMove> pending in Pending)
+		{
+			FactoryImprint imprint = pending.Key != null ? pending.Key.GetComponent<FactoryImprint>() : null;
+			if (imprint == null || pending.Key.IsNullOrReleased())
+			{
+				continue;
+			}
+			Vector3 position = pending.Key.transform.position;
+			JArray cost = new JArray();
+			if (pending.Value.Cost != null)
+			{
+				foreach (KeyValuePair<Type, Adjectif> entry in pending.Value.Cost.DicoAdjectif)
+				{
+					if (entry.Value is Ressource && entry.Value.quantifiable != null)
+					{
+						cost.Add(new JObject { ["type"] = entry.Key.FullName, ["count"] = entry.Value.quantifiable.valeur });
+					}
+				}
+			}
+			JObject move = new JObject
+			{
+				["factory"] = imprint.AssetKey.Factory,
+				["name"] = imprint.AssetKey.Name,
+				["x"] = position.x,
+				["y"] = position.y,
+				["z"] = position.z,
+				["cost"] = cost
+			};
+			Blueprint target = pending.Value.Target;
+			if (IsLiveTarget(target))
+			{
+				Vector3 at = target.transform.position;
+				move["tx"] = at.x;
+				move["ty"] = at.y;
+				move["tz"] = at.z;
+			}
+			moves.Add(move);
+		}
+		try
+		{
+			if (moves.Count == 0)
+			{
+				if (File.Exists(file))
+				{
+					File.Delete(file);
+				}
+				return;
+			}
+			File.WriteAllText(file, moves.ToString());
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogError("MoveStructure: could not save the pending moves: " + ex.Message);
+		}
+	}
+
+	// Server, when a level is ready: pending moves of the loaded save.
+	private static void RestorePending()
+	{
+		Asset_Map map = GameParam.Map;
+		if (!NetworkServer.active || map == null || string.IsNullOrEmpty(map.path))
 		{
 			return;
 		}
+		string file = System.IO.Path.Combine(map.path, SaveFile);
+		if (!File.Exists(file))
+		{
+			return;
+		}
+		try
+		{
+			FactoryImprint[] buildings = UnityEngine.Object.FindObjectsOfType<FactoryImprint>();
+			int restored = 0;
+			foreach (JToken move in JArray.Parse(File.ReadAllText(file)))
+			{
+				Factory.AssetKey key = new Factory.AssetKey((string)move["factory"], (string)move["name"]);
+				Vector3 position = new Vector3((float)move["x"], (float)move["y"], (float)move["z"]);
+				GameObject building = Find(buildings, key, position);
+				if (building == null || Pending.ContainsKey(building))
+				{
+					continue;
+				}
+				Description cost = new Description();
+				foreach (JToken entry in move["cost"])
+				{
+					Type type = typeof(Adjectif).Assembly.GetType((string)entry["type"]);
+					if (type != null)
+					{
+						cost.Add(Adjectif.New(type, (int)entry["count"]));
+					}
+				}
+				Blueprint target = null;
+				if (move["tx"] != null)
+				{
+					target = FindBlueprint(BlueprintAssetKeyResolver.Resolve(key), new Vector3((float)move["tx"], (float)move["ty"], (float)move["tz"]));
+				}
+				Pending[building] = new PendingMove { Cost = cost, Target = target };
+				restored++;
+			}
+			Plugin.Log.LogInfo("MoveStructure: restored " + restored + " pending moves");
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogError("MoveStructure: could not read the pending moves: " + ex.Message);
+		}
+	}
+
+	private static GameObject Find(FactoryImprint[] buildings, Factory.AssetKey key, Vector3 position)
+	{
+		foreach (FactoryImprint imprint in buildings)
+		{
+			if (imprint != null && !imprint.Released && imprint.AssetKey == key && (imprint.transform.position - position).sqrMagnitude < 0.01f)
+			{
+				return imprint.gameObject;
+			}
+		}
+		return null;
+	}
+
+	// The new blueprint of a move, found again by its key and position after loading a save.
+	private static Blueprint FindBlueprint(Factory.AssetKey key, Vector3 position)
+	{
+		foreach (Blueprint blueprint in UnityEngine.Object.FindObjectsOfType<Blueprint>())
+		{
+			if (blueprint != null && !blueprint.Released && !blueprint.IsAnti && blueprint.AssetKey == key && (blueprint.transform.position - position).sqrMagnitude < 0.01f)
+			{
+				return blueprint;
+			}
+		}
+		return null;
+	}
+
+	private static bool IsLiveTarget(Blueprint target)
+	{
+		return target != null && !target.Released && !target.IsAnti && target.recepteur != null;
+	}
+
+	// Server: the anti-blueprint removes itself once the building is demolished. If one is still there a moment
+	// later it has nothing left to demolish, so it is removed instead of staying as a ghost.
+	private static void CheckDemolished()
+	{
+		if (ToCheck.Count == 0 || !NetworkServer.active)
+		{
+			return;
+		}
+		float now = Time.realtimeSinceStartup;
+		for (int i = ToCheck.Count - 1; i >= 0; i--)
+		{
+			Demolished demolished = ToCheck[i];
+			if (now < demolished.CheckAt)
+			{
+				continue;
+			}
+			ToCheck.RemoveAt(i);
+			foreach (Blueprint blueprint in UnityEngine.Object.FindObjectsOfType<Blueprint>())
+			{
+				if (blueprint == null || blueprint.Released || !blueprint.IsAnti || blueprint.AssetKey != demolished.BlueprintKey || (blueprint.transform.position - demolished.Position).sqrMagnitude > 0.01f)
+				{
+					continue;
+				}
+				Plugin.Log.LogInfo("MoveStructure: removed the demolish ghost left at " + demolished.Position + " (" + blueprint.name + ", state " + blueprint.State + ")");
+				blueprint.gameObject.SafeNetworkDestroy();
+			}
+		}
+	}
+
+	// Server: a building demolished by a move drops its contents; the materials it cost go into the new blueprint,
+	// or on the ground when that blueprint is gone.
+	internal static void OnRelease(GameObject building)
+	{
+		if (!NetworkServer.active || !Pending.TryGetValue(building, out PendingMove move))
+		{
+			return;
+		}
+		Description cost = move.Cost;
+		Blueprint target = IsLiveTarget(move.Target) ? move.Target : null;
 		Pending.Remove(building);
+		FactoryImprint imprint = building.GetComponent<FactoryImprint>();
+		if (imprint != null)
+		{
+			ToCheck.Add(new Demolished { BlueprintKey = BlueprintAssetKeyResolver.Resolve(imprint.AssetKey), Position = building.transform.position, CheckAt = Time.realtimeSinceStartup + 1f });
+		}
 		GameComponent component = building.GetComponent<GameComponent>();
 		if (component != null && component.recepteur != null && component.recepteur.CarriesSomething())
 		{
@@ -204,6 +442,7 @@ internal static class MoveStructure
 		}
 		Vector3 center = building.transform.position;
 		List<GameObject> dropped = new List<GameObject>();
+		int delivered = 0;
 		foreach (Ressource ressource in cost.GetRessources().ToList())
 		{
 			Factory.AssetKey item = Description.RepresentativeOf(ressource);
@@ -214,14 +453,28 @@ internal static class MoveStructure
 			for (int i = 0; i < ressource.quantifiable.valeur; i++)
 			{
 				GameObject go = Transactor.SpawnUNet(item, component != null ? component.faction : null, center + Vector3.up * 0.5f, Quaternion.identity);
-				if (go != null)
+				if (go == null)
+				{
+					continue;
+				}
+				// As a worker's delivery does it (Transaction.Store).
+				if (target != null && target.recepteur.HasRoomFor(go))
+				{
+					target.recepteur.AddObject(go);
+					go.GetComponent<GameComponent>().Soulever();
+					delivered++;
+				}
+				else
 				{
 					dropped.Add(go);
 				}
 			}
 		}
-		Recepteur.ScatterObjects(dropped, center);
-		Plugin.Log.LogInfo("Moved " + building.name + ": dropped " + dropped.Count + " material items");
+		if (dropped.Count > 0)
+		{
+			Recepteur.ScatterObjects(dropped, center);
+		}
+		Plugin.Log.LogInfo("Moved " + building.name + ": " + delivered + " material items into the new blueprint, " + dropped.Count + " dropped");
 	}
 }
 
@@ -286,6 +539,20 @@ internal static class MoveStructureReleasePatch
 		if (imprint != null && !imprint.Released)
 		{
 			MoveStructure.OnRelease(imprint.gameObject);
+		}
+	}
+}
+
+// Saves the pending moves with the game.
+[Feature(Features.MoveStructure, Features.MoveStructureInfo)]
+[HarmonyPatch(typeof(Asset_Map), "Disk_Save")]
+internal static class MoveStructureSavePatch
+{
+	private static void Postfix(Asset_Map __instance)
+	{
+		if (NetworkServer.active && !string.IsNullOrEmpty(__instance.path))
+		{
+			MoveStructure.WritePending(__instance.path);
 		}
 	}
 }

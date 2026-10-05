@@ -25,13 +25,27 @@ internal static class TaskReservation
 		public Labor Labor;
 
 		public float Until;
+
+		public float Since;
 	}
 
 	private const float TimeoutSeconds = 15f;
 
+	// After this, a reservation only holds while the worker's task (current or about to start) is the goal's.
+	private const float GraceSeconds = 2f;
+
 	private static readonly Dictionary<Goal, List<Reservation>> ByGoal = new Dictionary<Goal, List<Reservation>>();
 
 	private static readonly Dictionary<Labor, Reservation> ByLabor = new Dictionary<Labor, Reservation>();
+
+	private static void Enable()
+	{
+		GameSession.OnLeave(() =>
+		{
+			ByGoal.Clear();
+			ByLabor.Clear();
+		});
+	}
 
 	public static bool IsExclusive(Goal goal)
 	{
@@ -49,7 +63,8 @@ internal static class TaskReservation
 		{
 			Goal = goal,
 			Labor = labor,
-			Until = Time.time + TimeoutSeconds
+			Until = Time.time + TimeoutSeconds,
+			Since = Time.time
 		};
 		ByLabor[labor] = reservation;
 		if (!ByGoal.TryGetValue(goal, out List<Reservation> list))
@@ -101,15 +116,28 @@ internal static class TaskReservation
 		return count;
 	}
 
-	// A reservation ends when it times out, when either side is gone, or once the game has the worker on the
-	// goal (from then on the game's own worker list keeps others away).
+	// A reservation ends when it times out, when either side is gone, once the game has the worker on the goal
+	// (from then on the game's own worker list keeps others away), or when the worker went on to something else: a
+	// worker whose task for the goal failed or was never started blocked the goal for others for the full 15 s, and,
+	// searching again, often reserved it again (the worker trace showed open build tasks nobody would take).
 	private static bool IsValid(Reservation reservation)
 	{
 		if (Time.time > reservation.Until || reservation.Labor.IsNullOrReleased() || reservation.Goal.IsNullOrReleased())
 		{
 			return false;
 		}
-		return !reservation.Goal.workers.Contains(reservation.Labor);
+		if (reservation.Goal.workers.Contains(reservation.Labor))
+		{
+			return false;
+		}
+		if (Time.time - reservation.Since < GraceSeconds)
+		{
+			return true;
+		}
+		GameObject goal = reservation.Goal.gameObject;
+		Task current = reservation.Labor.CurrentTask;
+		Task pending = reservation.Labor.PendingTask;
+		return (current != null && current.Giver == goal) || (pending != null && pending.Giver == goal);
 	}
 
 	public static bool IsReservedByOther(Goal goal, Labor labor)

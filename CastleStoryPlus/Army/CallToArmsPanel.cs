@@ -536,8 +536,15 @@ internal class CallToArmsPanel : MonoBehaviour
 		return root;
 	}
 
+	// One per colour for the whole session: the panel is rebuilt every game.
+	private static readonly Dictionary<Color, Material> MarkerMaterials = new Dictionary<Color, Material>();
+
 	private static Material MarkerMaterial(Color color)
 	{
+		if (MarkerMaterials.TryGetValue(color, out Material cached) && cached != null)
+		{
+			return cached;
+		}
 		Shader shader = Shader.Find("Sprites/Default");
 		if (shader == null)
 		{
@@ -549,6 +556,7 @@ internal class CallToArmsPanel : MonoBehaviour
 		}
 		Material material = new Material(shader);
 		material.color = color;
+		MarkerMaterials[color] = material;
 		return material;
 	}
 

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 using Brix.Assets;
 using Brix.Engine;
 using Brix.External.Signals;
@@ -35,36 +37,20 @@ internal static class ContinueButtonPatch
 			return;
 		}
 		Container.Item play = container.items[playIdx];
-		Container.Item item = new Container.Item
+		// A copy of every setting of Play (state, group, layout, contexts...): an item left in the default Closed
+		// state is hidden by the container.
+		Container.Item item = new Container.Item();
+		foreach (FieldInfo field in typeof(Container.Item).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
 		{
-			usesOriginalAssetKey = play.usesOriginalAssetKey,
-			originalAssetKey = play.originalAssetKey,
-			original = play.original,
-			parentTrs = play.parentTrs,
-			keepImageEnabled = play.keepImageEnabled,
-			keepSpriteImageEnabled = play.keepSpriteImageEnabled,
-			imageTexture = play.imageTexture,
-			sprite = play.sprite,
-			size = play.size,
-			titleText = Title,
-			menuContext = play.menuContext,
-			networkContext = play.networkContext,
-			debugContext = play.debugContext,
-			worldEditorContext = play.worldEditorContext,
-			playerContext = play.playerContext,
-			color = play.color,
-			bgColor = play.bgColor,
-			idxOffset = play.idxOffset,
-			MinWidth = play.MinWidth,
-			MinHeight = play.MinHeight,
-			PrefWidth = play.PrefWidth,
-			PrefHeight = play.PrefHeight,
-			FlexWidth = play.FlexWidth,
-			FlexHeight = play.FlexHeight,
-			isDynamic = play.isDynamic,
-			IsTitleCaps = play.IsTitleCaps,
-			containerPopulatorOperation = MenuOperations.ContinueGame
-		};
+			field.SetValue(item, field.GetValue(play));
+		}
+		item.instance = null;
+		item.titleText = Title;
+		item.localizeTitle = string.Empty;
+		item.actionItems = new List<Container.Item.ActionItem>();
+		item.isDefaultInGroup = false;
+		item.doClick = false;
+		item.containerPopulatorOperation = MenuOperations.ContinueGame;
 		if (!play.isDynamic)
 		{
 			if (play.instance == null)

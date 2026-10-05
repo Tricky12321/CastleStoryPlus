@@ -217,6 +217,7 @@ internal class PlusLogo : MonoBehaviour
 		Texture2D texture = new Texture2D(2, 2, TextureFormat.ARGB32, mipmap: true);
 		if (!texture.LoadImage(File.ReadAllBytes(path)))
 		{
+			Destroy(texture);
 			return null;
 		}
 		texture.filterMode = FilterMode.Trilinear;

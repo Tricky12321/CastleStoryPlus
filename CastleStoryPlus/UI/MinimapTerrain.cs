@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Brix.Components;
 using Brix.Engine;
 using Brix.Engine.Blocks;
+using Brix.Engine.FlatWorld.Layers;
 using Brix.UI;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Loading;
@@ -42,6 +43,18 @@ internal class MinimapTerrain : MonoBehaviour
 
 	private int _size;
 
+	// Reused on every refresh: a 1024 x 1024 map needs ~9 MB of buffers, and allocating them every 15 seconds made
+	// the heap grow (Unity's Mono GC does not compact).
+	private int[] _heights;
+
+	private byte[] _types;
+
+	private Color32[] _pixels;
+
+	private readonly List<XYZ> _placed = new List<XYZ>();
+
+	private readonly HashSet<XYZ> _tops = new HashSet<XYZ>();
+
 	private static void Postfix(MiniMap __instance)
 	{
 		if (__instance.mapImage == null || __instance.GetComponent<MinimapTerrain>() != null)
@@ -78,30 +91,33 @@ internal class MinimapTerrain : MonoBehaviour
 	private IEnumerator Build()
 	{
 		int count = _size * _size;
-		int[] heights = new int[count];
-		byte[] types = new byte[count];
+		if (_heights == null || _heights.Length != count)
+		{
+			_heights = new int[count];
+			_types = new byte[count];
+			_pixels = new Color32[count];
+		}
+		int[] heights = _heights;
+		byte[] types = _types;
 		for (int i = 0; i < count; i++)
 		{
 			heights[i] = -1;
+			types[i] = 0;
 		}
 		FrameBudget budget = new FrameBudget(4);
-		// The terrain can change between frames; if the enumeration breaks, this refresh is skipped.
-		IEnumerator<XYZ> tops = Voxel.Engine.GetTopVoxelPositionsFromLayers().GetEnumerator();
-		while (true)
+		// The game's GetTopVoxelPositionsFromLayers builds a new set of every column's top voxel (~1M on a big map)
+		// on each call; fill one kept set instead. The set is a snapshot, so later terrain changes cannot break it.
+		_tops.Clear();
+		if (Voxel.Engine is LayerVoxelEngine layered && layered.test != null)
 		{
-			XYZ top;
-			try
-			{
-				if (!tops.MoveNext())
-				{
-					break;
-				}
-				top = tops.Current;
-			}
-			catch (InvalidOperationException)
-			{
-				yield break;
-			}
+			layered.test.GetTopVoxelsFromLayers(_tops);
+		}
+		else
+		{
+			_tops.UnionWith(Voxel.Engine.GetTopVoxelPositionsFromLayers());
+		}
+		foreach (XYZ top in _tops)
+		{
 			int index = IndexOf(top);
 			if (index >= 0 && top.y > heights[index])
 			{
@@ -117,8 +133,9 @@ internal class MinimapTerrain : MonoBehaviour
 		BlockEngine blocks = BrixSingleton<BlockEngine>.Instance;
 		if (blocks != null && blocks._blocks != null)
 		{
-			List<XYZ> placed = new List<XYZ>(blocks._blocks.Keys);
-			foreach (XYZ block in placed)
+			_placed.Clear();
+			_placed.AddRange(blocks._blocks.Keys);
+			foreach (XYZ block in _placed)
 			{
 				int index = IndexOf(block);
 				if (index >= 0 && block.y >= heights[index])
@@ -163,7 +180,7 @@ internal class MinimapTerrain : MonoBehaviour
 			}
 		}
 		float range = Mathf.Max(1, maxY - minY);
-		Color32[] pixels = new Color32[heights.Length];
+		Color32[] pixels = _pixels;
 		for (int z = 0; z < _size; z++)
 		{
 			for (int x = 0; x < _size; x++)

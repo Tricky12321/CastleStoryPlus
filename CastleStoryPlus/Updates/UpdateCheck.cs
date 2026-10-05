@@ -48,15 +48,19 @@ internal class UpdateCheck : MonoBehaviour
 		SceneManager.sceneLoaded += (Scene scene, LoadSceneMode mode) => ShowIfMenu();
 		WWW www = new WWW("https://api.github.com/repos/" + Repo + "/releases?per_page=30", null, GitHubHeaders());
 		yield return www;
-		if (!string.IsNullOrEmpty(www.error))
+		// WWW holds native buffers until disposed.
+		string error = www.error;
+		string json = string.IsNullOrEmpty(error) ? www.text : null;
+		www.Dispose();
+		if (!string.IsNullOrEmpty(error))
 		{
-			Plugin.Log.LogInfo("Update check failed: " + www.error);
+			Plugin.Log.LogInfo("Update check failed: " + error);
 			yield break;
 		}
 		string best = null;
 		try
 		{
-			foreach (JToken release in JArray.Parse(www.text))
+			foreach (JToken release in JArray.Parse(json))
 			{
 				string tag = (string)release["tag_name"];
 				if (tag == null || (bool?)release["draft"] == true || (bool?)release["prerelease"] == true || ParseVersion(tag) == null)
@@ -186,12 +190,15 @@ internal class UpdateCheck : MonoBehaviour
 		{
 			WWW www = new WWW(_installerUrl);
 			yield return www;
-			if (string.IsNullOrEmpty(www.error) && www.bytes != null && www.bytes.Length > 0)
+			string error = www.error;
+			byte[] bytes = string.IsNullOrEmpty(error) ? www.bytes : null;
+			www.Dispose();
+			if (bytes != null && bytes.Length > 0)
 			{
 				string downloaded = Path.Combine(BepInEx.Paths.BepInExRootPath, "CastleStoryPlus.Updater" + Path.GetExtension(InstallerName));
 				try
 				{
-					File.WriteAllBytes(downloaded, www.bytes);
+					File.WriteAllBytes(downloaded, bytes);
 					installer = downloaded;
 				}
 				catch (Exception ex)
@@ -201,7 +208,7 @@ internal class UpdateCheck : MonoBehaviour
 			}
 			else
 			{
-				Plugin.Log.LogWarning("Could not download the " + _latest + " installer (" + www.error + "); using the shipped one");
+				Plugin.Log.LogWarning("Could not download the " + _latest + " installer (" + error + "); using the shipped one");
 			}
 		}
 		if (!File.Exists(installer))

@@ -104,7 +104,7 @@ internal class RespawnStatus : MonoBehaviour
 		{
 			return "respawn in " + Mathf.CeilToInt(firefly.captureTimer.RemainingSeconds()) + " s";
 		}
-		int required = GeneralRules.Main.GetHomeCrystalSpawnRequiredEnergy(nest.GetActiveOrSpawnableCharacterCount());
+		int required = RespawnCost.Enabled ? RespawnCost.Energy : GeneralRules.Main.GetHomeCrystalSpawnRequiredEnergy(nest.GetActiveOrSpawnableCharacterCount());
 		int missing = required - nest.GetAvailablePurifiedEnergy();
 		return (missing > 0) ? ("needs " + missing + " energy") : "respawning";
 	}

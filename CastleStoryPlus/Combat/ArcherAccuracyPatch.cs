@@ -18,6 +18,11 @@ internal static class Homing
 	// Per shot; projectiles are pooled, so the entry is replaced on every FireAt.
 	public static readonly Dictionary<KinematicProjectile, Location> Targets = new Dictionary<KinematicProjectile, Location>();
 
+	static Homing()
+	{
+		GameSession.OnLeave(Targets.Clear);
+	}
+
 	public static bool IsBricktronArrow(KinematicProjectile projectile, GameObject attacker)
 	{
 		return projectile.Archetype == KinematicProjectile.AttackArchetype.Arrow && attacker != null && attacker.GetComponent<Labor>() != null;

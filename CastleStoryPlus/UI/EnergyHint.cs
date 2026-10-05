@@ -190,7 +190,7 @@ internal class EnergyHint : MonoBehaviour
 				popup.Root.transform.rotation = camera.transform.rotation;
 				// Constant size on screen, whatever the zoom.
 				float distance = Vector3.Distance(camera.transform.position, popup.Root.transform.position);
-				popup.Root.transform.localScale = Vector3.one * (0.0008f * distance);
+				popup.Root.transform.localScale = Vector3.one * (0.00045f * distance);
 			}
 			float alpha = (t < 0.7f) ? 1f : (1f - (t - 0.7f) / 0.3f);
 			SetAlpha(popup.Amount, alpha);

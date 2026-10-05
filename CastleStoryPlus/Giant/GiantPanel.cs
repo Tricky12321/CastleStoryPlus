@@ -133,8 +133,7 @@ end
 		if (faction != null)
 		{
 			_limitText.text = "3x bricktrons: " + GiantBricktron.CountGiants(faction) + " / " + GiantBricktron.Limit(faction) + " (one per " + GiantBricktron.BricktronsPerGiant.Value + " bricktrons)";
-			FireflyNest nest = GiantBricktron.HomeNest(faction);
-			_costText.text = (nest != null) ? ("Cost: " + GiantBricktron.Cost(nest) + " energy (" + GiantBricktron.AvailableEnergy(nest) + " in the crystal) + the sacrificed worker") : "Cost: no home crystal";
+			_costText.text = GiantBricktron.CostText(faction);
 		}
 		string problem = (selected.Count == 2) ? GiantBricktron.Check(upgrade, sacrifice, out FireflyNest _, out int _) : "Select exactly 2 workers (" + selected.Count + " selected).";
 		_upgradeButton.interactable = problem == null;

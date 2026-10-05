@@ -10,6 +10,7 @@ using Brix.Game.Semantique;
 using Brix.Lifecycle.Pooling;
 using Brix.UI.Icons;
 using Brix.Utils;
+using CastleStoryPlus.Core;
 using Motus.Behavior;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -36,6 +37,11 @@ internal static class StockpileConsolidation
 	private const float ClaimSeconds = 60f;
 
 	private static readonly Dictionary<Labor, Move> _moves = new Dictionary<Labor, Move>();
+
+	static StockpileConsolidation()
+	{
+		GameSession.OnLeave(_moves.Clear);
+	}
 
 	public static readonly LaborInstruction<GameObject> Consolidate = new LaborInstruction<GameObject>("ConsolidateStockpiles", IconKeys.PickUp, (Labor labor, GameObject item) => MoveNode(labor, item));
 
@@ -127,6 +133,12 @@ internal static class StockpileConsolidation
 		}
 	}
 
+	// The worker is carrying a load from one stockpile to the other.
+	public static bool IsMoving(Labor labor)
+	{
+		return labor != null && labor.CurrentTask != null && _moves.ContainsKey(labor);
+	}
+
 	private static Node MoveNode(Labor labor, GameObject item)
 	{
 		if (!_moves.TryGetValue(labor, out Move move) || item == null)
@@ -171,17 +183,26 @@ internal static class StockpileConsolidation
 			{
 				continue;
 			}
-			Ressource resource = recepteur.FirstResource();
-			if (resource == null)
+			// The warehouse is the team's big store: nothing is moved out of it, and stockpiles are not emptied into it.
+			if (Building.Warehouse.IsWarehouse(go.transform))
 			{
 				continue;
 			}
-			if (!result.TryGetValue(resource, out List<Recepteur> list))
+			// A mixed stockpile (MixedStockpiles) is listed under every resource it holds.
+			foreach (KeyValuePair<System.Type, Adjectif> pair in recepteur.ContentDescription.DicoAdjectif)
 			{
-				list = new List<Recepteur>();
-				result.Add(resource, list);
+				Ressource resource = pair.Value as Ressource;
+				if (resource == null || resource.quantifiable.valeur <= 0)
+				{
+					continue;
+				}
+				if (!result.TryGetValue(resource, out List<Recepteur> list))
+				{
+					list = new List<Recepteur>();
+					result.Add(resource, list);
+				}
+				list.Add(recepteur);
 			}
-			list.Add(recepteur);
 		}
 		return result;
 	}

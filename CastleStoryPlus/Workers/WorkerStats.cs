@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 namespace CastleStoryPlus.Workers;
 
@@ -37,6 +38,38 @@ internal class WorkerStats
 	}
 
 	public static IEnumerable<KeyValuePair<CharacterState, WorkerStats>> Entries => All;
+
+	// Entries are dropped when a pooled bricktron is reused (WorkerStatsReset), but bricktrons destroyed with the
+	// scene of a left game are never reused. Their entries would keep the old game's objects in memory, so they go
+	// once the scene is unloaded. Not cleared outright: that could run after a save has loaded new stats.
+	static WorkerStats()
+	{
+		SceneManager.sceneUnloaded += (Scene scene) => PruneDestroyed();
+	}
+
+	private static void PruneDestroyed()
+	{
+		List<CharacterState> destroyed = null;
+		foreach (CharacterState state in All.Keys)
+		{
+			if (state == null)
+			{
+				if (destroyed == null)
+				{
+					destroyed = new List<CharacterState>();
+				}
+				destroyed.Add(state);
+			}
+		}
+		if (destroyed == null)
+		{
+			return;
+		}
+		foreach (CharacterState state in destroyed)
+		{
+			All.Remove(state);
+		}
+	}
 
 	public static WorkerStats Peek(CharacterState state)
 	{

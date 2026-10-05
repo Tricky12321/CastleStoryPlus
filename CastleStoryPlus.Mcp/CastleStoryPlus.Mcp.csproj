@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- MCP server (stdio) that gives Claude the tools of the in-game developer API (CastleStoryPlus.DevTools).
+       Registered for Claude Code in .mcp.json at the repository root. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>CastleStoryPlus.Mcp</AssemblyName>
+    <RootNamespace>CastleStoryPlus.Mcp</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+</Project>

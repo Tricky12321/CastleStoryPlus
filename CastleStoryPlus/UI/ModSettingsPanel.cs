@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
+using CastleStoryPlus.Combat;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
+using CastleStoryPlus.Market;
 using CastleStoryPlus.Menus;
+using CastleStoryPlus.Nature;
+using CastleStoryPlus.Pathfinding;
 using CastleStoryPlus.Saving;
+using CastleStoryPlus.WorkerAI;
 using UnityEngine;
 using UnityEngine.UI;
 using static CastleStoryPlus.UI.UiKit;
@@ -272,12 +277,57 @@ end
 		AddSection("ECONOMY");
 		_energyText = AddStepperRow("Energy per brewed firefly", StepEnergy);
 
+		if (HeuristicPatch.Weight != null)
+		{
+			AddSection("PATHFINDING");
+			AddIntStepper("Route search (12 shortest, 45 game)", HeuristicPatch.Weight, 1, 12, 45);
+			if (HeuristicPatch.EnemyWeight != null)
+			{
+				AddIntStepper("Enemy route search (12 shortest, 45 game)", HeuristicPatch.EnemyWeight, 1, 12, 45);
+				AddIntStepper("Enemy search steps per update (game 20)", HeuristicPatch.EnemyBudget, 10, 20, 200);
+			}
+		}
+
+		if (AutoCleanup.Radius != null)
+		{
+			AddSection("AUTO CLEANUP");
+			AddIntStepper("Pick up loose items within (blocks)", AutoCleanup.Radius, 5, 5, 60);
+		}
+
+		if (TreeStumps.WorkMultiplier != null)
+		{
+			AddSection("TREE STUMPS");
+			AddFloatStepper("Work to remove, compared to a tree", TreeStumps.WorkMultiplier, 0.5f, 0.5f, 10f, "x0.0");
+			AddIntStepper("Logs from a stump (a tree gives 3)", TreeStumps.Logs, 1, 0, 3);
+		}
+
+		if (Retreat.HealthThreshold != null)
+		{
+			AddSection("RETREAT (MELEE)");
+			AddFloatStepper("Retreat below health", Retreat.HealthThreshold, 0.05f, 0.05f, 0.9f, "0%");
+			AddFloatStepper("Fight again at health", Retreat.ResumeThreshold, 0.05f, 0.1f, 1f, "0%");
+		}
+
+		if (MarketPrices.Fee != null)
+		{
+			AddSection("MARKET");
+			AddFloatStepper("Fee per trade", MarketPrices.Fee, 0.05f, 0.05f, 0.9f, "0%");
+			AddFloatStepper("Extra price halves every (minutes)", MarketPrices.RecoveryMinutes, 1f, 1f, 60f, "0");
+		}
+
 		if (GiantBricktron.Speed != null)
 		{
 			AddSection("3X BRICKTRON");
 			AddFloatStepper("Speed of everything it does", GiantBricktron.Speed, 0.5f, 1f, 5f, "x0.0");
 			AddFloatStepper("Health", GiantBricktron.Health, 0.5f, 1f, 5f, "x0.0");
-			AddFloatStepper("Cost (energy of new bricktrons)", GiantBricktron.CostMultiplier, 0.25f, 0f, 5f, "x0.00");
+			if (GiantBricktron.UsesDarkCrystals)
+			{
+				AddIntStepper("Cost (dark crystals)", GiantBricktron.DarkCrystalCost, 5, 0, 500);
+			}
+			else
+			{
+				AddFloatStepper("Cost (energy of new bricktrons)", GiantBricktron.CostMultiplier, 0.25f, 0f, 5f, "x0.00");
+			}
 			AddIntStepper("Bricktrons per 3x bricktron", GiantBricktron.BricktronsPerGiant, 1, 1, 30);
 		}
 

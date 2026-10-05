@@ -14,8 +14,9 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Giant;
 
-// 3x bricktron: one worker upgraded with the energy of 1.5 new bricktrons and a second worker that is
-// sacrificed. It is drawn twice as big but still walks in one voxel and counts as one bricktron. Everything it
+// 3x bricktron: one worker upgraded with 50 dark crystals (DarkCrystals; without that feature the energy of 1.5 new
+// bricktrons, which the home crystal hardly ever keeps, as it turns energy into new bricktrons) and a second worker
+// that is sacrificed. It is drawn twice as big but still walks in one voxel and counts as one bricktron. Everything it
 // does runs 3x as fast (animations, so work, climbing and attacks, plus walking and running speed), and it takes
 // a third of the damage (3x health). Carrying is not tripled: at 3x speed it already hauls as much as three workers.
 // Allowed: one 3x bricktron per 5 bricktrons. The tier is stored in WorkerStats (saved and synced).
@@ -41,6 +42,8 @@ internal class GiantBricktron : MonoBehaviour
 
 	internal static ConfigEntry<float> CostMultiplier;
 
+	internal static ConfigEntry<int> DarkCrystalCost;
+
 	internal static ConfigEntry<int> BricktronsPerGiant;
 
 	private static bool _enabled;
@@ -56,7 +59,8 @@ internal class GiantBricktron : MonoBehaviour
 		Speed = Plugin.Cfg.Bind("GiantBricktron", "Speed", 3f, "Speed of everything a 3x bricktron does (work, walking, climbing, attacks).");
 		Health = Plugin.Cfg.Bind("GiantBricktron", "Health", 3f, "Health of a 3x bricktron (it takes 1/Health of the damage).");
 		Size = Plugin.Cfg.Bind("GiantBricktron", "Size", 2f, "Drawn size of a 3x bricktron. It still walks in one voxel.");
-		CostMultiplier = Plugin.Cfg.Bind("GiantBricktron", "CostMultiplier", 1.5f, "Upgrade cost: the energy of this many new bricktrons, paid from the home crystal (plus one sacrificed worker).");
+		CostMultiplier = Plugin.Cfg.Bind("GiantBricktron", "CostMultiplier", 1.5f, "Upgrade cost without the DarkCrystals feature: the energy of this many new bricktrons, paid from the home crystal (plus one sacrificed worker).");
+		DarkCrystalCost = Plugin.Cfg.Bind("GiantBricktron", "DarkCrystalCost", 50, "Upgrade cost with the DarkCrystals feature: dark crystals taken from the stockpiles (plus one sacrificed worker).");
 		BricktronsPerGiant = Plugin.Cfg.Bind("GiantBricktron", "BricktronsPerGiant", 5, "One 3x bricktron allowed per this many bricktrons.");
 		_enabled = true;
 		WorkerStats.Changed += (CharacterState state) => Pending.Add(state);
@@ -132,6 +136,19 @@ internal class GiantBricktron : MonoBehaviour
 		return null;
 	}
 
+	public static bool UsesDarkCrystals => Economy.DarkCrystals.IsOn();
+
+	// The cost line of the window.
+	public static string CostText(Faction faction)
+	{
+		if (UsesDarkCrystals)
+		{
+			return "Cost: " + DarkCrystalCost.Value + " dark crystals (" + Economy.DarkCrystals.Stock(faction) + " in the stockpiles) + the sacrificed worker";
+		}
+		FireflyNest nest = HomeNest(faction);
+		return (nest != null) ? ("Cost: " + Cost(nest) + " energy (" + AvailableEnergy(nest) + " in the crystal) + the sacrificed worker") : "Cost: no home crystal";
+	}
+
 	public static int Cost(FireflyNest nest)
 	{
 		return Mathf.CeilToInt(nest.NewFireflyRequiredEnergy * CostMultiplier.Value);
@@ -202,6 +219,12 @@ internal class GiantBricktron : MonoBehaviour
 		{
 			return "Limit reached: " + giants + "/" + limit + " (one per " + BricktronsPerGiant.Value + " bricktrons).";
 		}
+		if (UsesDarkCrystals)
+		{
+			cost = DarkCrystalCost.Value;
+			int stock = Economy.DarkCrystals.Stock(faction);
+			return (stock < cost) ? ("Not enough dark crystals in the stockpiles: " + stock + "/" + cost + ".") : null;
+		}
 		nest = HomeNest(faction);
 		if (nest == null)
 		{
@@ -229,7 +252,17 @@ internal class GiantBricktron : MonoBehaviour
 		{
 			return problem;
 		}
-		nest.ConsumeUnnamedFirefliesUpTo(cost);
+		if (UsesDarkCrystals)
+		{
+			if (!Economy.DarkCrystals.Consume(FactionOf(upgrade), cost))
+			{
+				return "Not enough dark crystals in the stockpiles.";
+			}
+		}
+		else
+		{
+			nest.ConsumeUnnamedFirefliesUpTo(cost);
+		}
 		GiantSacrifice.Mark(sacrifice.gameObject);
 		BricktronDamageReceiver receiver = sacrifice.GetComponent<BricktronDamageReceiver>();
 		if (receiver != null)
@@ -237,7 +270,7 @@ internal class GiantBricktron : MonoBehaviour
 			receiver.Kill();
 		}
 		WorkerStats.Modify(upgrade.state, (WorkerStats s) => s.Tier = 1);
-		Plugin.Log.LogInfo("3x bricktron: " + NameOf(upgrade) + " upgraded for " + cost + " energy, " + NameOf(sacrifice) + " sacrificed");
+		Plugin.Log.LogInfo("3x bricktron: " + NameOf(upgrade) + " upgraded for " + cost + (UsesDarkCrystals ? " dark crystals, " : " energy, ") + NameOf(sacrifice) + " sacrificed");
 		return null;
 	}
 
