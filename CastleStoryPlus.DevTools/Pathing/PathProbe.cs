@@ -85,6 +85,8 @@ internal static class PathProbe
 		}
 		Navigation navigation = labor.navigation;
 		SearchPathRequest request = SearchPathRequest.Make();
+		PathStats.Paused = true;
+		CastleStoryPlus.Pathfinding.SearchFrameBudget.Unlimited = true;
 		try
 		{
 			request.InitNavigation(navigation);
@@ -121,6 +123,8 @@ internal static class PathProbe
 		}
 		finally
 		{
+			PathStats.Paused = false;
+			CastleStoryPlus.Pathfinding.SearchFrameBudget.Unlimited = false;
 			if (request.Search != null)
 			{
 				request.Search.Clear();

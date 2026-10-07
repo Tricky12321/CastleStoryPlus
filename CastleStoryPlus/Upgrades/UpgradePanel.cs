@@ -74,6 +74,9 @@ internal class UpgradePanel : MonoBehaviour
 
 	private readonly Dictionary<UpgradeHall, Text> _queueEmpties = new Dictionary<UpgradeHall, Text>();
 
+	// Research station: how many of the crystal its research is paid in the stockpiles hold, in the header.
+	private readonly Dictionary<UpgradeHall, Text> _crystalTexts = new Dictionary<UpgradeHall, Text>();
+
 	private readonly Dictionary<UpgradeHall, Transform> _queueLists = new Dictionary<UpgradeHall, Transform>();
 
 	private readonly List<QueueRow> _queueRows = new List<QueueRow>();
@@ -131,7 +134,15 @@ internal class UpgradePanel : MonoBehaviour
 			RefreshRow(row, faction, queue, queued);
 		}
 		RefreshQueue(queue, queued);
+		if (_crystalTexts.TryGetValue(_hall, out Text crystals))
+		{
+			_stock.TryGetValue(ResearchCrystal.GetType(), out int have);
+			crystals.text = (Economy.DarkCrystals.IsOn() ? "Dark crystals: " : "Blue crystals: ") + have;
+		}
 	}
+
+	// The crystal the research station's studies are paid in.
+	private static Ressource ResearchCrystal => Economy.DarkCrystals.IsOn() ? Economy.DarkCrystals.Resource : Adjectif.blueCrystal;
 
 	private void RefreshRow(LineRow row, Faction faction, List<RecipeInfo> queue, int queued)
 	{
@@ -139,9 +150,9 @@ internal class UpgradePanel : MonoBehaviour
 		int tier = TeamUpgrades.Tier(faction, line.Index);
 		int queuedTier = QueuedTier(queue, line);
 		int next = tier + 1;
-		row.Icon.sprite = IconFor(line, Mathf.Clamp(Mathf.Max(next, queuedTier), 1, UpgradeLines.MaxTier));
-		row.Title.text = "<b>" + line.Name + "</b>  <color=#999999>" + line.Unit + "</color>  " + TierText(tier);
-		if (next > UpgradeLines.MaxTier)
+		row.Icon.sprite = IconFor(line, Mathf.Clamp(Mathf.Max(next, queuedTier), 1, line.Tiers));
+		row.Title.text = "<b>" + line.Name + "</b>  <color=#999999>" + line.Unit + "</color>  " + TierText(line, tier);
+		if (next > line.Tiers)
 		{
 			row.Effect.text = line.Effect[tier];
 			row.Effect.color = Done;
@@ -152,7 +163,7 @@ internal class UpgradePanel : MonoBehaviour
 		}
 		row.Effect.text = ((tier > 0) ? (line.Effect[tier] + "  ->  ") : "Next: ") + line.Effect[next];
 		row.Effect.color = TextColor;
-		row.Cost.text = "Tier " + next + " (" + UpgradeLines.TierNames[next] + "): " + CostText(line.Cost[next]);
+		row.Cost.text = "Tier " + next + " (" + UpgradeLines.TierName(line, next) + "): " + CostText(line.Cost[next]);
 		if (queuedTier > 0)
 		{
 			row.Research.interactable = false;
@@ -180,13 +191,13 @@ internal class UpgradePanel : MonoBehaviour
 		return 0;
 	}
 
-	private static string TierText(int tier)
+	private static string TierText(UpgradeLine line, int tier)
 	{
 		if (tier == 0)
 		{
 			return "<color=#999999>not researched</color>";
 		}
-		return "<color=#ffcc40>Tier " + tier + " " + UpgradeLines.TierNames[tier] + "</color>";
+		return "<color=#ffcc40>Tier " + tier + " " + UpgradeLines.TierName(line, tier) + "</color>";
 	}
 
 	// "6 iron, 4 planks", each count red when the stockpiles hold less.
@@ -248,6 +259,10 @@ internal class UpgradePanel : MonoBehaviour
 	{
 		_stock.Clear();
 		List<Ressource> resources = new List<Ressource>(UpgradeLines.Storage(_hall).Keys);
+		if (_hall == UpgradeHall.Research && !resources.Exists((Ressource resource) => resource.GetType() == ResearchCrystal.GetType()))
+		{
+			resources.Add(ResearchCrystal);
+		}
 		foreach (Ressource resource in resources)
 		{
 			_stock[resource.GetType()] = 0;
@@ -284,7 +299,7 @@ internal class UpgradePanel : MonoBehaviour
 			return;
 		}
 		int next = TeamUpgrades.Tier(StationFaction, line.Index) + 1;
-		if (next > UpgradeLines.MaxTier || line.Recipe[next] == null || QueuedTier(_station.QueuedRecipes, line) > 0)
+		if (next > line.Tiers || line.Recipe[next] == null || QueuedTier(_station.QueuedRecipes, line) > 0)
 		{
 			return;
 		}
@@ -314,6 +329,32 @@ internal class UpgradePanel : MonoBehaviour
 
 	private Transform _canvas;
 
+	private static string HallTitle(UpgradeHall hall)
+	{
+		switch (hall)
+		{
+		case UpgradeHall.Smithy:
+			return "SMITHY";
+		case UpgradeHall.Armoury:
+			return "ARMOURY";
+		default:
+			return "RESEARCH STATION";
+		}
+	}
+
+	private static string HallIntro(UpgradeHall hall)
+	{
+		switch (hall)
+		{
+		case UpgradeHall.Smithy:
+			return "Weapon upgrades for the whole team. Each tier is researched once and works for every bricktron at once.";
+		case UpgradeHall.Armoury:
+			return "Armour upgrades for the whole team. Each tier is researched once and works for every soldier at once.";
+		default:
+			return "Studies that improve the whole colony, paid in " + (Economy.DarkCrystals.IsOn() ? "dark crystals" : "blue crystal") + ". Each tier is researched once and works at once.";
+		}
+	}
+
 	private GameObject WindowFor(UpgradeHall hall)
 	{
 		if (_windows.TryGetValue(hall, out GameObject window) && window != null)
@@ -332,13 +373,16 @@ internal class UpgradePanel : MonoBehaviour
 		windowRect.anchoredPosition = new Vector2(-64f, 0f);
 
 		Transform header = CreateRow(window.transform, 30f);
-		Text title = CreateText(header, (hall == UpgradeHall.Smithy) ? "SMITHY" : "ARMOURY", 18, Yellow, TextAnchor.MiddleLeft);
+		Text title = CreateText(header, HallTitle(hall), 18, Yellow, TextAnchor.MiddleLeft);
 		title.fontStyle = FontStyle.Bold;
 		Flexible(title.gameObject);
+		if (hall == UpgradeHall.Research)
+		{
+			Text crystals = CreateText(header, string.Empty, 14, Yellow, TextAnchor.MiddleRight);
+			_crystalTexts[hall] = crystals;
+		}
 		CreateButton(header, "X", 28f, Close);
-		Text intro = AddNote(window.transform, (hall == UpgradeHall.Smithy)
-			? "Weapon upgrades for the whole team. Each tier is researched once and works for every bricktron at once."
-			: "Armour upgrades for the whole team. Each tier is researched once and works for every soldier at once.");
+		Text intro = AddNote(window.transform, HallIntro(hall));
 		intro.color = Grey;
 
 		List<LineRow> rows = new List<LineRow>();

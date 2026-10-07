@@ -15,6 +15,7 @@ using Brix.Transactions;
 using Brix.Utils;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
+using CastleStoryPlus.Menus;
 using MoonSharp.Interpreter;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -28,8 +29,11 @@ namespace CastleStoryPlus.Diagnostics;
 // - Bricktrons: new builders at the home crystal, heal every own bricktron, the worker trace on or off
 //   (BepInEx/workertrace.log: what the workers do, and why they reject or fail tasks; works on clients too);
 // - Resources: drops 10, 50 or 100 of a resource on the ground where the camera looks;
-// - Enemies: corruptrons where the camera looks, kill every enemy within 30 blocks of it;
-// - Waves (invasion): next wave now, +1 or +5 minutes before the next wave, freeze the wave timer.
+// - Enemies: corruptrons where the camera looks, kill every enemy within 30 blocks of it, 100% critrate (every hit and
+//   shot of the player's bricktrons is a critical hit, whatever their level; not saved);
+// - Waves (invasion): next wave now, +1, +5, +10 or +15 minutes before the next wave, freeze the wave timer, and the fixed time
+//   between waves (the choices of the new game screen; saved with the world, a longer current wait is cut to it).
+// - Routes: draws the route searches of the selected bricktrons (RouteView): coarse, straightened and walked.
 // Wave commands are queued here and carried out by the invasion server script on its next slow update.
 [Feature(Features.DebugMenu, Features.DebugMenuInfo)]
 internal class DebugMenu : MonoBehaviour
@@ -39,6 +43,9 @@ internal class DebugMenu : MonoBehaviour
 	private const int WaveNext = -1;
 
 	private const int WaveFreeze = -2;
+
+	// Commands at or below this set the time between waves: WaveIntervalCommand - seconds.
+	private const int WaveIntervalCommand = -1000;
 
 	private static readonly KeyValuePair<string, Ressource>[] ResourceButtons =
 	{
@@ -69,6 +76,8 @@ internal class DebugMenu : MonoBehaviour
 
 	private static float _waveReportedAt = -100f;
 
+	private static float _waveDuration = -1f;
+
 	private static int _waveCommand;
 
 	private GameObject _window;
@@ -80,6 +89,12 @@ internal class DebugMenu : MonoBehaviour
 	private Text _amountLabel;
 
 	private Text _traceLabel;
+
+	private Text _routesLabel;
+
+	private Text _critLabel;
+
+	private Text _routesText;
 
 	private int _amount = 10;
 
@@ -93,6 +108,7 @@ internal class DebugMenu : MonoBehaviour
 			DynValue remaining = args[0];
 			_waveRemaining = (remaining.Type == DataType.Number) ? (float)remaining.Number : -1f;
 			_waveFrozen = args[1].CastToBool();
+			_waveDuration = (args[2].Type == DataType.Number) ? (float)args[2].Number : -1f;
 			_waveReportedAt = Time.unscaledTime;
 			int command = _waveCommand;
 			_waveCommand = 0;
@@ -108,7 +124,7 @@ Hooks.Connect(hk_SlowUpdate, function()
 	elseif t ~= nil and t.running then
 		remaining = t:RemainingSeconds()
 	end
-	local command = CastleStoryPlus.DebugWave(remaining, CSP_FrozenWave ~= nil)
+	local command = CastleStoryPlus.DebugWave(remaining, CSP_FrozenWave ~= nil, sv_Settings and sv_Settings.waveDuration)
 	if t == nil then
 		return
 	end
@@ -116,6 +132,15 @@ Hooks.Connect(hk_SlowUpdate, function()
 		CSP_FrozenWave = nil
 		NextWave()
 		return
+	elseif command <= -1000 then
+		local duration = -1000 - command
+		sv_Settings.waveDuration = duration
+		if CSP_FrozenWave ~= nil and CSP_FrozenWave > duration then
+			CSP_FrozenWave = duration
+		elseif CSP_FrozenWave == nil and t.running and remaining > duration then
+			t:Start(duration)
+			_SendWaveTime(true)
+		end
 	elseif command == -2 then
 		if CSP_FrozenWave ~= nil then
 			CSP_FrozenWave = nil
@@ -183,7 +208,7 @@ end)
 		GameObject canvas = CreateCanvas("DebugMenuCanvas", transform, 950);
 		_window = canvas;
 		GameObject window = CreatePanel("DebugMenuWindow", canvas.transform);
-		SetRect(window.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-300f, 0f), new Vector2(560f, 680f));
+		SetRect(window.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-300f, 0f), new Vector2(560f, 800f));
 		VerticalLayoutGroup layout = window.AddComponent<VerticalLayoutGroup>();
 		layout.padding = new RectOffset(14, 14, 10, 14);
 		layout.spacing = 6f;
@@ -226,6 +251,21 @@ end)
 		});
 		_traceLabel = trace.GetComponentInChildren<Text>();
 
+		Section(window.transform, "Routes (of the selected bricktrons)");
+		Transform routes = CreateRow(window.transform, 26f);
+		Button routesButton = CreateButton(routes, string.Empty, 130f, () =>
+		{
+			RouteView.Toggle();
+			SetStatus(RouteView.Enabled ? "Routes on: select bricktrons and give them somewhere to go." : "Routes off.");
+			Refresh();
+		});
+		_routesLabel = routesButton.GetComponentInChildren<Text>();
+		Legend(routes, "coarse", RouteView.CoarseColor);
+		Legend(routes, "straightened", RouteView.ImprovedColor);
+		Legend(routes, "walked", RouteView.FinalColor);
+		_routesText = CreateText(CreateRow(window.transform, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
+		Flexible(_routesText.gameObject);
+
 		Section(window.transform, "Resources (dropped where the camera looks)");
 		Transform amountRow = CreateRow(window.transform, 26f);
 		_amountLabel = CreateText(amountRow, string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
@@ -255,15 +295,37 @@ end)
 		CreateButton(enemies, "+1 corruptron", 120f, () => Run(() => SpawnEnemies(1)));
 		CreateButton(enemies, "+5 corruptrons", 120f, () => Run(() => SpawnEnemies(5)));
 		CreateButton(enemies, "Kill enemies near", 150f, () => Run(KillEnemies));
+		Button crit = CreateButton(enemies, string.Empty, 150f, () =>
+		{
+			CastleStoryPlus.Combat.CriticalHits.Forced = !CastleStoryPlus.Combat.CriticalHits.Forced;
+			SetStatus(CastleStoryPlus.Combat.CriticalHits.Forced ? "Every hit and shot of your bricktrons is a critical hit." : "Critical hits by level again.");
+			Refresh();
+		});
+		_critLabel = crit.GetComponentInChildren<Text>();
 
 		Section(window.transform, "Invasion waves");
 		_waveText = CreateText(CreateRow(window.transform, 20f), string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
 		Flexible(_waveText.gameObject);
 		Transform waves = CreateRow(window.transform, 26f);
-		CreateButton(waves, "Next wave now", 120f, () => QueueWave(WaveNext));
-		CreateButton(waves, "+1 min", 70f, () => QueueWave(60));
-		CreateButton(waves, "+5 min", 70f, () => QueueWave(300));
-		CreateButton(waves, "Freeze / resume", 130f, () => QueueWave(WaveFreeze));
+		CreateButton(waves, "Next wave now", 110f, () => QueueWave(WaveNext));
+		CreateButton(waves, "+1 min", 60f, () => QueueWave(60));
+		CreateButton(waves, "+5 min", 60f, () => QueueWave(300));
+		CreateButton(waves, "+10 min", 60f, () => QueueWave(600));
+		CreateButton(waves, "+15 min", 60f, () => QueueWave(900));
+		CreateButton(waves, "Freeze / resume", 120f, () => QueueWave(WaveFreeze));
+		Transform interval = CreateRow(window.transform, 26f);
+		Fixed(CreateText(interval, "Waves every", 13, TextColor, TextAnchor.MiddleLeft).gameObject, 90f, 26f);
+		foreach (int minutes in WaveInterval.Minutes)
+		{
+			int value = minutes;
+			CreateButton(interval, value + " min", 70f, () => QueueWave(WaveIntervalCommand - value * 60));
+		}
+	}
+
+	private static void Legend(Transform parent, string name, Color color)
+	{
+		Text text = CreateText(parent, name, 12, color, TextAnchor.MiddleLeft);
+		Fixed(text.gameObject, name.Length * 8f + 10f, 26f);
 	}
 
 	private static void Section(Transform parent, string title)
@@ -277,6 +339,9 @@ end)
 		_nextRefresh = Time.unscaledTime + 0.5f;
 		_amountLabel.text = "Amount: " + _amount;
 		_traceLabel.text = WorkerTrace.Active ? "Worker trace: on" : "Worker trace: off";
+		_routesLabel.text = RouteView.Enabled ? "Routes: on" : "Routes: off";
+		_critLabel.text = CastleStoryPlus.Combat.CriticalHits.Forced ? "100% critrate: on" : "100% critrate: off";
+		_routesText.text = RouteView.Enabled ? RouteView.Summary : string.Empty;
 		if (!NetworkServer.active)
 		{
 			SetStatus("Host only: these commands run on the host.");
@@ -293,7 +358,7 @@ end)
 		else
 		{
 			int seconds = Mathf.Max(0, Mathf.CeilToInt(_waveRemaining));
-			_waveText.text = "Next wave in " + (seconds / 60) + ":" + (seconds % 60).ToString("00") + (_waveFrozen ? " (frozen)" : string.Empty) + ((_waveCommand != 0) ? " - command sent" : string.Empty);
+			_waveText.text = "Next wave in " + (seconds / 60) + ":" + (seconds % 60).ToString("00") + (_waveFrozen ? " (frozen)" : string.Empty) + ((_waveDuration > 0f) ? ", waves every " + Mathf.RoundToInt(_waveDuration / 60f) + " min" : string.Empty) + ((_waveCommand != 0) ? " - command sent" : string.Empty);
 		}
 	}
 
@@ -336,7 +401,24 @@ end)
 			return;
 		}
 		_waveCommand = command;
-		SetStatus((command == WaveNext) ? "Next wave: starting." : ((command == WaveFreeze) ? "Wave timer: freeze / resume." : ("Wave timer: +" + (command / 60) + " min.")));
+		string message;
+		if (command == WaveNext)
+		{
+			message = "Next wave: starting.";
+		}
+		else if (command == WaveFreeze)
+		{
+			message = "Wave timer: freeze / resume.";
+		}
+		else if (command <= WaveIntervalCommand)
+		{
+			message = "Waves every " + ((WaveIntervalCommand - command) / 60) + " min.";
+		}
+		else
+		{
+			message = "Wave timer: +" + (command / 60) + " min.";
+		}
+		SetStatus(message);
 		Refresh();
 	}
 
@@ -393,7 +475,7 @@ end)
 	{
 		Faction faction = LocalFaction();
 		int healed = 0;
-		foreach (Labor labor in FindObjectsOfType<Labor>())
+		foreach (Labor labor in Live<Labor>.Active())
 		{
 			if (labor == null || faction == null || !faction.IsSame(labor.gameObject))
 			{
@@ -468,7 +550,7 @@ end)
 			}
 		}
 		Labor worker = null;
-		foreach (Labor labor in UnityEngine.Object.FindObjectsOfType<Labor>())
+		foreach (Labor labor in Live<Labor>.Active())
 		{
 			if (labor != null && labor.faction == faction && labor.recepteur != null)
 			{

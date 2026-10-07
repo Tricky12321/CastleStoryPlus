@@ -163,10 +163,10 @@ internal class PlusLogo : MonoBehaviour
 		rect.anchorMin = new Vector2(0.5f, 0f);
 		rect.anchorMax = new Vector2(0.5f, 0f);
 		rect.pivot = new Vector2(0.5f, 0f);
-		// Clear of the spinner (centred 64 above the curtain's edge, 64 high) with a gap, nudged left so
-		// logo plus badge are centred together.
+		// Well clear of the spinner (centred 64 above the curtain's edge, 64 high) and the status line above the
+		// title, nudged left so logo plus badge are centred together.
 		float overhang = rect.Find(BadgeName) is RectTransform badgeRect ? badgeRect.sizeDelta.x - BadgeTuck * rect.sizeDelta.x : 0f;
-		rect.anchoredPosition = new Vector2(-overhang * 0.5f, 140f);
+		rect.anchoredPosition = new Vector2(-overhang * 0.5f, 170f);
 	}
 
 	private static RectTransform NewImage(string name, Transform parent, Sprite sprite)

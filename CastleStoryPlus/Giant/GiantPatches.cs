@@ -11,7 +11,7 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Giant;
 
-// Walking and running speed of a 3x bricktron (the animations already run faster through the animator speed).
+// Walking and running speed of a giant bricktron (the animations already run faster through the animator speed).
 [Feature(Features.GiantBricktron, Features.GiantBricktronInfo)]
 [HarmonyPatch]
 internal static class GiantMoveSpeedPatch
@@ -32,7 +32,7 @@ internal static class GiantMoveSpeedPatch
 	}
 }
 
-// 3x health: a 3x bricktron takes a third of the damage (healing and regeneration are negative and unchanged).
+// More health: a giant bricktron takes 1/Health of the damage (healing and regeneration are negative and unchanged).
 [Feature(Features.GiantBricktron, Features.GiantBricktronInfo)]
 [HarmonyPatch(typeof(BricktronDamageReceiver), nameof(BricktronDamageReceiver.ApplyDamage), new[] { typeof(float), typeof(DamageType), typeof(DamageReaction), typeof(Vector3), typeof(Vector3), typeof(float), typeof(GameObject) })]
 internal static class GiantHealthPatch

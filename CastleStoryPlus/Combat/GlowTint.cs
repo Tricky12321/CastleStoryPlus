@@ -1,17 +1,28 @@
 using System.Collections.Generic;
+using CastleStoryPlus.UI;
 using UnityEngine;
 
 namespace CastleStoryPlus.Combat;
 
-// Tints a projectile green (materials, particles, trails and lights) and puts its own colours back. Projectiles are
-// pooled, so the colours are kept per object and restored when it is reused for an ordinary shot.
-internal class HealBoltTint : MonoBehaviour
+// Tints an object one colour (materials and their pictures, particles, trails and lights) and puts its own colours
+// back: a healing bolt green, a critical hit's arrow or bolt red (a critical sword is coloured by UpgradeVisuals).
+// Projectiles are pooled, so the colours are kept per object and restored when it is reused for an ordinary shot.
+internal class GlowTint : MonoBehaviour
 {
 	internal static readonly Color Green = new Color(0.25f, 1f, 0.35f, 1f);
+
+	internal static readonly Color Red = new Color(1f, 0.15f, 0.1f, 1f);
 
 	private static readonly string[] ColorProperties = new string[3] { "_Color", "_TintColor", "_EmissionColor" };
 
 	private readonly List<KeyValuePair<Material, KeyValuePair<string, Color>>> _materials = new List<KeyValuePair<Material, KeyValuePair<string, Color>>>();
+
+	// The pictures of the object's materials: the game's own shaders mostly have no colour property, so the picture
+	// itself is swapped for a recoloured copy (TextureRecolour, shared) while tinted.
+	private readonly List<KeyValuePair<Material, KeyValuePair<string, Texture>>> _textures = new List<KeyValuePair<Material, KeyValuePair<string, Texture>>>();
+
+	// How much brighter than the picture the recoloured copy is, so the colour shows on dark wood and feathers.
+	private const float PictureBoost = 1.6f;
 
 	private readonly List<KeyValuePair<ParticleSystem, ParticleSystem.MinMaxGradient>> _particles = new List<KeyValuePair<ParticleSystem, ParticleSystem.MinMaxGradient>>();
 
@@ -23,40 +34,41 @@ internal class HealBoltTint : MonoBehaviour
 
 	private bool _captured;
 
-	private bool _green;
+	// The colour shown, null for the object's own.
+	private Color? _tint;
 
 	// The bolt and its trail (a pooled object of its own, ArrowTrailer).
-	internal static void ApplyBolt(GameObject bolt, bool green)
+	internal static void ApplyBolt(GameObject bolt, Color? tint)
 	{
-		Apply(bolt, green);
+		Apply(bolt, tint);
 		ArrowTrailer trailer = (bolt != null) ? bolt.GetComponent<ArrowTrailer>() : null;
 		if (trailer != null && trailer.trail != null)
 		{
-			Apply(trailer.trail.gameObject, green);
+			Apply(trailer.trail.gameObject, tint);
 		}
 	}
 
-	internal static void Apply(GameObject go, bool green)
+	internal static void Apply(GameObject go, Color? tint)
 	{
 		if (go == null)
 		{
 			return;
 		}
-		HealBoltTint tint = go.GetComponent<HealBoltTint>();
-		if (tint == null)
+		GlowTint glow = go.GetComponent<GlowTint>();
+		if (glow == null)
 		{
-			if (!green)
+			if (tint == null)
 			{
 				return;
 			}
-			tint = go.AddComponent<HealBoltTint>();
+			glow = go.AddComponent<GlowTint>();
 		}
-		tint.Set(green);
+		glow.Set(tint);
 	}
 
-	private void Set(bool green)
+	private void Set(Color? tint)
 	{
-		if (green == _green)
+		if (tint == _tint)
 		{
 			return;
 		}
@@ -64,13 +76,24 @@ internal class HealBoltTint : MonoBehaviour
 		{
 			Capture();
 		}
-		_green = green;
+		_tint = tint;
+		bool tinted = tint.HasValue;
+		Color color = tint.GetValueOrDefault();
 		foreach (KeyValuePair<Material, KeyValuePair<string, Color>> entry in _materials)
 		{
 			if (entry.Key != null)
 			{
 				Color original = entry.Value.Value;
-				entry.Key.SetColor(entry.Value.Key, green ? Recolor(original) : original);
+				entry.Key.SetColor(entry.Value.Key, tinted ? Recolor(original, color) : original);
+			}
+		}
+		foreach (KeyValuePair<Material, KeyValuePair<string, Texture>> entry in _textures)
+		{
+			if (entry.Key != null)
+			{
+				Texture original = entry.Value.Value;
+				Texture2D recoloured = tinted ? TextureRecolour.Recoloured(original, color * PictureBoost, false, "glow") : null;
+				entry.Key.SetTexture(entry.Value.Key, (recoloured != null) ? recoloured : original);
 			}
 		}
 		foreach (KeyValuePair<ParticleSystem, ParticleSystem.MinMaxGradient> entry in _particles)
@@ -78,35 +101,35 @@ internal class HealBoltTint : MonoBehaviour
 			if (entry.Key != null)
 			{
 				ParticleSystem.MainModule main = entry.Key.main;
-				main.startColor = green ? new ParticleSystem.MinMaxGradient(Green) : entry.Value;
-				if (green)
+				main.startColor = tinted ? new ParticleSystem.MinMaxGradient(color) : entry.Value;
+				if (tinted)
 				{
-					RecolorAlive(entry.Key);
+					RecolorAlive(entry.Key, color);
 				}
 			}
 		}
-		// A colour over lifetime gradient would tint the green particles back; it is turned off while green.
+		// A colour over lifetime gradient would tint the particles back; it is turned off while tinted.
 		foreach (KeyValuePair<ParticleSystem, bool> entry in _particleFades)
 		{
 			if (entry.Key != null)
 			{
 				ParticleSystem.ColorOverLifetimeModule fade = entry.Key.colorOverLifetime;
-				fade.enabled = !green && entry.Value;
+				fade.enabled = !tinted && entry.Value;
 			}
 		}
 		foreach (KeyValuePair<TrailRenderer, KeyValuePair<Color, Color>> entry in _trails)
 		{
 			if (entry.Key != null)
 			{
-				entry.Key.startColor = green ? Recolor(entry.Value.Key) : entry.Value.Key;
-				entry.Key.endColor = green ? Recolor(entry.Value.Value) : entry.Value.Value;
+				entry.Key.startColor = tinted ? Recolor(entry.Value.Key, color) : entry.Value.Key;
+				entry.Key.endColor = tinted ? Recolor(entry.Value.Value, color) : entry.Value.Value;
 			}
 		}
 		foreach (KeyValuePair<Light, Color> entry in _lights)
 		{
 			if (entry.Key != null)
 			{
-				entry.Key.color = green ? Green : entry.Value;
+				entry.Key.color = tinted ? color : entry.Value;
 			}
 		}
 	}
@@ -122,7 +145,7 @@ internal class HealBoltTint : MonoBehaviour
 			}
 			foreach (Material material in renderer.materials)
 			{
-				CaptureMaterial(material);
+				CaptureMaterial(material, picture: true);
 			}
 		}
 		foreach (ParticleSystem system in GetComponentsInChildren<ParticleSystem>(true))
@@ -132,9 +155,10 @@ internal class HealBoltTint : MonoBehaviour
 			ParticleSystemRenderer renderer = system.GetComponent<ParticleSystemRenderer>();
 			if (renderer != null)
 			{
+				// Particles are tinted by their start colour; their picture stays.
 				foreach (Material material in renderer.materials)
 				{
-					CaptureMaterial(material);
+					CaptureMaterial(material, picture: false);
 				}
 			}
 		}
@@ -160,11 +184,16 @@ internal class HealBoltTint : MonoBehaviour
 	}
 
 	// Materials of this object only (renderer.materials makes them its own), so the shared ones stay untouched.
-	private void CaptureMaterial(Material material)
+	private void CaptureMaterial(Material material, bool picture)
 	{
 		if (material == null)
 		{
 			return;
+		}
+		string textureName = picture ? TextureRecolour.TextureProperty(material) : null;
+		if (textureName != null)
+		{
+			_textures.Add(new KeyValuePair<Material, KeyValuePair<string, Texture>>(material, new KeyValuePair<string, Texture>(textureName, material.GetTexture(textureName))));
 		}
 		foreach (string property in ColorProperties)
 		{
@@ -175,21 +204,21 @@ internal class HealBoltTint : MonoBehaviour
 		}
 	}
 
-	// Green with the original brightness and transparency.
-	private static Color Recolor(Color original)
+	// The tint with the original brightness and transparency.
+	private static Color Recolor(Color original, Color tint)
 	{
 		float brightness = Mathf.Max(original.r, Mathf.Max(original.g, original.b));
-		return new Color(Green.r * brightness, Green.g * brightness, Green.b * brightness, original.a);
+		return new Color(tint.r * brightness, tint.g * brightness, tint.b * brightness, original.a);
 	}
 
-	private static void RecolorAlive(ParticleSystem system)
+	private static void RecolorAlive(ParticleSystem system, Color tint)
 	{
 		ParticleSystem.Particle[] particles = new ParticleSystem.Particle[system.particleCount];
 		int count = system.GetParticles(particles);
 		for (int i = 0; i < count; i++)
 		{
 			Color32 color = particles[i].startColor;
-			particles[i].startColor = new Color32((byte)(Green.r * 255f), (byte)(Green.g * 255f), (byte)(Green.b * 255f), color.a);
+			particles[i].startColor = new Color32((byte)(tint.r * 255f), (byte)(tint.g * 255f), (byte)(tint.b * 255f), color.a);
 		}
 		system.SetParticles(particles, count);
 	}

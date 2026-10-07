@@ -35,6 +35,9 @@ internal static class LuaInjection
 		public Mode Mode;
 
 		public string Owner;
+
+		// Set for a range patch: everything from Anchor to the first EndAnchor after it is replaced.
+		public string EndAnchor;
 	}
 
 	public const string TableName = "CastleStoryPlus";
@@ -55,6 +58,22 @@ internal static class LuaInjection
 			Anchor = anchor,
 			Text = text,
 			Mode = mode
+		});
+	}
+
+	// Replaces a whole block, from the start of anchor to the end of the first endAnchor after it. Range patches
+	// are applied after all other patches, so a patch that inserts next to the block (for example after its last
+	// line) still finds its anchor; a patch that inserted inside the block goes away with it.
+	public static void AddRangePatch(string owner, string file, string anchor, string endAnchor, string text)
+	{
+		Patches.Add(new TextPatch
+		{
+			Owner = owner,
+			File = file.Replace('\\', '/'),
+			Anchor = anchor,
+			EndAnchor = endAnchor,
+			Text = text,
+			Mode = Mode.Replace
 		});
 	}
 
@@ -79,7 +98,22 @@ internal static class LuaInjection
 			return code;
 		}
 		string normalized = file.Replace('\\', '/');
+		List<TextPatch> ordered = new List<TextPatch>();
 		foreach (TextPatch patch in Patches)
+		{
+			if (patch.EndAnchor == null)
+			{
+				ordered.Add(patch);
+			}
+		}
+		foreach (TextPatch patch in Patches)
+		{
+			if (patch.EndAnchor != null)
+			{
+				ordered.Add(patch);
+			}
+		}
+		foreach (TextPatch patch in ordered)
 		{
 			if (!normalized.EndsWith(patch.File, StringComparison.OrdinalIgnoreCase))
 			{
@@ -93,6 +127,19 @@ internal static class LuaInjection
 			if (index < 0)
 			{
 				Plugin.Log.LogWarning("Lua patch '" + patch.Owner + "' not applied: anchor not found in " + patch.File);
+				continue;
+			}
+			if (patch.EndAnchor != null)
+			{
+				string endAnchor = patch.EndAnchor.Replace("\r\n", "\n").Replace("\n", newline);
+				int end = code.IndexOf(endAnchor, index + anchor.Length, StringComparison.Ordinal);
+				if (end < 0)
+				{
+					Plugin.Log.LogWarning("Lua patch '" + patch.Owner + "' not applied: end anchor not found in " + patch.File);
+					continue;
+				}
+				end += endAnchor.Length;
+				code = code.Remove(index, end - index).Insert(index, text);
 				continue;
 			}
 			switch (patch.Mode)

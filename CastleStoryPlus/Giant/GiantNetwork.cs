@@ -7,7 +7,7 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Giant;
 
-// UNET command on the player's UNetProjectCmd that asks the server for an upgrade to a 3x bricktron.
+// UNET command on the player's UNetProjectCmd that asks the server for an upgrade to a giant bricktron.
 // Registered by hand, like the game's weaved commands (see CallToArmsNetwork).
 [Feature(Features.GiantBricktron, Features.GiantBricktronInfo)]
 internal static class GiantNetwork
@@ -56,7 +56,7 @@ internal static class GiantNetwork
 		string problem = GiantBricktron.Upgrade(upgradeGO.GetComponent<Labor>(), sacrificeGO.GetComponent<Labor>());
 		if (problem != null)
 		{
-			Plugin.Log.LogInfo("3x bricktron upgrade refused: " + problem);
+			Plugin.Log.LogInfo("giant bricktron upgrade refused: " + problem);
 		}
 		return problem;
 	}

@@ -199,7 +199,7 @@ internal static class Metallurgy
 			Icon = SteelIcon,
 			Drawing = SteelIcon
 		}.With(Adjectif.iron, 1).With(Adjectif.clay, CoalPerSteel).Make();
-		if (SteelRecipe.id > 255)
+		if (SteelRecipe.id > Core.WideRecipeIds.MaxId)
 		{
 			Plugin.Log.LogError("Metallurgy: recipe id " + SteelRecipe.id + " is too high for the crafting queue");
 		}
@@ -538,7 +538,14 @@ internal static class MetallurgyLuaPatch
 
 	private static void Postfix()
 	{
-		if (_done)
+		Run();
+	}
+
+	// Also run by the later recipe makers (research station, market) before their own, so the steel and charcoal
+	// recipes always get the same ids, whatever order the postfixes run in.
+	internal static void Run()
+	{
+		if (_done || !Metallurgy.IsOn())
 		{
 			return;
 		}

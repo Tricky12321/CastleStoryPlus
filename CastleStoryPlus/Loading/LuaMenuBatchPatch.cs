@@ -78,9 +78,11 @@ internal static class LuaMenuBatchPatch
 	{
 		long start = Stopwatch.GetTimestamp();
 		LoadingStatus.CurrentMenu = menu.Path;
+		bool done = true;
 		try
 		{
-			return menu._isStop(menu._tMenu, menu);
+			done = menu._isStop(menu._tMenu, menu);
+			return done;
 		}
 		catch (Exception e)
 		{
@@ -97,8 +99,34 @@ internal static class LuaMenuBatchPatch
 			if (LoadProfiler.Active)
 			{
 				LoadProfiler.Add("lua menu " + menu.Path, ticks);
+				// Each step of the menu's build (the code up to its next yield), by where it yielded.
+				if (!done)
+				{
+					LoadProfiler.Add("lua menu step " + YieldedAt(menu), ticks);
+				}
 			}
 		}
+	}
+
+	// The Lua file, line and function where the menu's coroutine is waiting.
+	private static string YieldedAt(LuaMenuComponent menu)
+	{
+		try
+		{
+			MoonSharp.Interpreter.Coroutine coroutine = menu._tMenu.Tuple[1].Coroutine;
+			foreach (MoonSharp.Interpreter.Debugging.WatchItem item in coroutine.GetStackTrace(0))
+			{
+				MoonSharp.Interpreter.Debugging.SourceRef location = item.Location;
+				if (location != null)
+				{
+					return coroutine.OwnerScript.GetSourceCode(location.SourceIdx).Name + ":" + location.FromLine + " " + (item.Name ?? "?");
+				}
+			}
+		}
+		catch (Exception)
+		{
+		}
+		return menu.Path + " ?";
 	}
 
 	// Where the menu's Lua coroutine was when it stopped, from its call stack.

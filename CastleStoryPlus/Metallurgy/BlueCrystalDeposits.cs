@@ -25,7 +25,7 @@ internal static class BlueCrystalDeposits
 {
 	internal const int BlueType = (int)VoxelTerrainType.BlueCrystal;
 
-	private const float Threshold = 0.6f;
+	private const float Threshold = 0.65f;
 
 	private const string DefaultNoise = "Noise.BlueCrystalNoise";
 

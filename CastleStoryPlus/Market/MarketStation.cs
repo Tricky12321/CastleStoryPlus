@@ -3,6 +3,7 @@ using Brix.Game.Components;
 using Brix.UI.Icons;
 using CastleStoryPlus.Building;
 using UnityEngine;
+using CastleStoryPlus.Core;
 
 namespace CastleStoryPlus.Market;
 
@@ -31,6 +32,7 @@ internal class MarketStation : CraftingStation
 		}
 		CustomBuilding.PointSiblingsAtSelf(gameObject, this);
 		base.Awake();
+		Live<MarketStation>.Add(this);
 	}
 
 	public override void SetDefault()

@@ -13,8 +13,9 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Upgrades;
 
-// Adds the smithy (weapon upgrades) and the armoury (armour upgrades) to the game's factories when they load (see
-// CustomBuilding), both 4 x 3 blocks and 5 high, in the build menu's crafting group. The game already has a
+// Adds the smithy (weapon upgrades), the armoury (armour upgrades) and the research station (colony upgrades, paid in
+// dark crystals) to the game's factories when they load (see CustomBuilding), all 4 x 3 blocks, in the build menu's
+// crafting group. The game already has a
 // building called Forge, so the weapon building is the smithy.
 [Feature(Features.Upgrades, Features.UpgradesInfo)]
 [HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
@@ -23,6 +24,11 @@ internal static class UpgradeBuildings
 	internal const string SmithyName = "Smithy";
 
 	internal const string ArmouryName = "Armoury";
+
+	// The asset name (no space: it is a factory key and is saved); the build menu shows ResearchLabel.
+	internal const string ResearchName = "ResearchStation";
+
+	internal const string ResearchLabel = "Research Station";
 
 	private static readonly CustomBuilding Smithy = new CustomBuilding(SmithyName, 4, 3, 5)
 	{
@@ -52,18 +58,35 @@ internal static class UpgradeBuildings
 		Layout = new string[3] { "####", "#OAA", "#AA#" }
 	};
 
+	private static readonly CustomBuilding Research = new CustomBuilding(ResearchName, 4, 3, 4)
+	{
+		BuildModel = ResearchModel.Build,
+		BuildCost = (Description cost) =>
+		{
+			cost.Add(Adjectif.New(Adjectif.plankBlock.GetType(), 10));
+			cost.Add(Adjectif.New(Adjectif.stoneBlock.GetType(), 6));
+			cost.Add(Adjectif.New(Adjectif.glass.GetType(), 2));
+		},
+		SetupBuilding = (GameObject go) => Setup<ResearchStation>(go, UpgradeHall.Research, ResearchName),
+		// Bookshelves along the back; the alchemy table, the scholar's place and the reading desk; the open front with
+		// the book stack in the right corner.
+		Layout = new string[3] { "####", "#O#A", "AAA#" }
+	};
+
 	private static void Enable()
 	{
 		UI.BuildIcons.Register();
 		LuaInjection.AddPatch(Features.Upgrades, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_MachineShop\",\tgroupId = 3 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"" + SmithyName + "\"),\t\t\t\t{ Name = ||\"" + SmithyName + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("smithy", "_Forge") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n"
-			+ "_t.Add(AssetKey.New(\"Blueprints\", \"" + ArmouryName + "\"),\t\t\t\t{ Name = ||\"" + ArmouryName + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("armoury", "_Shield") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n");
+			+ "_t.Add(AssetKey.New(\"Blueprints\", \"" + ArmouryName + "\"),\t\t\t\t{ Name = ||\"" + ArmouryName + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("armoury", "_Shield") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n"
+			+ "_t.Add(AssetKey.New(\"Blueprints\", \"" + ResearchName + "\"),\t\t\t\t{ Name = ||\"" + ResearchLabel + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("research", "_Lab") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n");
 	}
 
 	private static void Postfix()
 	{
 		Smithy.AddToFactories();
 		Armoury.AddToFactories();
+		Research.AddToFactories();
 	}
 
 	// The station, and room for the most of each material one research of the building needs.
@@ -96,7 +119,7 @@ internal static class UpgradeResearchPatch
 	}
 }
 
-// The game's crafting menu (Lua) only knows its own stations; for the smithy and the armoury it shows nothing and
+// The game's crafting menu (Lua) only knows its own stations; for the upgrade buildings it shows nothing and
 // the upgrade window (UpgradePanel) is used instead.
 [Feature(Features.Upgrades, Features.UpgradesInfo)]
 [HarmonyPatch(typeof(CraftingStation), nameof(CraftingStation.SelectedStation))]

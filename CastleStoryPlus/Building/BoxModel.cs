@@ -7,7 +7,7 @@ namespace CastleStoryPlus.Building;
 // Builds a mod building's model from boxes and cylinders. Parts are merged into one mesh per surface, textured
 // with the mod's own textures (Assets/Market, made by tools/make_market_textures.py): one texture repeat per
 // block, so a part's texture keeps its scale whatever its size, and wood grain runs along each part's long side.
-// Used by the market, the smithy and the armoury.
+// Used by the market, the smithy, the armoury and the research station.
 internal sealed class BoxModel
 {
 	internal sealed class Surface
@@ -18,6 +18,10 @@ internal sealed class BoxModel
 
 		// Turn the texture so its width (the wood grain) runs along the longer side of each face.
 		public bool AlongLongSide;
+
+		// The texture starts at the part's lower corner instead of at a random offset (a picture that must line up
+		// with the part, like the book shelves).
+		public bool Aligned;
 
 		public Surface(string texture, int fallback, bool alongLongSide)
 		{
@@ -48,6 +52,19 @@ internal sealed class BoxModel
 	public static readonly Surface CrystalBlue = new Surface("crystal_blue", 0x58b8e8, alongLongSide: false);
 
 	public static readonly Surface CrystalOrange = new Surface("crystal_orange", 0xf0a23a, alongLongSide: false);
+
+	public static readonly Surface CrystalDark = new Surface("crystal_dark", 0x8a3ad0, alongLongSide: false);
+
+	// A shelf row of book spines, standing on the bottom of each half block.
+	public static readonly Surface Books = new Surface("books", 0x7a4a3a, alongLongSide: false) { Aligned = true };
+
+	public static readonly Surface LeatherRed = new Surface("leather_red", 0x8e2f28, alongLongSide: false);
+
+	public static readonly Surface LeatherGreen = new Surface("leather_green", 0x35603a, alongLongSide: false);
+
+	public static readonly Surface LeatherBlue = new Surface("leather_blue", 0x2f4a7a, alongLongSide: false);
+
+	public static readonly Surface Paper = new Surface("paper", 0xece2c6, alongLongSide: false);
 
 	private sealed class MeshData
 	{
@@ -135,6 +152,10 @@ internal sealed class BoxModel
 	{
 		MeshData data = DataFor(surface);
 		Vector2 offset = new Vector2(Random01(), Random01());
+		if (surface.Aligned)
+		{
+			offset = Vector2.zero;
+		}
 		foreach (Vector3[] face in Faces)
 		{
 			Vector3 normal = face[0];

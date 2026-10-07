@@ -17,22 +17,28 @@ using Brix.Input;
 using Brix.Util;
 using BepInEx.Configuration;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Pathfinding;
 using HarmonyLib;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace CastleStoryPlus.Building;
 
-// New building blocks in the build menu's brick wheel: stone bricks of 2 x 2 and 2 x 4 blocks, and wooden slabs of
+// New building blocks in the build menu's brick wheel: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 blocks and a brick
+// on end (1 x 1, 2 high), and wooden slabs of
 // 1 x 1, 2 x 1, 2 x 2 and 2 x 4 blocks, half a block high (in the upper half of the block, like the game's plank, so
 // they are walked on at the block's top). Each is three templates, as the game's blocks: the free block
 // (Blocks/<Name>, also what falls when it loses its support), the blueprint (Blueprints/<Name>) and the placed block,
 // which the game makes from the first two when it reads the block infos. The stone bricks are clones of the game's
-// brick (Stone_DoubleBrick) with a mesh of its brick mesh laid side by side; the slabs clone the plank's free block
+// brick (Stone_DoubleBrick) with its brick mesh stretched to their length, one whole brick per row; the slabs clone the plank's free block
 // (so a fallen slab is planks, not bricks) and the brick's blueprint. Bricks rest on stone or the ground like the
-// game's brick. A slab also holds on to the side of a stone block or the terrain: its support cells are the blocks
+// game's brick, but one block below is enough (the game's brick needs one per two blocks); a long brick (1 x 3, 1 x 4)
+// also rests on a stone block or the terrain right beyond either end, so it can bridge a gap between two walls. A slab
+// also holds on to the side of a stone block or the terrain: its support cells are the blocks
 // below it and the blocks round it at its own height, and one of them is enough. The IDs are kept in saves and must
 // never change; saves with these blocks need the mod.
+// The wood ladder (Ladders) is a slab-like wood block with a ladder mesh against its front face; Ladders makes it
+// climbable.
 [Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
 [HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class CustomBlocks
@@ -50,6 +56,9 @@ internal static class CustomBlocks
 
 		public int Depth;
 
+		// Height in blocks: 2 is the game's brick stood on end (stone only, 1 x 1).
+		public int Height = 1;
+
 		public int Cost;
 
 		public float Hp;
@@ -60,19 +69,29 @@ internal static class CustomBlocks
 		public string Icon;
 
 		public string IconFile;
+
+		// A ladder (Ladders): bricktrons climb it, it does not fill its block.
+		public bool Ladder;
 	}
 
-	private static readonly Shape[] Shapes = new Shape[6]
+	private static readonly Shape[] Shapes = new Shape[10]
 	{
 		new Shape { Name = "Stone_Brick2x2", IconFile = "stone_brick_2x2", Id = 9001, Width = 2, Depth = 2, Cost = 2, Hp = 960f, Label = "Large brick 2x2", Icon = "_Block" },
 		new Shape { Name = "Stone_Brick2x4", IconFile = "stone_brick_2x4", Id = 9002, Width = 2, Depth = 4, Cost = 4, Hp = 1920f, Label = "Long brick 2x4", Icon = "_Brick" },
+		new Shape { Name = "Stone_Brick1x3", IconFile = "stone_brick_1x3", Id = 9007, Width = 1, Depth = 3, Cost = 2, Hp = 720f, Label = "Long brick 1x3", Icon = "_Brick" },
+		new Shape { Name = "Stone_Brick1x1x2", IconFile = "stone_brick_tall", Id = 9010, Width = 1, Depth = 1, Height = 2, Cost = 1, Hp = 480f, Label = "Tall brick 1x1x2", Icon = "_Brick" },
+		new Shape { Name = "Stone_Brick1x4", IconFile = "stone_brick_1x4", Id = 9008, Width = 1, Depth = 4, Cost = 2, Hp = 960f, Label = "Long brick 1x4", Icon = "_Brick" },
 		new Shape { Name = "Wood_Slab1x1", IconFile = "wood_slab_1x1", Id = 9003, Wood = true, Width = 1, Depth = 1, Cost = 1, Hp = 120f, Label = "Wood slab 1x1", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab2x1", IconFile = "wood_slab_2x1", Id = 9004, Wood = true, Width = 1, Depth = 2, Cost = 1, Hp = 240f, Label = "Wood slab 2x1", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab2x2", IconFile = "wood_slab_2x2", Id = 9005, Wood = true, Width = 2, Depth = 2, Cost = 2, Hp = 480f, Label = "Wood slab 2x2", Icon = "_Plank" },
-		new Shape { Name = "Wood_Slab2x4", IconFile = "wood_slab_2x4", Id = 9006, Wood = true, Width = 2, Depth = 4, Cost = 4, Hp = 960f, Label = "Wood slab 2x4", Icon = "_Plank" }
+		new Shape { Name = "Wood_Slab2x4", IconFile = "wood_slab_2x4", Id = 9006, Wood = true, Width = 2, Depth = 4, Cost = 4, Hp = 960f, Label = "Wood slab 2x4", Icon = "_Plank" },
+		new Shape { Name = Ladders.Name, IconFile = "wood_ladder", Id = Ladders.Id, Wood = true, Ladder = true, Width = 1, Depth = 1, Cost = 1, Hp = 120f, Label = "Wood ladder", Icon = "_Plank" }
 	};
 
 	private const string StoneBlockSource = "Stone_DoubleBrick";
+
+	// The single square stone, lengthened into the long bricks.
+	private const string SingleBrickSource = "Stone_Brick";
 
 	private const string WoodBlockSource = "Wood_SinglePlank";
 
@@ -80,6 +99,9 @@ internal static class CustomBlocks
 
 	// Slabs fill the upper half of their block.
 	private const float SlabHeight = 0.5f;
+
+	// How far the ladder stands out from the wall.
+	private const float LadderDepth = 0.12f;
 
 	private static readonly Dictionary<string, Mesh> Meshes = new Dictionary<string, Mesh>();
 
@@ -258,7 +280,13 @@ internal static class CustomBlocks
 			go.name = shape.Name;
 			VoxelizedMeshDescriptor descriptor = go.GetComponent<VoxelizedMeshDescriptor>();
 			VoxelizedMesh source = descriptor.voxelMesh;
-			descriptor.voxelMesh = VoxelMeshFor(shape, source);
+			VoxelizedMesh single = null;
+			if (shape.Depth % 2 == 1 && factory.cachedTemplates.ContainsKey(SingleBrickSource))
+			{
+				VoxelizedMeshDescriptor singleDescriptor = factory.GetTemplate(SingleBrickSource).GetComponent<VoxelizedMeshDescriptor>();
+				single = singleDescriptor != null ? singleDescriptor.voxelMesh : null;
+			}
+			descriptor.voxelMesh = VoxelMeshFor(shape, source, single);
 			FactoryImprint imprint = go.GetComponent<FactoryImprint>();
 			if (imprint != null)
 			{
@@ -273,7 +301,7 @@ internal static class CustomBlocks
 		}
 	}
 
-	private static VoxelizedMesh VoxelMeshFor(Shape shape, VoxelizedMesh brick)
+	private static VoxelizedMesh VoxelMeshFor(Shape shape, VoxelizedMesh brick, VoxelizedMesh single)
 	{
 		// The pivot is the model's middle seen from the root block: the brick's is half a block along z (its centre
 		// offset is -0.5), plus whatever else its pivot holds; ours is the middle of our blocks.
@@ -283,44 +311,36 @@ internal static class CustomBlocks
 			pivot = -CenterOffset(shape) + (brick.pivot - new Vector3(0f, 0f, 0.5f))
 		};
 		List<VoxelizedMesh.VoxelData> voxels = new List<VoxelizedMesh.VoxelData>();
-		Mesh slabPiece = shape.Wood ? SlabPiece() : null;
+		Mesh slabPiece = shape.Ladder ? LadderMesh() : (shape.Wood ? SlabPiece() : null);
 		for (int x = 0; x < shape.Width; x++)
 		{
 			for (int z = 0; z < shape.Depth; z++)
 			{
-				VoxelizedMesh.VoxelData data = new VoxelizedMesh.VoxelData { position = new XYZ(x, 0, z) };
-				if (shape.Wood)
+				if (!shape.Wood)
 				{
-					data.faces = new VoxelizedMesh.FaceData[0];
-					for (int i = 0; i < data.partialMeshes.Length; i++)
+					// A stone brick is one piece: the root block draws all of it, the other blocks nothing.
+					for (int y = 0; y < shape.Height; y++)
 					{
-						data.partialMeshes[i] = slabPiece;
+						VoxelizedMesh.VoxelData cell = new VoxelizedMesh.VoxelData { position = new XYZ(x, y, z), faces = new VoxelizedMesh.FaceData[0] };
+						Mesh piece = (x == 0 && y == 0 && z == 0) ? WholePiece(shape) : EmptyPiece();
+						for (int i = 0; i < cell.partialMeshes.Length; i++)
+						{
+							cell.partialMeshes[i] = piece;
+						}
+						voxels.Add(cell);
 					}
+					continue;
 				}
-				else
+				VoxelizedMesh.VoxelData data = new VoxelizedMesh.VoxelData { position = new XYZ(x, 0, z), faces = new VoxelizedMesh.FaceData[0] };
+				for (int i = 0; i < data.partialMeshes.Length; i++)
 				{
-					// The brick's piece at its own back (z 0) or front (z 1) end.
-					VoxelizedMesh.VoxelData piece = PieceAt(brick, z % 2);
-					data.faces = piece.faces;
-					data.partialMeshes = piece.partialMeshes;
+					data.partialMeshes[i] = slabPiece;
 				}
 				voxels.Add(data);
 			}
 		}
 		mesh.voxels = voxels.ToArray();
 		return mesh;
-	}
-
-	private static VoxelizedMesh.VoxelData PieceAt(VoxelizedMesh brick, int z)
-	{
-		foreach (VoxelizedMesh.VoxelData data in brick.voxels)
-		{
-			if (data.position.z == z)
-			{
-				return data;
-			}
-		}
-		return brick.voxels[Mathf.Min(z, brick.voxels.Length - 1)];
 	}
 
 	private static string Positions(VoxelizedMesh mesh)
@@ -366,8 +386,16 @@ internal static class CustomBlocks
 				Object.DestroyImmediate(plank);
 			}
 		}
+		Mesh brick = go.GetComponent<MeshFilter>().sharedMesh;
+		Material brickMaterial = go.GetComponent<MeshRenderer>().sharedMaterial;
 		Mesh mesh = MeshFor(shape, go.GetComponent<MeshFilter>());
 		go.GetComponent<MeshFilter>().sharedMesh = mesh;
+		// A long stone brick shows its own texture.
+		Material stoneMaterial = (!shape.Wood && shape.Height == 1) ? LongStoneTexture.Make(shape.Name, brick, mesh, brickMaterial) : null;
+		if (stoneMaterial != null)
+		{
+			go.GetComponent<MeshRenderer>().sharedMaterials = new Material[1] { stoneMaterial };
+		}
 		// The plank's prefab has no material (the game gives it one while playing); the slab then keeps the same.
 		if (shape.Wood && _woodMaterial != null)
 		{
@@ -401,12 +429,20 @@ internal static class CustomBlocks
 					body = cell.Value;
 				}
 			}
+			if (shape.Ladder)
+			{
+				// Bricktrons climb inside the ladder's block: it takes the block but blocks no one.
+				body &= ~(long)(VPropertyMask.obstacle | VPropertyMask.character);
+			}
 			IndexedVolumetricProperties cells = new IndexedVolumetricProperties();
 			for (int x = 0; x < shape.Width; x++)
 			{
 				for (int z = 0; z < shape.Depth; z++)
 				{
-					cells[new XYZ(x, 0, z)] = body;
+					for (int y = 0; y < shape.Height; y++)
+					{
+						cells[new XYZ(x, y, z)] = body;
+					}
 				}
 			}
 			volume._indexedVolumetricProperties = cells;
@@ -460,17 +496,19 @@ internal static class CustomBlocks
 		{
 			Plugin.Log.LogInfo("CustomBlocks: " + shape.Name + " blueprint source volume " + Cells(volume._indexedVolumetricProperties));
 			int supports;
-			volume._indexedVolumetricProperties = BlueprintCells(shape, out supports);
+			int ends;
+			volume._indexedVolumetricProperties = BlueprintCells(shape, out supports, out ends);
 			ValidatorComponent validator = go.GetComponent<ValidatorComponent>();
 			if (validator != null)
 			{
-				// Bricks: like the game's brick, one support cell may be missing per two blocks. Slabs: one is enough.
-				validator.MaxMissingSupport = shape.Wood ? supports - 1 : shape.Width * shape.Depth / 2;
+				// One support cell is enough: a cell below the block (or for a slab beside it), or for a long brick the
+				// block right beyond either end.
+				validator.MaxMissingSupport = supports + ends - 1;
 			}
 		}
 	}
 
-	private static IndexedVolumetricProperties BlueprintCells(Shape shape, out int supports)
+	private static IndexedVolumetricProperties BlueprintCells(Shape shape, out int supports, out int ends)
 	{
 		const long access = (long)VPropertyMask.access;
 		const long swap = (long)VPropertyMask.meshSwapTrigger;
@@ -482,15 +520,22 @@ internal static class CustomBlocks
 		{
 			for (int z = 0; z < shape.Depth; z++)
 			{
-				cells[new XYZ(x, 0, z)] = body;
+				for (int y = 0; y < shape.Height; y++)
+				{
+					cells[new XYZ(x, y, z)] = body;
+				}
 				cells[new XYZ(x, -1, z)] = support;
-				cells[new XYZ(x, 1, z)] = swap;
+				cells[new XYZ(x, shape.Height, z)] = swap;
 				supports++;
 			}
 		}
 		// The cells round the body (not the corners), along the long sides first. At the body's height they swap
 		// the neighbours' meshes, and a slab is also held by the blocks there.
 		List<XYZ> ring = RingCells(shape);
+		// A long brick (1 x 3, 1 x 4) also rests on a stone block or the terrain right beyond its ends, so it can
+		// bridge a gap between two walls: such an end counts as a support cell.
+		ends = 0;
+		List<XYZ> endCells = LongBrickEnds(shape);
 		foreach (XYZ cell in ring)
 		{
 			long mask = swap;
@@ -499,7 +544,18 @@ internal static class CustomBlocks
 				mask |= support;
 				supports++;
 			}
+			else if (endCells.Contains(cell))
+			{
+				mask |= support;
+				ends++;
+			}
 			cells[cell] = (cells.TryGetValue(cell, out long old) ? old : 0L) | mask;
+			// The neighbours of the upper blocks of a tall brick swap their meshes too.
+			for (int y = 1; y < shape.Height; y++)
+			{
+				XYZ upper = new XYZ(cell.x, y, cell.z);
+				cells[upper] = (cells.TryGetValue(upper, out long above) ? above : 0L) | swap;
+			}
 		}
 		// Where builders stand, as the game's brick has them: beside the body, one and two lower, and on the
 		// blocks round it (one higher: a slab next to a wall is built from the top of the wall). The workers'
@@ -523,6 +579,27 @@ internal static class CustomBlocks
 
 	// The workers' knowledge keeps at most this many places to stand per object.
 	private const int MaxAccessCells = 32;
+
+	// The cells right beyond the two ends of a stone brick one block wide and three or more long; none for others.
+	private static List<XYZ> LongBrickEnds(Shape shape)
+	{
+		List<XYZ> result = new List<XYZ>();
+		if (shape.Wood || shape.Height != 1 || System.Math.Min(shape.Width, shape.Depth) != 1 || System.Math.Max(shape.Width, shape.Depth) < 3)
+		{
+			return result;
+		}
+		if (shape.Depth > shape.Width)
+		{
+			result.Add(new XYZ(0, 0, -1));
+			result.Add(new XYZ(0, 0, shape.Depth));
+		}
+		else
+		{
+			result.Add(new XYZ(-1, 0, 0));
+			result.Add(new XYZ(shape.Width, 0, 0));
+		}
+		return result;
+	}
 
 	// The cells next to the body at its height, without the corners: the long sides first, then the ends.
 	private static List<XYZ> RingCells(Shape shape)
@@ -563,7 +640,7 @@ internal static class CustomBlocks
 	// The model's middle is the middle of the block's cells; the root cell is (0, 0, 0).
 	private static Vector3 CenterOffset(Shape shape)
 	{
-		return new Vector3(-(shape.Width - 1) / 2f, 0f, -(shape.Depth - 1) / 2f);
+		return new Vector3(-(shape.Width - 1) / 2f, -(shape.Height - 1) / 2f, -(shape.Depth - 1) / 2f);
 	}
 
 	private static Mesh MeshFor(Shape shape, MeshFilter source)
@@ -572,82 +649,224 @@ internal static class CustomBlocks
 		{
 			return mesh;
 		}
-		mesh = shape.Wood ? SlabMesh(shape) : BrickMesh(shape, source != null ? source.sharedMesh : null);
+		mesh = shape.Ladder ? LadderMesh() : (shape.Wood ? SlabMesh(shape) : BrickMesh(shape, source != null ? source.sharedMesh : null, SingleBrickMesh()));
 		mesh.name = shape.Name;
 		Meshes[shape.Name] = mesh;
 		return mesh;
 	}
 
-	// The game's brick mesh (1 x 2 blocks, readable) laid side by side and end to end.
-	private static Mesh BrickMesh(Shape shape, Mesh brick)
+	// One whole stone the size of the brick (see Lengthened); a tall brick is the game's brick on end.
+	private static Mesh BrickMesh(Shape shape, Mesh brick, Mesh single)
 	{
 		List<CombineInstance> parts = new List<CombineInstance>();
-		for (int x = 0; x < shape.Width; x++)
+		if (shape.Height > 1)
 		{
-			for (int z = 0; z < shape.Depth; z += 2)
+			// Stood on end: the brick's length (z) turned up.
+			for (int x = 0; x < shape.Width; x++)
 			{
-				Vector3 position = new Vector3(x - (shape.Width - 1) / 2f, 0f, z + 0.5f - (shape.Depth - 1) / 2f);
-				parts.Add(new CombineInstance { mesh = brick, transform = Matrix4x4.Translate(position) });
+				for (int z = 0; z < shape.Depth; z++)
+				{
+					Vector3 position = new Vector3(x - (shape.Width - 1) / 2f, 0f, z - (shape.Depth - 1) / 2f);
+					parts.Add(new CombineInstance { mesh = brick, transform = Matrix4x4.TRS(position, OnEnd, Vector3.one) });
+				}
 			}
+			Mesh tall = new Mesh();
+			tall.CombineMeshes(parts.ToArray(), mergeSubMeshes: true, useMatrices: true);
+			tall.RecalculateBounds();
+			return tall;
 		}
-		Mesh mesh = new Mesh();
-		mesh.CombineMeshes(parts.ToArray(), mergeSubMeshes: true, useMatrices: true);
+		// The game's 1 x 2 brick (a plain box) with its sides pulled out to the brick's width and length, and its own
+		// texture with each face's picture continued to the face's size (LongStoneTexture), so it is one stone with
+		// the game's joints and bevels at its edges and nothing stretched.
+		return Lengthened(brick, shape.Width - 1f, shape.Depth - 2f);
+	}
+
+	// A copy of the mesh centred on x and z, its vertices on each side of the middle moved outwards by half the extra
+	// width (x) and length (z); texture coordinates stay, so the stone's faces stretch and its edges do not.
+	private static Mesh Lengthened(Mesh source, float extraWidth, float extra)
+	{
+		Bounds bounds = source.bounds;
+		Vector3[] vertices = source.vertices;
+		for (int i = 0; i < vertices.Length; i++)
+		{
+			Vector3 v = vertices[i] - new Vector3(bounds.center.x, 0f, bounds.center.z);
+			if (v.x > 0.001f)
+			{
+				v.x += extraWidth / 2f;
+			}
+			else if (v.x < -0.001f)
+			{
+				v.x -= extraWidth / 2f;
+			}
+			if (v.z > 0.001f)
+			{
+				v.z += extra / 2f;
+			}
+			else if (v.z < -0.001f)
+			{
+				v.z -= extra / 2f;
+			}
+			vertices[i] = v;
+		}
+		Mesh mesh = new Mesh
+		{
+			vertices = vertices,
+			normals = source.normals,
+			tangents = source.tangents,
+			uv = source.uv,
+			uv2 = source.uv2,
+			colors = source.colors,
+			subMeshCount = source.subMeshCount
+		};
+		for (int i = 0; i < source.subMeshCount; i++)
+		{
+			mesh.SetTriangles(source.GetTriangles(i), i);
+		}
 		mesh.RecalculateBounds();
 		return mesh;
+	}
+
+	// Turns the brick's length (z) upwards.
+	private static readonly Quaternion OnEnd = Quaternion.Euler(-90f, 0f, 0f);
+
+	// The root block's piece of a stone brick: the whole brick, moved from the root block's middle to the brick's.
+	private static Mesh WholePiece(Shape shape)
+	{
+		string key = shape.Name + "_Piece";
+		if (Meshes.TryGetValue(key, out Mesh mesh))
+		{
+			return mesh;
+		}
+		Mesh whole = Meshes.TryGetValue(shape.Name, out Mesh made) ? made : null;
+		if (whole == null)
+		{
+			return EmptyPiece();
+		}
+		mesh = new Mesh();
+		mesh.CombineMeshes(new CombineInstance[1] { new CombineInstance { mesh = whole, transform = Matrix4x4.Translate(-CenterOffset(shape)) } }, mergeSubMeshes: true, useMatrices: true);
+		mesh.RecalculateBounds();
+		mesh.name = key;
+		Meshes[key] = mesh;
+		return mesh;
+	}
+
+	private static Mesh EmptyPiece()
+	{
+		if (!Meshes.TryGetValue("EmptyPiece", out Mesh mesh))
+		{
+			mesh = new Mesh { name = "EmptyPiece" };
+			Meshes["EmptyPiece"] = mesh;
+		}
+		return mesh;
+	}
+
+	// The single brick's mesh, when it can be read (CombineMeshes needs that).
+	private static Mesh SingleBrickMesh()
+	{
+		if (!Factory.Factories.TryGetValue("Blocks", out Factory blocks) || blocks == null || !blocks.cachedTemplates.ContainsKey(SingleBrickSource))
+		{
+			return null;
+		}
+		MeshFilter filter = blocks.GetTemplate(SingleBrickSource).GetComponent<MeshFilter>();
+		if (filter == null || filter.sharedMesh == null || !filter.sharedMesh.isReadable)
+		{
+			return null;
+		}
+		return filter.sharedMesh;
 	}
 
 	// A box over the cells in the upper half of the block, with the planks texture's board strip on every face:
 	// one board per block across, running along the long side.
 	private static Mesh SlabMesh(Shape shape, float gap = 0.01f)
 	{
-		Vector3 size = new Vector3(shape.Width - gap, SlabHeight, shape.Depth - gap);
-		Vector3 centre = new Vector3(0f, 0.5f - SlabHeight / 2f, 0f);
-		List<Vector3> vertices = new List<Vector3>();
-		List<Vector3> normals = new List<Vector3>();
-		List<Vector2> uvs = new List<Vector2>();
-		List<int> triangles = new List<int>();
-		Vector3[] axes = new Vector3[3] { Vector3.right, Vector3.up, Vector3.forward };
-		for (int a = 0; a < 3; a++)
+		MeshParts parts = new MeshParts();
+		parts.AddBox(new Vector3(0f, 0.5f - SlabHeight / 2f, 0f), new Vector3(shape.Width - gap, SlabHeight, shape.Depth - gap));
+		return parts.ToMesh();
+	}
+
+	// A ladder against the block's front face (+z, the wall it leans on): two rails the block's full height and four
+	// rungs between them.
+	internal static Mesh LadderMesh()
+	{
+		if (Meshes.TryGetValue("Wood_LadderPiece", out Mesh mesh))
 		{
-			for (int sign = -1; sign <= 1; sign += 2)
+			return mesh;
+		}
+		MeshParts parts = new MeshParts();
+		const float railZ = 0.5f - LadderDepth / 2f;
+		for (int side = -1; side <= 1; side += 2)
+		{
+			parts.AddBox(new Vector3(side * 0.34f, 0f, railZ), new Vector3(0.1f, 0.99f, LadderDepth));
+		}
+		for (int rung = 0; rung < 4; rung++)
+		{
+			parts.AddBox(new Vector3(0f, -0.375f + rung * 0.25f, railZ - 0.01f), new Vector3(0.6f, 0.07f, 0.07f));
+		}
+		mesh = parts.ToMesh();
+		mesh.name = "Wood_LadderPiece";
+		Meshes["Wood_LadderPiece"] = mesh;
+		return mesh;
+	}
+
+	// Boxes with the planks texture's board strip on every face, boards along the longer side of the face.
+	private sealed class MeshParts
+	{
+		private readonly List<Vector3> _vertices = new List<Vector3>();
+
+		private readonly List<Vector3> _normals = new List<Vector3>();
+
+		private readonly List<Vector2> _uvs = new List<Vector2>();
+
+		private readonly List<int> _triangles = new List<int>();
+
+		public void AddBox(Vector3 centre, Vector3 size)
+		{
+			Vector3[] axes = new Vector3[3] { Vector3.right, Vector3.up, Vector3.forward };
+			for (int a = 0; a < 3; a++)
 			{
-				Vector3 normal = axes[a] * sign;
-				Vector3 u = axes[(a + 1) % 3];
-				Vector3 v = axes[(a + 2) % 3];
-				float lengthU = Vector3.Scale(u, size).magnitude;
-				float lengthV = Vector3.Scale(v, size).magnitude;
-				// Boards run along the longer side of the face.
-				bool swap = lengthV > lengthU;
-				int first = vertices.Count;
-				for (int corner = 0; corner < 4; corner++)
+				for (int sign = -1; sign <= 1; sign += 2)
 				{
-					float cu = (corner == 1 || corner == 2) ? 0.5f : -0.5f;
-					float cv = (corner >= 2) ? 0.5f : -0.5f;
-					vertices.Add(centre + Vector3.Scale(normal * 0.5f + u * cu + v * cv, size));
-					normals.Add(normal);
-					float along = ((swap ? cv : cu) + 0.5f) * (swap ? lengthV : lengthU);
-					float across = ((swap ? cu : cv) + 0.5f) * (swap ? lengthU : lengthV);
-					uvs.Add(new Vector2(along * 0.25f, 0.92f + across * 0.04f));
+					Vector3 normal = axes[a] * sign;
+					Vector3 u = axes[(a + 1) % 3];
+					Vector3 v = axes[(a + 2) % 3];
+					float lengthU = Vector3.Scale(u, size).magnitude;
+					float lengthV = Vector3.Scale(v, size).magnitude;
+					bool swap = lengthV > lengthU;
+					int first = _vertices.Count;
+					for (int corner = 0; corner < 4; corner++)
+					{
+						float cu = (corner == 1 || corner == 2) ? 0.5f : -0.5f;
+						float cv = (corner >= 2) ? 0.5f : -0.5f;
+						_vertices.Add(centre + Vector3.Scale(normal * 0.5f + u * cu + v * cv, size));
+						_normals.Add(normal);
+						float along = ((swap ? cv : cu) + 0.5f) * (swap ? lengthV : lengthU);
+						float across = ((swap ? cu : cv) + 0.5f) * (swap ? lengthU : lengthV);
+						_uvs.Add(new Vector2(along * 0.25f, 0.92f + across * 0.04f));
+					}
+					Vector3 p0 = _vertices[first], p1 = _vertices[first + 1], p2 = _vertices[first + 2];
+					bool facing = Vector3.Dot(Vector3.Cross(p1 - p0, p2 - p0), normal) > 0f;
+					_triangles.AddRange(facing ? new int[6] { first, first + 1, first + 2, first, first + 2, first + 3 } : new int[6] { first, first + 2, first + 1, first, first + 3, first + 2 });
 				}
-				Vector3 p0 = vertices[first], p1 = vertices[first + 1], p2 = vertices[first + 2];
-				bool facing = Vector3.Dot(Vector3.Cross(p1 - p0, p2 - p0), normal) > 0f;
-				triangles.AddRange(facing ? new int[6] { first, first + 1, first + 2, first, first + 2, first + 3 } : new int[6] { first, first + 2, first + 1, first, first + 3, first + 2 });
 			}
 		}
-		Mesh mesh = new Mesh();
-		mesh.SetVertices(vertices);
-		mesh.SetNormals(normals);
-		mesh.SetUVs(0, uvs);
-		mesh.SetTriangles(triangles, 0);
-		List<Color> colors = new List<Color>();
-		for (int i = 0; i < vertices.Count; i++)
+
+		public Mesh ToMesh()
 		{
-			colors.Add(Color.white);
+			Mesh mesh = new Mesh();
+			mesh.SetVertices(_vertices);
+			mesh.SetNormals(_normals);
+			mesh.SetUVs(0, _uvs);
+			mesh.SetTriangles(_triangles, 0);
+			List<Color> colors = new List<Color>();
+			for (int i = 0; i < _vertices.Count; i++)
+			{
+				colors.Add(Color.white);
+			}
+			mesh.SetColors(colors);
+			mesh.RecalculateTangents();
+			mesh.RecalculateBounds();
+			return mesh;
 		}
-		mesh.SetColors(colors);
-		mesh.RecalculateTangents();
-		mesh.RecalculateBounds();
-		return mesh;
 	}
 
 	// The material the game draws placed planks with: the plank's prefab has none of its own, its display data

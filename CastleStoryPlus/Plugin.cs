@@ -32,6 +32,11 @@ public class Plugin : BaseUnityPlugin
 
 	internal static readonly Dictionary<string, bool> LoadedFeatures = new Dictionary<string, bool>();
 
+	internal static bool IsEnabled(string feature)
+	{
+		return LoadedFeatures.TryGetValue(feature, out bool enabled) && enabled;
+	}
+
 	private void Awake()
 	{
 		Log = Logger;

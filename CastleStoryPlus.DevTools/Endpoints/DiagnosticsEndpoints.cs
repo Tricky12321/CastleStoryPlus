@@ -25,6 +25,29 @@ internal static class DiagnosticsEndpoints
 		{
 			Parameters = "unit (bricktron id; default: the player's first builder), max (default 50)"
 		});
+		routes.Add(new Route("GET", "/api/workertrace", "Whether the worker trace (every worker state change and why workers reject or fail tasks, written to BepInEx/workertrace.log) is on", WorkerTraceState));
+		routes.Add(new Route("POST", "/api/workertrace", "Switches the worker trace on or off (off by default; it costs frame time while on)", SetWorkerTrace)
+		{
+			Parameters = "on (true or false, required)"
+		});
+	}
+
+	private static object WorkerTraceState(ApiRequest request)
+	{
+		return Obj("on", WorkerTrace.Active, "file", System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "workertrace.log"));
+	}
+
+	private static object SetWorkerTrace(ApiRequest request)
+	{
+		if (request.Bool("on", false))
+		{
+			WorkerTrace.Start();
+		}
+		else
+		{
+			WorkerTrace.Stop();
+		}
+		return WorkerTraceState(request);
 	}
 
 	private static object Problems(ApiRequest request)

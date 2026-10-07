@@ -15,7 +15,7 @@ namespace CastleStoryPlus.Loading;
 // log with the load timing. Only active during a load, so the hooks cost nothing in game.
 internal static class LoadProfiler
 {
-	private const int Shown = 25;
+	private const int Shown = 60;
 
 	private class Bucket
 	{
@@ -26,6 +26,8 @@ internal static class LoadProfiler
 		public long Longest;
 
 		public int Count;
+
+		public int Gcs;
 	}
 
 	private static readonly Dictionary<string, Bucket> Buckets = new Dictionary<string, Bucket>();
@@ -43,6 +45,11 @@ internal static class LoadProfiler
 
 	public static void Add(string name, long ticks)
 	{
+		Add(name, ticks, 0);
+	}
+
+	public static void Add(string name, long ticks, int gcs)
+	{
 		if (!Buckets.TryGetValue(name, out Bucket bucket))
 		{
 			bucket = new Bucket { Name = name };
@@ -51,6 +58,7 @@ internal static class LoadProfiler
 		bucket.Ticks += ticks;
 		bucket.Longest = Math.Max(bucket.Longest, ticks);
 		bucket.Count++;
+		bucket.Gcs += gcs;
 	}
 
 	public static void Stop(StringBuilder text)
@@ -63,7 +71,7 @@ internal static class LoadProfiler
 		for (int i = 0; i < list.Count && i < Shown; i++)
 		{
 			Bucket bucket = list[i];
-			text.Append("\n  ").Append(bucket.Name).Append(": ").Append(Seconds(bucket.Ticks)).Append(" (longest ").Append(Seconds(bucket.Longest)).Append(", ").Append(bucket.Count).Append(" calls)");
+			text.Append("\n  ").Append(bucket.Name).Append(": ").Append(Seconds(bucket.Ticks)).Append(" (longest ").Append(Seconds(bucket.Longest)).Append(", ").Append(bucket.Count).Append(" calls").Append((bucket.Gcs > 0) ? (", " + bucket.Gcs + " garbage collections") : string.Empty).Append(")");
 		}
 		Buckets.Clear();
 	}

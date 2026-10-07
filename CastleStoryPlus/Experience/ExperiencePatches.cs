@@ -59,6 +59,11 @@ internal static class RangeDamagePatch
 {
 	private static void Postfix(Profession __instance, ref int __result)
 	{
+		// Shots take it through ShotDamage, which reads RangeDamage once without it.
+		if (CastleStoryPlus.Combat.ShotDamage.Raw)
+		{
+			return;
+		}
 		__result = Mathf.RoundToInt(__result * WorkerExperience.Multiplier(WorkerExperience.CombatLevel(__instance.GetComponent<Labor>())));
 	}
 }

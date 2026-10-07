@@ -5,6 +5,7 @@ using Brix.Game.Components;
 using Brix.Game.Semantique;
 using Brix.Game.Storage;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Upgrades;
 using HarmonyLib;
 using UnityEngine;
 
@@ -14,7 +15,10 @@ namespace CastleStoryPlus.Building;
 // stretched 1.5 x. The meshes and materials come from the (hidden) display children the large stockpile cloned from
 // the pallet: the crate and its heaps (raw stone, raw iron, crystals, plant fibre) get one half-size crate per block;
 // the 1 x 2 blocks (bricks, logs, planks) are laid as a pinwheel around a half block, mirrored on every other level;
-// ingots (iron, glass) lie in two crossed layers like on the pallet; ropes, fabric and cogs get one per block.
+// ingots (iron, glass) lie in two crossed layers like on the pallet; ropes, fabric and cogs get one per block; the
+// mod's resources (coal, steel, dark crystal), which the pallet has no display for, are their own model stacked.
+// With the Stacking research the blocks, ingots, ropes and fabric get a third layer (StackingVisual.Ratio), and the
+// crates are as much taller, their heaps as much higher.
 // Mixed pallets get a column per block of the same pieces. Resources without a layout here (bombs, wards...) keep
 // the game's own display.
 internal class LargeStockpileVisual : MonoBehaviour
@@ -25,7 +29,10 @@ internal class LargeStockpileVisual : MonoBehaviour
 		Block,
 		Ingot,
 		Coil,
-		Cog
+		Cog,
+		// The resource's own model stacked in each block-wide column (the mod's resources: the pallet has no
+		// display for them).
+		Item
 	}
 
 	private sealed class Layout
@@ -91,7 +98,10 @@ internal class LargeStockpileVisual : MonoBehaviour
 		{ "Glass", new Layout(Kind.Ingot, "Glass/Lingot1") },
 		{ "Rope", new Layout(Kind.Coil, "Ropes/Rope1", levelY: new float[2] { 0.3f, 0.75f }) },
 		{ "Fabric", new Layout(Kind.Coil, "Fabric/Fabric1", levelY: new float[2] { 0.6f, 1.33f }) },
-		{ "Cog", new Layout(Kind.Cog, null) }
+		{ "Cog", new Layout(Kind.Cog, null) },
+		{ "Clay", new Layout(Kind.Item, null) },
+		{ "Terracotta", new Layout(Kind.Item, null) },
+		{ "PurifiedBlueCrystal", new Layout(Kind.Item, null) }
 	};
 
 	private const string CratePath = "Visual/Crate";
@@ -194,7 +204,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 		string signature = "#";
 		foreach (Ressource resource in types)
 		{
-			signature += resource.GetType().Name + ":" + recepteur.ContentDescription.Value(resource) + ";";
+			signature += resource.GetType().Name + ":" + recepteur.ContentDescription.Value(resource) + "/" + recepteur.BaseCapacity.Value(resource) + ";";
 		}
 		// Every display on the stockpile asks for a refresh; build once per content change.
 		if (signature == _signature)
@@ -218,11 +228,13 @@ internal class LargeStockpileVisual : MonoBehaviour
 		Layout layout = Layouts[resource.GetType().Name];
 		int capacity = Mathf.Max(1, recepteur.BaseCapacity.Value(resource));
 		float fill = Mathf.Clamp01((float)recepteur.ContentDescription.Value(resource) / capacity);
+		float ratio = StackingVisual.Ratio(recepteur, resource);
 		if (layout.Kind == Kind.Crate)
 		{
+			// The heap measured against the crate's room before Stacking: a crate holding more is taller.
 			foreach (Vector2 centre in Centres)
 			{
-				AddCrate(recepteur, layout, centre, fill);
+				AddCrate(recepteur, layout, centre, fill * ratio, ratio);
 			}
 			return;
 		}
@@ -230,7 +242,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 		{
 			return;
 		}
-		AddPieces(transform, source, LargePieces(layout, source), Vector2.zero, fill);
+		AddPieces(transform, source, LargePieces(layout, source, ratio), Vector2.zero, fill);
 	}
 
 	private void BuildMixed(Recepteur recepteur, List<Ressource> types)
@@ -247,7 +259,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 				float fill = (float)inColumn / perColumn;
 				if (layout != null && layout.Kind == Kind.Crate)
 				{
-					AddCrate(recepteur, layout, Centres[column], fill);
+					AddCrate(recepteur, layout, Centres[column], fill, 1f);
 				}
 				else if (TryGetSource(recepteur, resource, layout, out Source source))
 				{
@@ -260,8 +272,8 @@ internal class LargeStockpileVisual : MonoBehaviour
 		}
 	}
 
-	// A block-sized crate on the pallet with its heap, as high as the crate is full.
-	private void AddCrate(Recepteur recepteur, Layout layout, Vector2 centre, float fill)
+	// A block-sized crate on the pallet with its heap, as high as the crate is full; height stretches the crate upwards.
+	private void AddCrate(Recepteur recepteur, Layout layout, Vector2 centre, float fill, float height)
 	{
 		Transform crateSource = recepteur.transform.Find(CratePath);
 		Transform heapSource = recepteur.transform.Find(layout.Source);
@@ -273,7 +285,8 @@ internal class LargeStockpileVisual : MonoBehaviour
 		cell.transform.SetParent(transform, false);
 		cell.transform.localPosition = new Vector3(centre.x, BaseTop, centre.y);
 		cell.transform.localScale = Vector3.one * CrateScale;
-		AddPiece(cell.transform, crate, new Placement(Vector3.zero, crate.Rotation, Vector3.one));
+		// The crate mesh stands on its z axis (turned upright by its rotation).
+		AddPiece(cell.transform, crate, new Placement(Vector3.zero, crate.Rotation, new Vector3(1f, 1f, height)));
 		if (fill > 0f && TryGetSource(heapSource, out Source heap))
 		{
 			// Low in the crate when nearly empty, up to just under the rim when full.
@@ -339,14 +352,14 @@ internal class LargeStockpileVisual : MonoBehaviour
 		return true;
 	}
 
-	// The whole 3 x 3 for one resource, bottom first.
-	private static List<Placement> LargePieces(Layout layout, Source source)
+	// The whole 3 x 3 for one resource, bottom first; ratio is the room over the room before Stacking (more layers).
+	private static List<Placement> LargePieces(Layout layout, Source source, float ratio)
 	{
 		List<Placement> pieces = new List<Placement>();
 		switch (layout.Kind)
 		{
 			case Kind.Block:
-				for (int level = 0; level < layout.Levels; level++)
+				for (int level = 0; level < Mathf.Max(layout.Levels, Mathf.RoundToInt(layout.Levels * ratio)); level++)
 				{
 					float y = BaseTop + layout.LevelHeight * (level + 0.5f);
 					foreach (Vector4 block in Pinwheel(level))
@@ -358,31 +371,45 @@ internal class LargeStockpileVisual : MonoBehaviour
 				}
 				break;
 			case Kind.Ingot:
-				// As on the pallet: a layer lengthwise along x, then one crossed along z.
-				foreach (float z in new float[6] { -1.25f, -0.75f, -0.25f, 0.25f, 0.75f, 1.25f })
+				// As on the pallet: a layer lengthwise along x, then one crossed along z, and so on up.
+				for (int layer = 0; layer < Mathf.Max(2, Mathf.RoundToInt(2 * ratio)); layer++)
 				{
-					for (int x = -1; x <= 1; x++)
+					float y = 0.35f + 0.3f * layer;
+					if (layer % 2 == 0)
 					{
-						pieces.Add(new Placement(new Vector3(x, 0.35f, z), Quaternion.Euler(0f, 90f, 0f), Vector3.one));
+						foreach (float z in new float[6] { -1.25f, -0.75f, -0.25f, 0.25f, 0.75f, 1.25f })
+						{
+							for (int x = -1; x <= 1; x++)
+							{
+								pieces.Add(new Placement(new Vector3(x, y, z), Quaternion.Euler(0f, 90f, 0f), Vector3.one));
+							}
+						}
 					}
-				}
-				foreach (float x in new float[6] { -1.125f, -0.675f, -0.225f, 0.225f, 0.675f, 1.125f })
-				{
-					for (int z = -1; z <= 1; z++)
+					else
 					{
-						pieces.Add(new Placement(new Vector3(x, 0.65f, z), Quaternion.Euler(0f, 180f, 0f), Vector3.one));
+						foreach (float x in new float[6] { -1.125f, -0.675f, -0.225f, 0.225f, 0.675f, 1.125f })
+						{
+							for (int z = -1; z <= 1; z++)
+							{
+								pieces.Add(new Placement(new Vector3(x, y, z), Quaternion.Euler(0f, 180f, 0f), Vector3.one));
+							}
+						}
 					}
 				}
 				break;
 			case Kind.Coil:
-				foreach (float y in layout.LevelY)
+			{
+				float step = layout.LevelY[1] - layout.LevelY[0];
+				for (int level = 0; level < Mathf.Max(layout.LevelY.Length, Mathf.RoundToInt(layout.LevelY.Length * ratio)); level++)
 				{
+					float y = layout.LevelY[0] + step * level;
 					foreach (Vector2 centre in Centres)
 					{
 						pieces.Add(new Placement(new Vector3(centre.x, y, centre.y), source.Rotation, Vector3.one));
 					}
 				}
 				break;
+			}
 			case Kind.Cog:
 				foreach (Vector2 centre in Centres)
 				{
@@ -391,6 +418,18 @@ internal class LargeStockpileVisual : MonoBehaviour
 				foreach (Vector2 centre in new Vector2[4] { new Vector2(-0.5f, -0.5f), new Vector2(0.5f, -0.5f), new Vector2(-0.5f, 0.5f), new Vector2(0.5f, 0.5f) })
 				{
 					pieces.Add(new Placement(new Vector3(centre.x, 0.5f, centre.y), Quaternion.Euler(0f, 45f, 0f) * source.Rotation, Vector3.one));
+				}
+				break;
+			case Kind.Item:
+				// Layer by layer over the nine columns, so a part-full stockpile is evenly low.
+				foreach (Placement layer in RepresentativeColumn(source))
+				{
+					foreach (Vector2 centre in Centres)
+					{
+						Placement piece = layer;
+						piece.Position += new Vector3(centre.x, 0f, centre.y);
+						pieces.Add(piece);
+					}
 				}
 				break;
 		}
@@ -461,6 +500,9 @@ internal class LargeStockpileVisual : MonoBehaviour
 				{
 					pieces.Add(new Placement(new Vector3(0f, 0.28f + 0.15f * level, 0f), Quaternion.Euler(0f, level * 30f, 0f) * source.Rotation, Vector3.one));
 				}
+				break;
+			case Kind.Item:
+				pieces.AddRange(RepresentativeColumn(source));
 				break;
 		}
 		return pieces;

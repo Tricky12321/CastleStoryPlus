@@ -109,6 +109,37 @@ internal static class BuildNeeds
 		return bring + TaskReservation.OtherReservations(goal, labor);
 	}
 
+	// Whether the other workers already bring all the goal still needs of what this worker would fetch (or, when it
+	// finds nothing to fetch, of everything the goal still needs).
+	public static bool IsCovered(BuildGoal goal, Labor labor)
+	{
+		int others = OtherWorkersBring(goal, labor);
+		if (others == 0)
+		{
+			return false;
+		}
+		int remaining = RemainingNeedFor(goal, labor.Find(goal.recepteur));
+		if (remaining < 0)
+		{
+			remaining = TotalNeed(goal);
+		}
+		return remaining >= 0 && remaining <= others;
+	}
+
+	private static int TotalNeed(BuildGoal goal)
+	{
+		if (goal.recepteur == null)
+		{
+			return -1;
+		}
+		int total = 0;
+		foreach (Ressource ressource in goal.recepteur.CurrentCapacity.GetRessources().ToList())
+		{
+			total += ressource.quantifiable.valeur;
+		}
+		return total;
+	}
+
 	public static int RemainingNeedFor(BuildGoal goal, Ressource ressource)
 	{
 		return (ressource == null) ? -1 : goal.recepteur.CurrentCapacity.Value(ressource);
@@ -137,13 +168,7 @@ internal static class BuildGoalCoveredPatch
 		{
 			return;
 		}
-		int others = BuildNeeds.OtherWorkersBring(__instance, labor);
-		if (others == 0)
-		{
-			return;
-		}
-		int remaining = BuildNeeds.RemainingNeedFor(__instance, labor.Find(__instance.recepteur));
-		if (remaining >= 0 && remaining <= others)
+		if (BuildNeeds.IsCovered(__instance, labor))
 		{
 			errorDestination.AddDecisionError(SharedWorkException<Exceptions.GoalTooCrowded>.Get.Problem, labor);
 			__result = false;

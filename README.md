@@ -14,6 +14,9 @@ The mod is a  [BepInEx 5](https://github.com/BepInEx/BepInEx) plugin that uses [
 |---|---|---|
 | Economy | New workers arrive faster: brewed fireflies carry more energy (default +30%, `[Economy] EnergyMultiplier`) | `Economy` |
 | Worker AI | Workers start work on their own, pick up their next task faster, and help other task groups when theirs is done | `WorkerAI` |
+| Worker AI | A task can be paused instead of deleted: no bricktron works on it until it is resumed | `PauseTasks` |
+| Worker AI | How many bricktrons work on a task at a time can be limited, e.g. a quarry with 4 | `WorkLimit` |
+| Worker AI | A single blueprint (e.g. a warehouse) can get top priority from the context wheel over it | `BuildPriority` |
 | Worker AI | No duplicate build jobs; workers carry a full armful for a blueprint and the ones near it, and deliver to them on one trip | `BuildJobs` |
 | Worker AI | Faster task search in big task areas (mining, digging, many trees): no idle seconds after each block | `FasterTaskSearch` |
 | Worker AI | Task reservation: a worker reserves the task it chooses, so idle workers no longer walk to the same task together | `TaskReservation` |
@@ -23,53 +26,65 @@ The mod is a  [BepInEx 5](https://github.com/BepInEx/BepInEx) plugin that uses [
 | Worker AI | Resource reservation: a worker reserves the items it fetches (a loose item, or its share of a stockpile), so others fetch elsewhere | `ResourceReservation` |
 | Worker AI | Workers prefer the nearest stockpile | `StockpileChoice` |
 | Worker AI | Idle workers consolidate small stockpiles into the fullest one | `StockpileConsolidation` |
-| Worker AI | Mixed stockpiles: one pallet holds several resources, one resource type per column (four columns); raw stone (converted to bricks), iron, brimstone, crystals and other valuables (`[MixedStockpiles] NeverMix`) are never mixed | `MixedStockpiles` |
+| Worker AI | Mixed stockpiles: one pallet holds several resources, one resource type per column (four columns); raw stone (converted to bricks), bricks, logs, planks, iron, brimstone, crystals and other valuables (`[MixedStockpiles] NeverMix`) are never mixed | `MixedStockpiles` |
 | Building | Large stockpile: 3 x 3 blocks, holds three times as much as the 2 x 2 stockpile | `LargeStockpile` |
-| Worker AI | Idle workers pick up loose items near the base and store them, no cleanup zone needed | `AutoCleanup` |
+| Worker AI | Idle workers pick up loose items near the base and store them, no cleanup zone needed; items on top of a building are taken from its foot; the range is set on the home crystal's task (blue ring around the crystal) | `AutoCleanup` |
+| Worker AI | Idle builders repair damaged blocks near the base, no repair zone needed; the range is set on the home crystal's task (green ring around the crystal) | `AutoRepair` |
 | Worker AI | Tree harvest areas also remove the stumps of felled trees: 3x the axe work of a tree, 1 log instead of 3 (`[TreeStumps]`) | `TreeStumps` |
 | Building | Hovering a blueprint shows the resources it still needs, with icon and count; a block of a build task, and the menu of a selected build task, show what the whole task still needs (red when the stockpiles hold too little) | `BuildNeeds` |
-| Pathfinding | Shorter routes, bigger search budgets, no pause after picking something up, stairs usable under walkways | `Pathfinding` |
+| Pathfinding | Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame | `Pathfinding` |
 | Performance | Fixes memory leaks in the game itself (worker error store, highlights, pie menus, Lua menus, observers that outlive their game, stale reservations) | `GameLeakFixes` |
+| Performance | Shorter garbage collection pauses: the Lua value heap (10 million slots, 280 MB, read by every collection) starts at 1 million slots and grows only when needed | `LuaHeapShrink` |
 | Combat | Archers always hit visible targets, and arrows never hurt allies | `ArcherAccuracy` |
 | Combat | Melee fighters low on health retreat to a healing ward or the home crystal and heal before fighting again (`[Retreat]`) | `Retreat` |
 | Call to arms | Soldiers per class (limited by the sets you own), ranged and melee rally points, a role for each worker (for the selected workers, or per worker in a list of all workers) | `CallToArms` |
+| Combat | Mixed weapon stands: one stand holds the weapons and armour of all soldier classes at once (as many weapons, shields/quivers and helmets/caps as before, any classes mixed); equipping takes one whole kit of a single class: the one a call to arms asks for, otherwise the class with the most kits on the stand (`[MixedRacks] PerSlot`) | `MixedRacks` |
 | Experience | Separate work and combat XP, levels 1–10 with +5% per level, shown in the name tag with XP bars and a level-up effect | `Experience` |
-| Workers | 3x bricktrons: sacrifice one worker and pay 50 dark crystals (or, without DarkCrystals, 1.5x the energy of a new bricktron) to upgrade another; twice as big, 3x speed for everything it does, 3x health, still counts as one bricktron; one per 5 bricktrons (`[GiantBricktron]`) | `GiantBricktron` |
-| Building | New blocks: stone bricks of 2 x 2 and 2 x 4, wooden slabs (half high) of 1 x 1, 2 x 1, 2 x 2 and 2 x 4 that hold on to the side of stone | `CustomBlocks` |
+| Workers | Giant bricktrons: sacrifice one worker and pay 50 dark crystals (or, without DarkCrystals, 1.5x the energy of a new bricktron) to upgrade another; 1.25x as big, 2x speed for everything it does, 2x health, carries 2.5x as much, still counts as one bricktron; one per 5 bricktrons; first researched at the research station (`[GiantBricktron]`) | `GiantBricktron` |
+| Building | New blocks: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 that stand on one supported block (the long ones bridge gaps between walls), a brick on end (1 x 1, 2 high), wooden slabs (half high) of 1 x 1, 2 x 1, 2 x 2 and 2 x 4 that hold on to the side of stone | `CustomBlocks` |
+| Building | A drag build stops when the mouse button is let go, also over the interface or outside the window | `DragRelease` |
+| Building | One build task per team: every blueprint goes into it, and other build tasks are merged into it | `GlobalBuildJob` |
+| Building | Wood ladder: bricktrons climb straight up and down it, slower than stairs (`[Ladders] ClimbSpeed`, `RouteCost`), only with free hands or a bag | `Ladders` |
 | Building | Warehouse: a 9 x 6 hall in the build menu that holds 4500 resources of any kind; workers walk inside, and its brick works turns stored stone into bricks (60 planks, 80 bricks, 20 iron, 10 rope) | `Warehouse` |
 | Building | A demolished stockpile or warehouse drops what it holds instead of destroying it | `StockpileSpill` |
-| Building | Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other; 15% fee, prices rise with trading and recover over time, so trading never makes resources; workers walk inside (`[Market]`) | `Market` |
-| Combat | Smithy and armoury in the build menu (crafting group): workers research weapon upgrades (Sharpened Blades, Heavy Blades, Fletching, Steady Aim, Winch) and armour upgrades (Chainmail, Padded Gambeson, Reinforced Helmet, Shield Rims, Warded Plate) in three tiers (iron, steel, crystal) for the whole team; kept in the save; workers walk inside | `Upgrades` |
+| Building | Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other; 15% fee, prices rise with trading and recover over time (a trade then asks more for the same lot, never refused), so trading never makes resources; coal and steel trade too (steel can only be given); several workers fetch for the same trade; workers walk inside (`[Market]`) | `Market` |
+| Combat | Smithy, armoury and research station in the build menu (crafting group): workers research weapon upgrades (Sharpened Blades, Heavy Blades, Fletching, Steady Aim, Winch) and armour upgrades (Chainmail, Padded Gambeson, Reinforced Helmet, Shield Rims, Warded Plate) in three tiers (iron, steel, crystal), and at the research station colony upgrades paid in dark crystals (Housing: up to 15 more bricktrons, Work Methods, Stacking (+33% storage per tier, up to twice the room: 4 layers instead of 2, taller crates), Crystal Attunement, Light Boots, Firefly Lore, Giant Bricktrons, Scouting: more time between waves, Efficient Mining: more stone, ore and crystal from digging and mining; 5 minutes of work per tier, with a progress bar over the researching worker), for the whole team; kept in the save; workers walk inside | `Upgrades` |
 | Economy | Coal and steel: coal is mined from veins in the deep rock of every map or burnt from logs in the furnace; the forge makes steel from iron and coal; the upgrades' steel tier costs steel | `Metallurgy` |
 | Building | Hovering a stockpile lists what it holds next to the mouse (icon, name, count); a warehouse also shows how full it is in percent | `StockpileTooltip` |
-| Economy | Dark crystals: slain enemies drop them (5 at 1 in 3, biftrons 15 at 1 in 2); the upgrades' crystal tier and 3x bricktrons cost dark crystals | `DarkCrystals` |
+| Economy | Dark crystals: slain enemies drop them (5 at 1 in 3, biftrons 15 at 1 in 2); the upgrades' crystal tier and giant bricktrons cost dark crystals | `DarkCrystals` |
 | Economy | Blue crystal veins in the deep rock of every map, so blue crystal can be mined | `BlueCrystalDeposits` |
 | Workers | A dead worker respawns for a flat 100 energy instead of the price of a new bricktron | `RespawnCost` |
 | Economy | Workshops can loop their queue until a stock limit (5–100 of what they make), waiting while there is enough | `CraftLoopLimit` |
+| Economy | A workshop's priority (e.g. the research station) can be set like a task's: locked, low, medium or high | `WorkshopPriority` |
 | Workers | Dying bricktrons drop their gear instead of losing it | `DropGearOnDeath` |
 | Combat | Artificers heal team mates in attack range with green healing bolts (10% health per bolt, one at a time) | `ArtificerHealing` |
+| Combat | Critical hits from combat level 3: double damage at 5% (level 3), 10% (5), 15% (8) or 20% (10), with a red "2x damage" over the bricktron and a red glowing sword or shot | `CriticalHits` |
 | Building | Eyedropper: middle-click a block or building to build a copy | `Eyedropper` |
 | Building | Pending blueprints are always visible | `BlueprintsVisible` |
+| Building | Blueprints marked for deconstruction stay dark orange, also while their build task is not selected | `DeconstructColour` |
 | Building | Move buildings: hold **M** and click a building, then place it; workers demolish the old one and build the new one from its materials (`[Building] MoveStructureKey`) | `MoveStructure` |
 | Building | Copy and paste: **Ctrl+C** and drag an area to copy its blocks, buildings and blueprints; **Ctrl+V** pastes them as blueprints (right-click rotates) (`[Building] CopyKey`, `PasteKey`) | `CopyPaste` |
-| UI | Resource list (icon, name, count) in the top-right corner; used-up resources stay listed in red, plus storage used and free | `ResourceList` |
+| UI | Resource list (icon, name, count) in the top-right corner; a resource stays listed from the first time it is stocked (in red at 0, also after loading), plus storage used and free (with free as a percentage); a **Resources** button on the right-hand bar shows and hides it (`[ResourceList] Shown`) | `ResourceList` |
 | UI | Minimap shows the island (terrain colours, height, slopes, walls and buildings) under the units | `MinimapTerrain` |
 | UI | Invasion: big warning before the next wave at 30 and 15 seconds, countdown from 5 | `WaveWarning` |
+| UI | Invasion: an arrow on the screen points where the next wave will come from, 30 seconds before it | `WaveDirection` |
 | UI | Respawn status under a dead worker's firefly (time left, missing energy) | `RespawnStatus` |
 | UI | Energy hint above your home crystal when the firefly of a killed enemy or worker arrives ("+N energy") | `EnergyHint` |
 | UI | Castle Story Plus logo on the splash screen, main menu and loading screen | `PlusLogo` |
 | UI | **Ctrl+F**: search the world; matching bricktrons (name, job), enemies, buildings, blueprints and resources get a yellow ring (several searches with commas) | `WorldSearch` |
 | UI | Fast startup: `[Startup] FastStartup = true` in the config (or launch option `-faststartup`) skips the logo screens at startup | `FastStartup` |
 | Menus | **Continue** on the title screen loads the latest save | `ContinueButton` |
-| Menus | **Save & Leave** in the quit dialog | `SaveAndLeave` |
+| Menus | **Save and return to main menu** and **Save and quit game** (with a confirmation) in the quit dialog | `SaveAndLeave` |
 | Menus | Exit closes the game at once (main menu or in a game), no long wait while everything is torn down | `FastQuit` |
 | Menus | New Invasion worlds: choose how often enemy waves come (every 5, 10, 15, 20 or 30 minutes), saved with the world | `WaveInterval` |
 | Menus | Game speed keys in single player: **1** normal, **2** 2x, **3** 3x (`[GameSpeed]`) | `SpeedKeys` |
 | Saving | Autosave every 2 minutes of play (`[Saving] AutosaveMinutes`, 0 = off), one autosave slot per map | `AutoSave` |
-| Menus | **Castle Story Plus settings** in the in-game Settings menu: autosave interval, firefly energy, 3x bricktron values, keys and feature switches | (always on) |
+| Menus | **Castle Story Plus settings** in the in-game Settings menu: autosave interval, firefly energy, giant bricktron values, keys and feature switches | (always on) |
 | Loading | Faster map loading that keeps the window responsive | `FasterLoading` |
+| Loading | Game menus drawn in C# instead of the game's slow-to-build Lua menus, one switch per menu in `[LuaUi]` (all off by default; being built up step by step) | `CsMenus` |
 | Debug | F9: system log (what every bricktron does, problems, the mod's log) | `SystemLog` |
-| Debug | F8: debug menu (host only): energy, builders, healing, resources, enemies, invasion waves | `DebugMenu` |
+| Debug | F8: debug menu (host only): energy, builders, healing, resources, enemies, invasion waves and the time between them, route view, 100% critrate | `DebugMenu` |
+| Debug | F7: performance window: frame rate, frame times (1% low, p95, p99), garbage collections, frame time and frame rate graphs, what takes the time each frame (every Update of the game and the mod, measured from the first time the window opens) and the last spikes; frames over 100 ms (`[Performance] SpikeMs`) are logged with what took their time | `Performance` |
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
@@ -141,6 +156,8 @@ Castle Story runs Unity's very old **Mono 2.6**. On Linux, MonoMod (the library 
 - it then starts the normal BepInEx preloader.
 
 On Windows the bootstrap only starts BepInEx and changes nothing else.
+
+The full story (the failing call chain, how the platform and the setter hook work, doorstop 3 and 4, and the assembly loading trap on Mono 2.6) is in [docs/BepInEx-on-Mono-2.6.md](docs/BepInEx-on-Mono-2.6.md).
 
 ## Configuration
 

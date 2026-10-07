@@ -109,7 +109,7 @@ internal static class WorkerTraceDetails
 			return;
 		}
 		List<string> idle = new List<string>();
-		foreach (Labor labor in UnityEngine.Object.FindObjectsOfType<Labor>())
+		foreach (Labor labor in Live<Labor>.Active())
 		{
 			if (labor == null || !faction.IsSame(labor.gameObject) || (labor.Activity != Activity.Idle && labor.Activity != Activity.Chilling))
 			{

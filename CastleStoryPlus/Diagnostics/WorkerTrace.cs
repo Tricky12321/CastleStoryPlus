@@ -20,7 +20,34 @@ internal class WorkerTrace : MonoBehaviour
 
 	private static readonly Dictionary<Labor, string> _states = new Dictionary<Labor, string>();
 
-	private Labor[] _labors = new Labor[0];
+	// What the logged state line is made of, compared every frame; the line itself is only built when it changes.
+	private struct Snapshot
+	{
+		public Activity Activity;
+
+		public object Task;
+
+		public object Pending;
+
+		public bool Available;
+
+		public bool Delay;
+
+		public int Queue;
+
+		public bool Moving;
+
+		public object Project;
+
+		public bool Same(Snapshot other)
+		{
+			return Activity == other.Activity && Task == other.Task && Pending == other.Pending && Available == other.Available && Delay == other.Delay && Queue == other.Queue && Moving == other.Moving && Project == other.Project;
+		}
+	}
+
+	private static readonly Dictionary<Labor, Snapshot> _snapshots = new Dictionary<Labor, Snapshot>();
+
+	private readonly List<Labor> _labors = new List<Labor>();
 
 	private float _nextRefresh;
 
@@ -30,7 +57,11 @@ internal class WorkerTrace : MonoBehaviour
 
 	private static void Enable()
 	{
-		GameSession.OnLeave(_states.Clear);
+		GameSession.OnLeave(() =>
+		{
+			_states.Clear();
+			_snapshots.Clear();
+		});
 		Plugin.Root.AddComponent<WorkerTrace>();
 		if (Plugin.Cfg.Bind("Debug", "WorkerTrace", false, "Log every worker state change, and why workers reject or fail tasks, to BepInEx/workertrace.log (modding aid; can also be switched on in the debug menu, F8).").Value)
 		{
@@ -82,7 +113,7 @@ internal class WorkerTrace : MonoBehaviour
 		if (Time.unscaledTime >= _nextRefresh)
 		{
 			_nextRefresh = Time.unscaledTime + RefreshSeconds;
-			_labors = FindObjectsOfType<Labor>();
+			Live<Labor>.Active(_labors);
 		}
 		foreach (Labor labor in _labors)
 		{
@@ -90,6 +121,12 @@ internal class WorkerTrace : MonoBehaviour
 			{
 				continue;
 			}
+			Snapshot snapshot = SnapshotOf(labor);
+			if (_snapshots.TryGetValue(labor, out Snapshot was) && was.Same(snapshot))
+			{
+				continue;
+			}
+			_snapshots[labor] = snapshot;
 			string state = StateOf(labor);
 			if (!_states.TryGetValue(labor, out string old) || old != state)
 			{
@@ -97,6 +134,22 @@ internal class WorkerTrace : MonoBehaviour
 				Log(labor, state);
 			}
 		}
+	}
+
+	private static Snapshot SnapshotOf(Labor labor)
+	{
+		Locomotion4 locomotion = labor.navigation != null ? labor.navigation.Locomotion : null;
+		return new Snapshot
+		{
+			Activity = labor.Activity,
+			Task = labor.CurrentTask,
+			Pending = labor.PendingTask,
+			Available = labor.IsAvailable(),
+			Delay = labor.DelayBeforeAvailable > 0f,
+			Queue = labor.InstructionQueue.Count,
+			Moving = !(locomotion == null || locomotion.IsInPlace()),
+			Project = labor.Project
+		};
 	}
 
 	private static string StateOf(Labor labor)

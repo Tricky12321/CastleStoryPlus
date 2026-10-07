@@ -223,7 +223,7 @@ internal class SystemLogPanel : MonoBehaviour
 	{
 		Faction local = (User.LocalUser != null) ? User.LocalUser.faction : null;
 		List<Labor> labors = new List<Labor>();
-		foreach (Labor labor in FindObjectsOfType<Labor>())
+		foreach (Labor labor in Live<Labor>.Active())
 		{
 			if (labor != null && (_allFactions || (local != null && local.IsSame(labor.gameObject))))
 			{

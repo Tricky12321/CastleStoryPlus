@@ -2,8 +2,10 @@ require("LUI2.lua")
 -------
 -- Resource list for the top-right corner: one row per stocked resource with icon, name and count.
 -- Replaces the icon grid that used to sit in the faction panel under the minimap.
--- Resources that have been stocked once stay listed for the rest of the session, in red at 0.
--- Above the list: stockpile room used / total and free (CastleStoryPlus.StorageUsed/StorageCapacity).
+-- Resources that have been stocked once stay listed for good, in red at 0, also after a save is loaded
+-- (CastleStoryPlus.ResourceSeen/MarkResourceSeen, saved with the team).
+-- Above the list: stockpile room used / total and free, with free as a share of the total
+-- (CastleStoryPlus.StorageUsed/StorageCapacity).
 -------
 
 
@@ -24,9 +26,6 @@ _t.excludedResources[Resource.LanternWard] = true
 _t.excludedResources[Resource.PylonWard] = true
 _t.excludedResources[Resource.BearTrap] = true
 _t.excludedResources[Resource.None] = true
-
---resources stocked at least once since the map was loaded
-_t.seen = {}
 
 _t.normalNameColor = Color.New(0.85, 0.85, 0.85, 1)
 -------
@@ -83,6 +82,15 @@ _t.StorageCapacity =
 _t.StorageFree =
 	function(self)
 		return math.max(0, self:StorageCapacity() - self:StorageUsed())
+	end
+_t.StorageFreeText =
+	function(self)
+		local capacity = self:StorageCapacity()
+		local percent = 0
+		if capacity > 0 then
+			percent = math.floor(self:StorageFree() * 100 / capacity + 0.5)
+		end
+		return tostring(self:StorageFree()) .. " (" .. tostring(percent) .. "%)"
 	end
 _t.StorageFreeColor =
 	function(self)
@@ -143,7 +151,7 @@ _t.CreateStorageRowPanel =
 _t.CreateStoragePanels =
 	function(self, p_parent)
 		self:CreateStorageRowPanel(p_parent, "Storage used", ||tostring(self:StorageUsed()) .. " / " .. tostring(self:StorageCapacity()), ||CastleYellow)
-		self:CreateStorageRowPanel(p_parent, "Storage free", ||tostring(self:StorageFree()), ||self:StorageFreeColor())
+		self:CreateStorageRowPanel(p_parent, "Storage free", ||self:StorageFreeText(), ||self:StorageFreeColor())
 	end
 
 --panels: empty hint
@@ -175,13 +183,17 @@ _t.HasAnyRow =
 		return false
 	end
 
---listed while stocked, and afterwards once it has been stocked
+--listed from the first time it is stocked, for good (remembered by the team, saved with the world)
 _t.IsListed =
 	function(self, resource)
-		if Data.Storage:HasResourceCount(resource) and Data.Storage:GetResourceCount(resource) > 0 then
-			self.seen[resource] = true
+		if CastleStoryPlus.ResourceSeen(resource) then
+			return true
 		end
-		return self.seen[resource] == true
+		if Data.Storage:HasResourceCount(resource) and Data.Storage:GetResourceCount(resource) > 0 then
+			CastleStoryPlus.MarkResourceSeen(resource)
+			return true
+		end
+		return false
 	end
 
 _t.IsEmpty =

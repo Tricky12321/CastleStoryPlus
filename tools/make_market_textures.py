@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Renders the market building's textures in CastleStoryPlus/Assets/Market/.
+"""Renders the textures of the mod's box-model buildings (market, smithy, armoury, research station) in
+CastleStoryPlus/Assets/Market/.
 
 Every texture is 128 x 128, tiles seamlessly and covers one block (1 x 1 world unit), in the soft, painted look
 of the game's own buildings: low-contrast colour variation, clear shapes (boards, stones, shingles), no fine noise.
@@ -171,6 +172,60 @@ def crystal(base):
     return shade(base, facets + sparkle + 0.08)
 
 
+def books():
+    """Two shelf rows of book spines in leather colours, each book its own height, with bands near both ends."""
+    pixels = np.zeros((SIZE, SIZE, 3))
+    pixels[:, :] = hex_rgb(0x3A2616)
+    colours = [0x8E2F28, 0x35603A, 0x2F4A7A, 0x7A5A2A, 0x5A2E5E, 0x9A7A3A, 0x4A3A2A]
+    half = SIZE // 2
+    for shelf in range(2):
+        # The shelf board at the bottom of each half (image rows run top to bottom).
+        bottom = (shelf + 1) * half
+        pixels[bottom - 4:bottom, :] = hex_rgb(0x6A4527)
+        x = 0
+        while x < SIZE:
+            width = int(RNG.integers(6, 12))
+            width = min(width, SIZE - x)
+            height = int(RNG.integers(int(half * 0.6), half - 8))
+            top = bottom - 4 - height
+            base = hex_rgb(colours[int(RNG.integers(0, len(colours)))])
+            amount = (noise(4, 8)[top:bottom - 4, x:x + width] - 0.5) * 0.15
+            spine = shade(base, amount)
+            # Rounded spine: darker at both sides.
+            across = (np.arange(width) + 0.5) / width
+            spine *= (1 - 0.35 * (np.abs(across - 0.5) * 2) ** 2)[None, :, None]
+            # Gilt bands near the top and the bottom.
+            for band in (top + 4, bottom - 10):
+                if top <= band < bottom - 5:
+                    spine[band - top:band - top + 2, :] = hex_rgb(0xD8B04A)
+            pixels[top:bottom - 4, x:x + width] = spine
+            x += width + int(RNG.integers(0, 2))
+    return pixels
+
+
+def leather(base):
+    """Book cover leather: soft mottling and a gilt border."""
+    y = np.arange(SIZE)[:, None].repeat(SIZE, 1)
+    x = np.arange(SIZE)[None, :].repeat(SIZE, 0)
+    amount = (noise(10, 10) - 0.5) * 0.20 + (noise(32, 32) - 0.5) * 0.06
+    pixels = shade(base, amount)
+    edge = np.minimum(np.minimum(x, SIZE - 1 - x), np.minimum(y, SIZE - 1 - y))
+    pixels[(edge >= 10) & (edge < 13)] = hex_rgb(0xC9A040)
+    return pixels
+
+
+def paper():
+    """Parchment with faint lines of writing."""
+    y = np.arange(SIZE)[:, None].repeat(SIZE, 1)
+    x = np.arange(SIZE)[None, :].repeat(SIZE, 0)
+    amount = (noise(6, 6) - 0.5) * 0.10
+    pixels = shade(hex_rgb(0xECE2C6), amount)
+    lines = ((y % 12) >= 8) & ((y % 12) < 10) & (x > 12) & (x < SIZE - 12)
+    words = noise(16, 32) > 0.4
+    pixels[lines & words] *= 0.55
+    return pixels
+
+
 def main():
     save(wood(hex_rgb(0xC69A62)), "wood_light")
     save(wood(hex_rgb(0x9C6B3D)), "wood")
@@ -183,6 +238,12 @@ def main():
     save(metal(hex_rgb(0x9AA0A6)), "iron")
     save(crystal(hex_rgb(0x58B8E8)), "crystal_blue")
     save(crystal(hex_rgb(0xF0A23A)), "crystal_orange")
+    save(crystal(hex_rgb(0x8A3AD0)), "crystal_dark")
+    save(books(), "books")
+    save(leather(hex_rgb(0x8E2F28)), "leather_red")
+    save(leather(hex_rgb(0x35603A)), "leather_green")
+    save(leather(hex_rgb(0x2F4A7A)), "leather_blue")
+    save(paper(), "paper")
 
 
 if __name__ == "__main__":

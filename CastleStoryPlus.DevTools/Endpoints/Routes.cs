@@ -14,6 +14,9 @@ internal static class Routes
 		SelectionEndpoints.Add(routes);
 		DiagnosticsEndpoints.Add(routes);
 		PathEndpoints.Add(routes);
+		PathStatsEndpoints.Add(routes);
+		FrameEndpoints.Add(routes);
+		HeapEndpoints.Add(routes);
 		TestEndpoints.Add(routes);
 		return routes;
 	}

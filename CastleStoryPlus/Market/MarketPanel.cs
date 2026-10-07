@@ -138,8 +138,8 @@ internal class MarketPanel : MonoBehaviour
 	{
 		_nextRefresh = Time.unscaledTime + RefreshSeconds;
 		CountStock();
-		RefreshTiles(_giveTiles, _give, _get);
-		RefreshTiles(_getTiles, _get, _give);
+		RefreshTiles(_giveTiles, _give, _get, false);
+		RefreshTiles(_getTiles, _get, _give, true);
 		RefreshQueue();
 		_repeatLabel.text = "Repeat: " + (_station.Looping ? "on" : "off");
 		MarketPrices.Trade trade = CurrentTrade();
@@ -153,30 +153,21 @@ internal class MarketPanel : MonoBehaviour
 		}
 		_tradeGiveIcon.sprite = trade.Give.Icon.Get64();
 		_tradeGetIcon.sprite = trade.Get.Icon.Get64();
-		int output = MarketPrices.Output(trade);
-		if (output > 0)
-		{
-			_tradeText.text = trade.GiveAmount + " " + trade.Give.Name + "  ->  " + output + " " + trade.Get.Name;
-			_tradeText.color = Yellow;
-		}
-		else
-		{
-			_tradeText.text = trade.Get.Name + " is too expensive right now: " + trade.GiveAmount + " " + trade.Give.Name + " would give nothing (you get them back).";
-			_tradeText.color = Bad;
-		}
+		_tradeText.text = trade.GiveAmount + " " + trade.Give.Name + "  ->  " + MarketPrices.Output(trade) + " " + trade.Get.Name;
+		_tradeText.color = Yellow;
 		_priceText.text = "Price level: " + Level(trade.Give) + ", " + Level(trade.Get);
 		_queueButton.interactable = _station.QueueCount < MaxQueue;
 	}
 
-	private void RefreshTiles(List<Tile> tiles, int selected, int other)
+	private void RefreshTiles(List<Tile> tiles, int selected, int other, bool get)
 	{
 		for (int i = 0; i < tiles.Count; i++)
 		{
 			Tile tile = tiles[i];
 			tile.Stock.text = Stock(tile.Good).ToString();
 			SetTileColor(tile.Button, (i == selected) ? TileSelected : TileNormal);
-			// The resource picked on the other side cannot be traded for itself.
-			tile.Button.interactable = i != other;
+			// The resource picked on the other side cannot be traded for itself, and some cannot be bought (steel).
+			tile.Button.interactable = i != other && (!get || tile.Good.Buyable);
 		}
 	}
 
@@ -216,8 +207,7 @@ internal class MarketPanel : MonoBehaviour
 			}
 			row.GiveIcon.sprite = trade.Give.Icon.Get64();
 			row.GetIcon.sprite = trade.Get.Icon.Get64();
-			int output = MarketPrices.Output(trade);
-			row.Text.text = trade.GiveAmount + " " + trade.Give.Name + "  ->  " + ((output > 0) ? (output + " " + trade.Get.Name) : ("no " + trade.Get.Name + " (too expensive)")) + ((i == 0) ? "  <color=#999999>next</color>" : string.Empty);
+			row.Text.text = trade.GiveAmount + " " + trade.Give.Name + "  ->  " + MarketPrices.Output(trade) + " " + trade.Get.Name + ((i == 0) ? "  <color=#999999>next</color>" : string.Empty);
 		}
 	}
 
@@ -279,6 +269,18 @@ internal class MarketPanel : MonoBehaviour
 		int give = _give;
 		_give = _get;
 		_get = give;
+		// What was given cannot always be bought (steel): then the first good that can.
+		if (!MarketPrices.Goods[_get].Buyable)
+		{
+			for (int i = 0; i < MarketPrices.Goods.Count; i++)
+			{
+				if (i != _give && MarketPrices.Goods[i].Buyable)
+				{
+					_get = i;
+					break;
+				}
+			}
+		}
 		_nextRefresh = 0f;
 	}
 

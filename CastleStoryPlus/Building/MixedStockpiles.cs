@@ -33,7 +33,7 @@ internal static class MixedStockpiles
 
 	private static void Enable()
 	{
-		string list = Plugin.Cfg.Bind("MixedStockpiles", "NeverMix", "Iron,RawIron,PurifiedBrimstone,OrangeCrystal,BlueCrystal,BlueCrystalChunck,Glass,Terracotta,Cog,Bomb,ExplosiveBarrel", "Resources that always get a pallet of their own, comma separated (names as in the log line 'MixedStockpiles: pallet capacity').").Value;
+		string list = Plugin.Cfg.Bind("MixedStockpiles", "NeverMix", "Iron,RawIron,PurifiedBrimstone,OrangeCrystal,BlueCrystal,BlueCrystalChunck,Glass,Terracotta,Cog,Bomb,ExplosiveBarrel,StoneBlock,WoodBlock,PlankBlock", "Resources that always get a pallet of their own, comma separated (names as in the log line 'MixedStockpiles: pallet capacity').").Value;
 		foreach (string name in list.Split(','))
 		{
 			if (name.Trim().Length > 0)

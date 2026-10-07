@@ -18,7 +18,7 @@ namespace CastleStoryPlus.UI;
 
 // "Castle Story Plus settings" window, opened from the in-game Settings menu. Every value is a BepInEx
 // config entry, so a change here is written to BepInEx/config/com.tricky12321.castlestoryplus.cfg at once.
-// Autosave, firefly energy, 3x bricktron values and keys apply immediately; feature switches apply after a restart.
+// Autosave, firefly energy, giant bricktron values and keys apply immediately; feature switches apply after a restart.
 [Feature]
 internal class ModSettingsPanel : MonoBehaviour
 {
@@ -281,6 +281,10 @@ end
 		{
 			AddSection("PATHFINDING");
 			AddIntStepper("Route search (12 shortest, 45 game)", HeuristicPatch.Weight, 1, 12, 45);
+			if (ImproveSearchLimit.Limit != null)
+			{
+				AddIntStepper("Route straightening nodes (game 100)", ImproveSearchLimit.Limit, 100, 100, 5000);
+			}
 			if (HeuristicPatch.EnemyWeight != null)
 			{
 				AddIntStepper("Enemy route search (12 shortest, 45 game)", HeuristicPatch.EnemyWeight, 1, 12, 45);
@@ -291,7 +295,13 @@ end
 		if (AutoCleanup.Radius != null)
 		{
 			AddSection("AUTO CLEANUP");
-			AddIntStepper("Pick up loose items within (blocks)", AutoCleanup.Radius, 5, 5, 60);
+			AddIntStepper("Pick up loose items within (blocks)", AutoCleanup.Radius, 5, BaseRanges.Min, BaseRanges.Max);
+		}
+
+		if (AutoRepair.Radius != null)
+		{
+			AddSection("AUTO REPAIR");
+			AddIntStepper("Repair damaged blocks within (blocks)", AutoRepair.Radius, 5, BaseRanges.Min, BaseRanges.Max);
 		}
 
 		if (TreeStumps.WorkMultiplier != null)
@@ -317,7 +327,7 @@ end
 
 		if (GiantBricktron.Speed != null)
 		{
-			AddSection("3X BRICKTRON");
+			AddSection("GIANT BRICKTRON");
 			AddFloatStepper("Speed of everything it does", GiantBricktron.Speed, 0.5f, 1f, 5f, "x0.0");
 			AddFloatStepper("Health", GiantBricktron.Health, 0.5f, 1f, 5f, "x0.0");
 			if (GiantBricktron.UsesDarkCrystals)
@@ -328,7 +338,7 @@ end
 			{
 				AddFloatStepper("Cost (energy of new bricktrons)", GiantBricktron.CostMultiplier, 0.25f, 0f, 5f, "x0.00");
 			}
-			AddIntStepper("Bricktrons per 3x bricktron", GiantBricktron.BricktronsPerGiant, 1, 1, 30);
+			AddIntStepper("Bricktrons per giant bricktron", GiantBricktron.BricktronsPerGiant, 1, 1, 30);
 		}
 
 		if (SpeedKeys.Speed2 != null)

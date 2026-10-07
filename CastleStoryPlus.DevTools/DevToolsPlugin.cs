@@ -1,7 +1,10 @@
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using HarmonyLib;
 using CastleStoryPlus.DevTools.Api;
+using CastleStoryPlus.DevTools.Memory;
+using CastleStoryPlus.DevTools.Pathing;
 using CastleStoryPlus.DevTools.Testing;
 
 namespace CastleStoryPlus.DevTools;
@@ -9,7 +12,9 @@ namespace CastleStoryPlus.DevTools;
 // Developer tools for Castle Story Plus, a plugin of its own that is never part of a release:
 // - an HTTP API on localhost into the running game ([Api] Port), used by the MCP server (CastleStoryPlus.Mcp) so
 //   Claude can read the game's state, run the in-game tests and look at the results;
-// - the in-game test runner (Testing) with the tests (Tests) that check the mod in a real game: pathfinding, ...
+// - the in-game test runner (Testing) with the tests (Tests) that check the mod in a real game: pathfinding, ...;
+// - measurements of the game's route searches (Pathing/PathStats), read at /api/path/stats;
+// - a scan of what fills the managed heap (Memory/HeapScan), read at /api/heap.
 [BepInPlugin(Guid, Name, Version)]
 [BepInDependency(CastleStoryPlus.Plugin.Guid)]
 public class DevToolsPlugin : BaseUnityPlugin
@@ -35,7 +40,10 @@ public class DevToolsPlugin : BaseUnityPlugin
 		ApiPort = Config.Bind("Api", "Port", 27860, "Port of the developer API: http://127.0.0.1:<port>/api/...");
 		LogBuffer.Install();
 		gameObject.AddComponent<MainThread>();
+		gameObject.AddComponent<HeapScan>();
 		gameObject.AddComponent<TestRunner>();
+		PathStats.Reset();
+		new Harmony(Guid).PatchAll(typeof(DevToolsPlugin).Assembly);
 		if (ApiEnabled.Value)
 		{
 			_server = new ApiServer(ApiPort.Value, Endpoints.Routes.Build());

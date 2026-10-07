@@ -5,9 +5,9 @@ using CastleStoryPlus.Building;
 
 namespace CastleStoryPlus.Upgrades;
 
-// The crafting station of the smithy and the armoury: a research is a recipe that a worker fills with its
-// materials and works on; finishing it unlocks the tier for the faction (UpgradeResearchPatch). Put on the
-// building in place of the workbench station it is cloned from. One subclass per building, because plugin
+// The crafting station of the smithy, the armoury and the research station: a research is a recipe that a worker
+// fills with its materials and works on; finishing it unlocks the tier for the faction (UpgradeResearchPatch). Put
+// on the building in place of the workbench station it is cloned from. One subclass per building, because plugin
 // components are not guaranteed to keep their serialized fields through the factory's clone.
 internal abstract class UpgradeStation : CraftingStation
 {
@@ -53,4 +53,13 @@ internal class ArmouryStation : UpgradeStation
 	public override IconKey Icon => IconKeys._Shield;
 
 	public override string PieMenuTag => UpgradeBuildings.ArmouryName;
+}
+
+internal class ResearchStation : UpgradeStation
+{
+	public override UpgradeHall Hall => UpgradeHall.Research;
+
+	public override IconKey Icon => IconKeys._Lab;
+
+	public override string PieMenuTag => UpgradeBuildings.ResearchName;
 }

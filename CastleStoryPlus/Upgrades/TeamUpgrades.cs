@@ -6,6 +6,7 @@ using Brix.Game.AI;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
+using CastleStoryPlus.Core;
 
 namespace CastleStoryPlus.Upgrades;
 
@@ -39,6 +40,20 @@ internal static class TeamUpgrades
 		return (unit != null) ? Tier(Faction.GetFaction(unit), line) : 0;
 	}
 
+	// The highest tier any faction has of the line (for effects shared by everyone, like the wave timer).
+	public static int HighestTier(int line)
+	{
+		int highest = 0;
+		foreach (KeyValuePair<Faction, int[]> entry in All)
+		{
+			if (entry.Key != null && line < entry.Value.Length)
+			{
+				highest = Mathf.Max(highest, entry.Value[line]);
+			}
+		}
+		return highest;
+	}
+
 	// The line's effect for the unit's faction, e.g. 0.3 for +30%.
 	public static float Value(GameObject unit, int line)
 	{
@@ -67,7 +82,7 @@ internal static class TeamUpgrades
 	// Max health comes from the tool statistics (Profession.SetHpBonus); recompile them for the faction's units.
 	private static void RefreshHealth(Faction faction)
 	{
-		foreach (Toolbag toolbag in UnityEngine.Object.FindObjectsOfType<Toolbag>())
+		foreach (Toolbag toolbag in Live<Toolbag>.Active())
 		{
 			if (toolbag != null && Faction.GetFaction(toolbag.gameObject) == faction)
 			{

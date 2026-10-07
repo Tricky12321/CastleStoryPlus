@@ -7,6 +7,7 @@ using Brix.Game.AI.KnowledgeSpace;
 using Brix.Game.AI.Nodes;
 using Brix.Game.Semantique;
 using Brix.Lifecycle.Pooling;
+using CastleStoryPlus.Building;
 using Motus.Behavior;
 using UnityEngine;
 
@@ -93,6 +94,11 @@ internal static class Kits
 			}
 			best = go;
 			bestDistance = distance;
+		}
+		// A stand may hold kits of several classes (MixedRacks): take this job's kit there, not its main one.
+		if (best != null)
+		{
+			MixedRacks.Want(labor, job);
 		}
 		return best;
 	}

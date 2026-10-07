@@ -9,8 +9,9 @@ using LoadingScreen = Brix.NewUI.LoadingScreen.LoadingScreen;
 
 namespace CastleStoryPlus.Loading;
 
-// A line under the loading screen's title that says what the map load is doing ("Placing trees and plants, 12 s"),
-// so a slow or stuck load shows where it is. Driven by LoadTiming, which steps the loader's coroutines.
+// A line above the loading screen's spinner, which sits over the title ("Entering world"), that says what the map load is doing ("Placing trees
+// and plants, 12 s"), so a slow or stuck load shows where it is. Driven by LoadTiming, which steps the loader's
+// coroutines.
 internal static class LoadingStatus
 {
 	private const string ObjectName = "CastleStoryPlusLoadingStatus";
@@ -142,7 +143,7 @@ internal static class LoadingStatus
 		return (dot > 0) ? name.Substring(0, dot) : name;
 	}
 
-	// A copy of the loading screen's title, half its size, right under it.
+	// A copy of the loading screen's title, half its size, above the spinner over the title.
 	private static Text FindText()
 	{
 		if (_text != null)
@@ -182,8 +183,86 @@ internal static class LoadingStatus
 		float height = titleRect.rect.height;
 		rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, Mathf.Max(titleRect.rect.width, 800f));
 		rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height * FontScale);
-		// The copy's top edge on the title's bottom edge.
-		rect.anchoredPosition = titleRect.anchoredPosition - new Vector2(0f, height * titleRect.pivot.y + height * FontScale * (1f - rect.pivot.y));
+		rect.anchoredPosition = titleRect.anchoredPosition;
+		LineAboveTitle keeper = rect.GetComponent<LineAboveTitle>() ?? rect.gameObject.AddComponent<LineAboveTitle>();
+		keeper.Line = rect;
+		keeper.Title = title;
+		keeper.Spinner = (screen.SpinImage != null) ? screen.SpinImage.rectTransform : null;
 		return _text;
+	}
+}
+
+// Keeps the status line right above the spinner (or the title's letters, without one). The screen animates, so it is placed again after it every
+// frame.
+internal class LineAboveTitle : MonoBehaviour
+{
+	public RectTransform Line;
+
+	public Text Title;
+
+	public RectTransform Spinner;
+
+	private readonly Vector3[] _corners = new Vector3[4];
+
+	private Text _text;
+
+	private void LateUpdate()
+	{
+		if (Line == null || Title == null)
+		{
+			return;
+		}
+		if (_text == null)
+		{
+			_text = Line.GetComponent<Text>();
+			if (_text == null)
+			{
+				return;
+			}
+		}
+		// Only the part the letters fill is measured: the boxes are much taller than their text.
+		TextBounds(Title, out float below);
+		if (Spinner != null && Spinner.gameObject.activeInHierarchy)
+		{
+			// From its middle and height, not its corners: it spins, and its corners go round with it.
+			float spinnerTop = Spinner.TransformPoint(Spinner.rect.center).y + Spinner.rect.height * 0.5f * Mathf.Abs(Spinner.lossyScale.y);
+			below = Mathf.Max(below, spinnerTop);
+		}
+		float lineBottom = TextBounds(_text, out float lineTop);
+		float gap = (lineTop - lineBottom) * 0.5f;
+		float shift = below + gap - lineBottom;
+		// Worked out from where the line is now, so it never drifts.
+		if (Mathf.Abs(shift) > 0.01f)
+		{
+			Line.position += new Vector3(0f, shift, 0f);
+		}
+	}
+
+	// The bottom and top (world space) of the lines a text fills inside its box, from its alignment.
+	private float TextBounds(Text text, out float top)
+	{
+		text.rectTransform.GetWorldCorners(_corners);
+		float boxBottom = _corners[0].y;
+		float boxTop = _corners[1].y;
+		float boxHeight = text.rectTransform.rect.height;
+		float scale = (boxHeight > 0.01f) ? (boxTop - boxBottom) / boxHeight : text.rectTransform.lossyScale.y;
+		float height = Mathf.Min(boxTop - boxBottom, text.preferredHeight * scale);
+		switch (text.alignment)
+		{
+		case TextAnchor.UpperLeft:
+		case TextAnchor.UpperCenter:
+		case TextAnchor.UpperRight:
+			top = boxTop;
+			break;
+		case TextAnchor.LowerLeft:
+		case TextAnchor.LowerCenter:
+		case TextAnchor.LowerRight:
+			top = boxBottom + height;
+			break;
+		default:
+			top = (boxTop + boxBottom + height) / 2f;
+			break;
+		}
+		return top - height;
 	}
 }

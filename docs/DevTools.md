@@ -40,6 +40,8 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/path?to=x,y,z&from=&unit=&enemy=&nodes=` | Runs the game's route search for a bricktron and compares it with the shortest route |
 | `GET /api/path/node?at=x,y,z` | The navigation node at a voxel and its links (kind, weight) |
 | `GET /api/path/ground?x=&z=` | The highest voxel a bricktron can stand on in a column |
+| `GET /api/path/stats?enemy=&top=&recent=` | Measurements of the route searches the game ran since the last reset |
+| `POST /api/path/stats/reset` | Starts the route search measurements again from zero |
 | `GET /api/tests?filter=` | The in-game tests |
 | `POST /api/tests/run?filter=` | Starts a run (answers at once) |
 | `GET /api/tests/results` | Progress, and each test's outcome, message, log and recorded values |
@@ -57,6 +59,14 @@ The cost of a route is the sum of its links' weights, counted the way the game c
 - climbing costs 240 or more.
 
 `costRatio` is the A\* cost divided by the shortest cost, so 1 means a shortest route.
+
+`/api/path/stats` measures the searches the game itself runs while it plays (the API's own searches are not counted). The game first searches over coarse terrain blocks, then a fine search straightens the route near the start. The answer gives:
+- searches per minute and how each ended (`improved`, `kept coarse` when the fine search ran out, `not precise`, `failed`, `abandoned`);
+- CPU per search, per busy frame and the worst frame, and frames until a search is done;
+- nodes visited by the coarse and the fine search, and whether the fine search needed a higher level;
+- route length per straight distance;
+- `repeats`: how many searches went to a target cell (4 voxels) an earlier search already went to, or came from and went to the same cells, which is what distance maps per target or a route cache could answer;
+- the most common targets, target cells and origin/target pairs, and the most recent searches.
 
 ## In-game tests
 
@@ -111,6 +121,7 @@ Claude Code then has these tools:
 - `game_screenshot`, which shows the image
 - `path_find`
 - `path_node`
+- `path_stats` and `path_stats_reset`
 - `tests_list`
 - `tests_run`, which waits for the results
 - `tests_results`

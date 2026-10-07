@@ -55,7 +55,8 @@ internal static class FletchingPatch
 {
 	private static void Postfix(Profession __instance, ref int __result)
 	{
-		if (!UpgradeEffects.HasJob(__instance.labor, Occupation.Job.Archer))
+		// Shots take it through ShotDamage, which reads RangeDamage once without it.
+		if (CastleStoryPlus.Combat.ShotDamage.Raw || !UpgradeEffects.HasJob(__instance.labor, Occupation.Job.Archer))
 		{
 			return;
 		}

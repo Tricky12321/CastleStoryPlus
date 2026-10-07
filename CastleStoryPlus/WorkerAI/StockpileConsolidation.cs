@@ -18,7 +18,8 @@ using UnityEngine.Networking;
 namespace CastleStoryPlus.WorkerAI;
 
 // Idle chore: move resources out of the least-filled stockpile into the stockpile of the same resource
-// that has the least free room left, so storage stays compact. Only offered by IdleProject, which workers
+// that has the least free room left, so storage stays compact. Only whole remainders that one worker carries in one
+// trip are moved, so each move empties a stockpile of that resource. Only offered by IdleProject, which workers
 // reach when no real project has work for them.
 internal static class StockpileConsolidation
 {
@@ -36,11 +37,22 @@ internal static class StockpileConsolidation
 	// A claim expires on its own in case a task is dropped without running its Finally.
 	private const float ClaimSeconds = 60f;
 
+	// A stockpile that was just given a load is not emptied again for a while: when a load cannot be stored where
+	// it was meant to go (a mixed stockpile counted as having room), the worker stores it in the nearest stockpile,
+	// which could make it the next smallest source, and the same items went round and round.
+	private const float ReceivedSeconds = 300f;
+
 	private static readonly Dictionary<Labor, Move> _moves = new Dictionary<Labor, Move>();
+
+	private static readonly Dictionary<Recepteur, float> _receivedAt = new Dictionary<Recepteur, float>();
 
 	static StockpileConsolidation()
 	{
-		GameSession.OnLeave(_moves.Clear);
+		GameSession.OnLeave(() =>
+		{
+			_moves.Clear();
+			_receivedAt.Clear();
+		});
 	}
 
 	public static readonly LaborInstruction<GameObject> Consolidate = new LaborInstruction<GameObject>("ConsolidateStockpiles", IconKeys.PickUp, (Labor labor, GameObject item) => MoveNode(labor, item));
@@ -67,7 +79,7 @@ internal static class StockpileConsolidation
 			foreach (Recepteur pile in piles)
 			{
 				int count = pile.ContentDescription.Value(resource);
-				if (count > 0 && count < sourceCount && !IsClaimed(pile) && Recepteur.CharactersCouldGrabFrom(pile.gameObject))
+				if (count > 0 && count < sourceCount && !IsClaimed(pile) && !RecentlyReceived(pile) && Recepteur.CharactersCouldGrabFrom(pile.gameObject))
 				{
 					source = pile;
 					sourceCount = count;
@@ -79,6 +91,11 @@ internal static class StockpileConsolidation
 			}
 			// Target: the pile with the least free room that can still take this resource,
 			// and holds at least as much as the source (never spread a fuller pile into an emptier one).
+			if (!source.FirstObjectOf(resource, out GameObject item))
+			{
+				continue;
+			}
+			Factory.AssetKey key = item.GetComponent<GameComponent>().AssetKey;
 			Recepteur target = null;
 			int targetRoom = int.MaxValue;
 			foreach (Recepteur pile in piles)
@@ -87,9 +104,9 @@ internal static class StockpileConsolidation
 				{
 					continue;
 				}
-				int room = pile.CurrentCapacity.Value(resource);
+				int room = RoomFor(pile, key);
 				int count = pile.ContentDescription.Value(resource);
-				if (room > 0 && count >= sourceCount && room < targetRoom)
+				if (room >= sourceCount && count >= sourceCount && room < targetRoom)
 				{
 					target = pile;
 					targetRoom = room;
@@ -99,13 +116,10 @@ internal static class StockpileConsolidation
 			{
 				continue;
 			}
-			if (!source.FirstObjectOf(resource, out GameObject item))
-			{
-				continue;
-			}
-			Factory.AssetKey key = item.GetComponent<GameComponent>().AssetKey;
-			int amount = Mathf.Min(sourceCount, targetRoom, labor.recepteur.CanFitUpTo(key));
-			if (amount <= 0)
+			// Only a move that empties the source in one trip: moving part of it (a stone at a time once stockpiles
+			// hold more) never ends, as building and storing change the counts all the time.
+			int amount = sourceCount;
+			if (labor.recepteur.CanFitUpTo(key) < amount)
 			{
 				continue;
 			}
@@ -120,6 +134,7 @@ internal static class StockpileConsolidation
 				Amount = amount,
 				ClaimedUntil = Time.time + ClaimSeconds
 			};
+			_receivedAt[target] = Time.time;
 			return item;
 		}
 		return null;
@@ -207,6 +222,22 @@ internal static class StockpileConsolidation
 		return result;
 	}
 
+	// Room the stockpile really has for the item: the resource's own room can be left on a mixed stockpile whose
+	// columns are all taken.
+	private static int RoomFor(Recepteur pile, Factory.AssetKey key)
+	{
+		if (pile.IsFull() || !pile.HasRoomFor(key))
+		{
+			return 0;
+		}
+		return pile.CanFitUpTo(key);
+	}
+
+	private static bool RecentlyReceived(Recepteur pile)
+	{
+		return _receivedAt.TryGetValue(pile, out float at) && Time.time - at < ReceivedSeconds;
+	}
+
 	private static bool IsClaimed(Recepteur pile)
 	{
 		foreach (Move move in _moves.Values)
@@ -231,6 +262,25 @@ internal static class StockpileConsolidation
 					expired = new List<Labor>();
 				}
 				expired.Add(pair.Key);
+			}
+		}
+		List<Recepteur> stale = null;
+		foreach (KeyValuePair<Recepteur, float> pair in _receivedAt)
+		{
+			if (pair.Key == null || Time.time - pair.Value >= ReceivedSeconds)
+			{
+				if (stale == null)
+				{
+					stale = new List<Recepteur>();
+				}
+				stale.Add(pair.Key);
+			}
+		}
+		if (stale != null)
+		{
+			foreach (Recepteur pile in stale)
+			{
+				_receivedAt.Remove(pile);
 			}
 		}
 		if (expired == null)

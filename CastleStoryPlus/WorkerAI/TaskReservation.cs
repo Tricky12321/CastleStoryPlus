@@ -162,8 +162,8 @@ internal static class TaskReservationSkipPatch
 	}
 }
 
-// When the search ends: reserve the chosen task, or drop it if another worker reserved it in the meantime
-// (the worker then searches again).
+// When the search ends: reserve the chosen task, or drop it if another worker reserved it in the meantime, or (a
+// blueprint) if what it still needs is already being brought by others (the worker then searches again).
 [Feature(Features.TaskReservation, Features.TaskReservationInfo)]
 [HarmonyPatch(typeof(GoalSelector), nameof(GoalSelector.GoalIsRejected))]
 internal static class TaskReservationReservePatch
@@ -175,6 +175,13 @@ internal static class TaskReservationReservePatch
 			return;
 		}
 		if (TaskReservation.IsReservedByOther(bestGoal, labor))
+		{
+			__result = true;
+			return;
+		}
+		// A build task is checked again: searches take several ticks, and workers searching at the same time all
+		// found the same small blueprint (one ward: seven workers) still uncovered.
+		if (bestGoal is BuildGoal build && !build.IsAnti && Plugin.IsEnabled(Features.BuildJobs) && BuildNeeds.IsCovered(build, labor))
 		{
 			__result = true;
 			return;

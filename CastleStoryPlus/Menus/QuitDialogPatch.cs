@@ -16,8 +16,9 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Menus;
 
-// Adds SAVE & LEAVE to the Quit Game dialog. A loaded manual save is overwritten; anything else
-// (new map, quicksave, autosave) becomes a new manual save named after the map and the time.
+// Adds SAVE AND RETURN TO MAIN MENU and SAVE AND QUIT GAME (after a confirmation) to the Quit Game dialog. A loaded
+// manual save is overwritten; anything else (new map, quicksave, autosave) becomes a new manual save named after the
+// map and the time.
 [Feature(Features.SaveAndLeave, Features.SaveAndLeaveInfo)]
 [HarmonyPatch(typeof(Container), nameof(Container.ItemClick))]
 internal static class QuitDialogPatch
@@ -40,13 +41,18 @@ internal static class QuitDialogPatch
 	{
 		List<OkDialogContainerPopulator.GenericDialog.Btn> buttons = new List<OkDialogContainerPopulator.GenericDialog.Btn>();
 		// "&&" makes I2Helper.TryGet return the literal text instead of looking up a term.
-		buttons.Add(new OkDialogContainerPopulator.GenericDialog.Btn("&&SAVE & LEAVE", () =>
+		buttons.Add(new OkDialogContainerPopulator.GenericDialog.Btn("&&SAVE AND RETURN TO MAIN MENU", () =>
 		{
 			GameSignals.Invoke(GameSignals.OnCloseDialog);
 			if (SaveBeforeLeaving())
 			{
 				Architecte.QuitToMainMenu();
 			}
+		}, string.Empty));
+		buttons.Add(new OkDialogContainerPopulator.GenericDialog.Btn("&&SAVE AND QUIT GAME", () =>
+		{
+			GameSignals.Invoke(GameSignals.OnCloseDialog);
+			ShowSaveAndQuitConfirmation();
 		}, string.Empty));
 		buttons.Add(new OkDialogContainerPopulator.GenericDialog.Btn(I2Helper.TryGet("##gamemenu_quit_exitdesktop").ToUpper(), () =>
 		{
@@ -63,6 +69,26 @@ internal static class QuitDialogPatch
 			GameSignals.Invoke(GameSignals.OnCloseDialog);
 		}, string.Empty));
 		GameSignals.Invoke(GameSignals.OnDisplayGenericDialog, new OkDialogContainerPopulator.GenericDialog(I2Helper.TryGet("##gamemenu_quit_game").ToUpper(), I2Helper.TryGet("##gamemenu_quit_message"), buttons.ToArray()));
+	}
+
+	private static void ShowSaveAndQuitConfirmation()
+	{
+		GameSignals.Invoke(GameSignals.OnDisplayGenericDialog, new OkDialogContainerPopulator.GenericDialog("SAVE AND QUIT GAME", "The game will be saved and Castle Story will close.\nAre you sure?", new OkDialogContainerPopulator.GenericDialog.Btn[2]
+		{
+			new OkDialogContainerPopulator.GenericDialog.Btn("&&SAVE AND QUIT", () =>
+			{
+				GameSignals.Invoke(GameSignals.OnCloseDialog);
+				if (SaveBeforeLeaving())
+				{
+					GameSignals.Invoke(GameSignals.QuitThroughMenu);
+					ApplicationQuitter.Quit();
+				}
+			}, string.Empty),
+			new OkDialogContainerPopulator.GenericDialog.Btn(I2Helper.TryGet("##gamemenu_cancel").ToUpper(), () =>
+			{
+				GameSignals.Invoke(GameSignals.OnCloseDialog);
+			}, string.Empty)
+		}));
 	}
 
 	// Only the host can save in multiplayer.

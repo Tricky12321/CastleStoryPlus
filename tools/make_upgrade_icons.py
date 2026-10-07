@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Renders the weapon/armour upgrade icons in CastleStoryPlus/Assets/Upgrades/.
+"""Renders the weapon, armour and research upgrade icons in CastleStoryPlus/Assets/Upgrades/.
 
 One icon per upgrade line and tier (<line>_t<tier>.png, 128 x 128), plus one icon per building
 (building_<name>.png). Every icon is a rounded badge:
 
-- background colour = category: warm red for weapons (the forge), deep blue for armour (the armoury)
+- background colour = category: warm red for weapons (the forge), deep blue for armour (the armoury), purple
+  for the research station
 - frame colour and stars = tier: bronze + 1 star, silver + 2 stars, gold + 3 stars
 - metal of the item itself = tier: iron, steel, blue crystal
 
@@ -39,6 +40,7 @@ CATEGORY_BG = {
     "armour": ("#2f5384", "#14233b"),
     "market": ("#7a5a1e", "#33240a"),
     "storage": ("#5d6672", "#23282f"),
+    "research": ("#5e3a8a", "#24133b"),
 }
 
 WOOD = "#8b5a2b"
@@ -244,6 +246,106 @@ def warded_plate(t):
   </g>"""
 
 
+# ---------- research lines ----------
+
+def housing(t):
+    return f"""<path d="M24 60 L64 26 L104 60 Z" fill="#b4553a"/>
+  <path d="M30 58 L64 30 L98 58" fill="none" stroke="{t['metal']}" stroke-width="4"/>
+  <rect x="32" y="60" width="64" height="42" fill="#c99652"/>
+  <rect x="56" y="74" width="16" height="28" rx="2" fill="#6d4520"/>
+  <rect x="38" y="68" width="12" height="12" fill="#ffd34d" stroke-width="3"/>
+  <rect x="78" y="68" width="12" height="12" fill="#ffd34d" stroke-width="3"/>
+  <path d="M96 22 L96 34 M90 28 L102 28" stroke="{t['light']}" stroke-width="5"/>
+  <path d="M96 22 L96 34 M90 28 L102 28" stroke="#3ccf5a" stroke-width="2" />"""
+
+
+def work_methods(t):
+    teeth = "".join(f'<rect x="80" y="62" width="10" height="14" rx="2" fill="{t["metal"]}" stroke-width="3" transform="rotate({a} 85 85)"/>'
+                    for a in range(0, 360, 45))
+    return f"""{teeth}
+  <circle cx="85" cy="85" r="17" fill="{t['metal']}"/>
+  <circle cx="85" cy="85" r="6" fill="{t['dark']}" stroke-width="3"/>
+  <g transform="rotate(-40 50 54)">
+    <rect x="46" y="30" width="8" height="70" rx="3" fill="{WOOD}"/>
+    <rect x="30" y="18" width="40" height="18" rx="3" fill="{t['metal']}"/>
+    <path d="M34 22 L66 22" stroke="{t['light']}" stroke-width="3"/>
+  </g>"""
+
+
+def stacking(t):
+    crates = ""
+    for x, y in ((24, 76), (64, 76), (44, 40), (84, 40)):
+        crates += (f'<rect x="{x}" y="{y}" width="36" height="32" rx="2" fill="{WOOD_LIGHT}"/>'
+                   f'<path d="M{x} {y} L{x + 36} {y + 32} M{x + 36} {y} L{x} {y + 32}" stroke="{WOOD}" stroke-width="3"/>'
+                   f'<rect x="{x}" y="{y}" width="36" height="32" rx="2" fill="none"/>')
+    return crates + f"""<path d="M96 18 L96 34 M88 26 L96 18 L104 26" fill="none" stroke="{t['light']}" stroke-width="5"/>"""
+
+
+def crystal_attunement(t):
+    return f"""<g filter="url(#glow)">
+    <path d="M64 14 L84 46 L74 104 L54 104 L44 46 Z" fill="#9a4ee0"/>
+    <path d="M64 14 L64 104 M44 46 L84 46" stroke="#e6c8ff" stroke-width="2.5"/>
+  </g>
+  <path d="M22 60 Q30 50 38 60 Q46 70 54 60" fill="none" stroke="{t['metal']}" stroke-width="5"/>
+  <path d="M74 80 Q82 70 90 80 Q98 90 106 80" fill="none" stroke="{t['metal']}" stroke-width="5"/>"""
+
+
+def light_boots(t):
+    return f"""<path d="M40 24 L66 24 L66 74 Q92 76 102 88 L102 102 L36 102 L36 70 Z" fill="{LEATHER}"/>
+  <path d="M36 102 L102 102 L102 94 L36 94 Z" fill="{t['metal']}" stroke-width="3"/>
+  <path d="M40 34 L66 34" stroke="{t['metal']}" stroke-width="4"/>
+  <path d="M30 40 Q14 30 10 48 Q20 46 26 54 Q16 58 18 70 Q28 62 36 62" fill="#f4efe6" stroke-width="3"/>
+  <path d="M106 40 L118 40 M108 52 L122 52 M106 64 L116 64" stroke="{t['light']}" stroke-width="4"/>"""
+
+
+def firefly_lore(t):
+    return f"""<path d="M14 92 Q38 80 62 92 L62 112 Q38 100 14 112 Z" fill="#fbf4e0"/>
+  <path d="M66 92 Q90 80 114 92 L114 112 Q90 100 66 112 Z" fill="#fbf4e0"/>
+  <path d="M62 92 L66 92 L66 112 L62 112" fill="{LEATHER}"/>
+  <g filter="url(#glow)">
+    <ellipse cx="50" cy="40" rx="14" ry="9" fill="#dcf5ff" opacity="0.9" transform="rotate(-30 50 40)"/>
+    <ellipse cx="78" cy="40" rx="14" ry="9" fill="#dcf5ff" opacity="0.9" transform="rotate(30 78 40)"/>
+    <circle cx="64" cy="56" r="13" fill="{t['metal']}"/>
+    <circle cx="64" cy="56" r="6" fill="#ffffff" stroke="none"/>
+  </g>"""
+
+
+def giants(t):
+    return f"""<rect x="22" y="70" width="20" height="30" rx="5" fill="#c99652"/>
+  <rect x="24" y="50" width="16" height="18" rx="4" fill="#d3d1cb"/>
+  <rect x="56" y="44" width="40" height="58" rx="8" fill="#c99652"/>
+  <rect x="60" y="12" width="32" height="30" rx="6" fill="#d3d1cb"/>
+  <circle cx="70" cy="26" r="3" fill="{INK}" stroke="none"/><circle cx="82" cy="26" r="3" fill="{INK}" stroke="none"/>
+  <path d="M44 84 L54 84 M50 78 L56 84 L50 90" fill="none" stroke="#ffffff" stroke-width="4"/>
+  <g filter="url(#glow)"><path d="M104 18 L110 30 L104 42 L98 30 Z" fill="#9a4ee0" stroke-width="2.5"/></g>"""
+
+
+def scouting(t):
+    return f"""<path d="M30 104 L40 46 L64 46 L74 104 Z" fill="{WOOD}"/>
+  <path d="M36 80 L68 80 M38 64 L66 64" stroke-width="3" fill="none"/>
+  <path d="M30 46 L52 26 L74 46 Z" fill="#b4553a"/>
+  <g transform="rotate(-25 92 50)">
+    <rect x="66" y="42" width="48" height="16" rx="4" fill="{t['metal']}"/>
+    <rect x="58" y="44" width="12" height="12" rx="3" fill="{t['dark']}"/>
+    <rect x="110" y="40" width="8" height="20" rx="3" fill="{t['light']}"/>
+  </g>
+  <path d="M84 96 L118 96 M102 86 L118 96 L102 106" fill="none" stroke="#ffd34d" stroke-width="5"/>"""
+
+
+def efficient_mining(t):
+    return f"""<path d="M18 104 L30 74 L58 66 L78 80 L74 104 Z" fill="#7d7f86"/>
+  <path d="M30 74 L46 86 L58 66 M46 86 L50 104" fill="none" stroke-width="3"/>
+  <path d="M36 92 L42 86 L48 92 L42 98 Z" fill="#e8853a" stroke-width="2.5"/>
+  <path d="M58 84 L64 78 L70 84 L64 90 Z" fill="#58c4ff" stroke-width="2.5"/>
+  <g transform="rotate(35 70 46)">
+    <rect x="66" y="34" width="8" height="66" rx="3" fill="{WOOD}"/>
+    <path d="M38 40 Q70 18 102 40 L98 46 Q70 30 42 46 Z" fill="{t['metal']}"/>
+    <path d="M46 38 Q70 24 94 38" fill="none" stroke="{t['light']}" stroke-width="3"/>
+  </g>
+  <path d="M96 66 L96 90 M84 78 L108 78" stroke="{INK}" stroke-width="11"/>
+  <path d="M96 66 L96 90 M84 78 L108 78" stroke="#3ccf5a" stroke-width="5"/>"""
+
+
 # ---------- buildings ----------
 
 def forge_building(_):
@@ -316,6 +418,15 @@ LINES = [
     ("helmet", "Reinforced Helmet", "armour", helmet, ["+15 HP", "+30 HP", "+50 HP"]),
     ("shield_rims", "Shield Rims", "armour", shield, ["+10% block", "+20% block", "+30% block"]),
     ("warded_plate", "Warded Plate", "armour", warded_plate, ["5% vs magic", "10% vs magic", "15% vs magic"]),
+    ("housing", "Housing", "research", housing, ["+5 bricktrons", "+10 bricktrons", "+15 bricktrons"]),
+    ("work_methods", "Work Methods", "research", work_methods, ["+10% work", "+20% work", "+30% work"]),
+    ("stacking", "Stacking", "research", stacking, ["+33% storage", "+67% storage", "+100% storage"]),
+    ("crystal_attunement", "Crystal Attunement", "research", crystal_attunement, ["-15% energy", "-30% energy", "-45% energy"]),
+    ("light_boots", "Light Boots", "research", light_boots, ["+5% walking", "+10% walking", "+15% walking"]),
+    ("firefly_lore", "Firefly Lore", "research", firefly_lore, ["+10% energy", "+20% energy", "+30% energy"]),
+    ("giants", "Giant Bricktrons", "research", giants, ["unlocks giants"]),
+    ("scouting", "Scouting", "research", scouting, ["+15% wave time", "+30% wave time", "+50% wave time"]),
+    ("efficient_mining", "Efficient Mining", "research", efficient_mining, ["10% extra ore", "20% extra ore", "30% extra ore"]),
 ]
 
 BUILDINGS = [
@@ -338,8 +449,8 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     icons = {}
     with tempfile.TemporaryDirectory() as tmp:
-        for key, _, category, draw, _ in LINES:
-            for tier in (1, 2, 3):
+        for key, _, category, draw, effects in LINES:
+            for tier in range(1, len(effects) + 1):
                 path = os.path.join(OUT, f"{key}_t{tier}.png")
                 render(badge(category, tier, draw(TIERS[tier])), path, tmp)
                 icons[(key, tier)] = path
@@ -373,12 +484,13 @@ def make_preview(icons, path):
     for key, name, cat, _, effects in LINES:
         if cat != category:
             category = cat
-            d.text((30, y - 52 if y == top else y + 4), "WEAPONS (Forge)" if cat == "weapon" else "ARMOUR (Armoury)",
-                   font=head_font, fill="#e8836f" if cat == "weapon" else "#7fa8e0")
+            heading, colour = {"weapon": ("WEAPONS (Smithy)", "#e8836f"), "armour": ("ARMOUR (Armoury)", "#7fa8e0"),
+                               "research": ("COLONY (Research station)", "#c7a0ff")}[cat]
+            d.text((30, y - 52 if y == top else y + 4), heading, font=head_font, fill=colour)
             if y != top:
                 y += 34
         d.text((30, y + cell / 2), name, font=name_font, fill="#f2f2f2", anchor="lm")
-        for i in range(3):
+        for i in range(len(effects)):
             x = label_w + gap + i * (cell + gap)
             sheet.alpha_composite(Image.open(icons[(key, i + 1)]).convert("RGBA"), (x, y))
             d.text((x + cell / 2, y + cell + 14), effects[i], font=small_font, fill="#bdbdbd", anchor="mm")

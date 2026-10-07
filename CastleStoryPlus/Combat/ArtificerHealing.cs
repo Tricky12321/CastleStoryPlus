@@ -51,7 +51,7 @@ internal class ArtificerHealing : MonoBehaviour
 
 	private readonly Dictionary<Labor, KeyValuePair<GameObject, float>> _failed = new Dictionary<Labor, KeyValuePair<GameObject, float>>();
 
-	private Labor[] _units = new Labor[0];
+	private readonly List<Labor> _units = new List<Labor>();
 
 	private float _nextCheck;
 
@@ -80,7 +80,7 @@ internal class ArtificerHealing : MonoBehaviour
 		if (Time.time >= _nextUnitList)
 		{
 			_nextUnitList = Time.time + UnitListSeconds;
-			_units = FindObjectsOfType<Labor>();
+			Live<Labor>.Active(_units);
 		}
 		_staffs.Clear();
 		_staffs.AddRange(Staffs);
@@ -278,7 +278,7 @@ internal static class ArtificerHealBoltFirePatch
 		{
 			Bolts[__result] = __result.DestroyOnHit;
 		}
-		HealBoltTint.ApplyBolt(__result.gameObject, true);
+		GlowTint.ApplyBolt(__result.gameObject, GlowTint.Green);
 	}
 }
 
@@ -317,7 +317,7 @@ internal static class ArtificerHealBoltResetPatch
 			__instance.DestroyOnHit = destroyOnHit;
 			ArtificerHealBoltFirePatch.Bolts.Remove(__instance);
 		}
-		HealBoltTint.Apply(__instance.gameObject, false);
+		GlowTint.Apply(__instance.gameObject, null);
 	}
 }
 
@@ -340,7 +340,7 @@ internal static class ArtificerHealBoltClientPatch
 		GameObject attacker = projectile.NetworkAttacker;
 		GameObject victim = __instance.NetworktargetGO;
 		bool heal = attacker != null && victim != null && victim != attacker && victim.GetComponent<Labor>() != null && Affiliation.IsAllied(attacker, victim);
-		HealBoltTint.ApplyBolt(__instance.gameObject, heal);
+		GlowTint.ApplyBolt(__instance.gameObject, heal ? GlowTint.Green : (Color?)null);
 	}
 }
 
@@ -370,7 +370,7 @@ internal static class ArtificerHealBoltTrailPatch
 	{
 		if (__instance.trail != null)
 		{
-			HealBoltTint.Apply(__instance.trail.gameObject, false);
+			GlowTint.Apply(__instance.trail.gameObject, null);
 		}
 	}
 }

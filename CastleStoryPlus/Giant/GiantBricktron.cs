@@ -14,12 +14,12 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Giant;
 
-// 3x bricktron: one worker upgraded with 50 dark crystals (DarkCrystals; without that feature the energy of 1.5 new
+// Giant bricktron: one worker upgraded with 50 dark crystals (DarkCrystals; without that feature the energy of 1.5 new
 // bricktrons, which the home crystal hardly ever keeps, as it turns energy into new bricktrons) and a second worker
-// that is sacrificed. It is drawn twice as big but still walks in one voxel and counts as one bricktron. Everything it
-// does runs 3x as fast (animations, so work, climbing and attacks, plus walking and running speed), and it takes
-// a third of the damage (3x health). Carrying is not tripled: at 3x speed it already hauls as much as three workers.
-// Allowed: one 3x bricktron per 5 bricktrons. The tier is stored in WorkerStats (saved and synced).
+// that is sacrificed. It is drawn 1.5x as big but still walks in one voxel and counts as one bricktron. Everything it
+// does runs 2x as fast (animations, so work, climbing and attacks, plus walking and running speed), it takes half
+// the damage (2x health) and it carries 2.5x as much (its own storage, so as many more items per trip).
+// Allowed: one giant bricktron per 5 bricktrons. The tier is stored in WorkerStats (saved and synced).
 [Feature(Features.GiantBricktron, Features.GiantBricktronInfo)]
 internal class GiantBricktron : MonoBehaviour
 {
@@ -30,6 +30,9 @@ internal class GiantBricktron : MonoBehaviour
 		public Transform Scaled;
 
 		public Vector3 OriginalScale;
+
+		// The carry capacity it had before, per resource, to give back when it is no longer a giant.
+		public Dictionary<Type, int> OriginalCarry;
 	}
 
 	private const float ScanSeconds = 0.5f;
@@ -39,6 +42,8 @@ internal class GiantBricktron : MonoBehaviour
 	internal static ConfigEntry<float> Health;
 
 	internal static ConfigEntry<float> Size;
+
+	internal static ConfigEntry<float> Carry;
 
 	internal static ConfigEntry<float> CostMultiplier;
 
@@ -50,18 +55,21 @@ internal class GiantBricktron : MonoBehaviour
 
 	private static readonly Dictionary<CharacterState, Applied> AppliedTo = new Dictionary<CharacterState, Applied>();
 
+	private static readonly Dictionary<Transform, Vector3> UnscaledModels = new Dictionary<Transform, Vector3>();
+
 	private static readonly List<CharacterState> Pending = new List<CharacterState>();
 
 	private float _nextScan;
 
 	private static void Enable()
 	{
-		Speed = Plugin.Cfg.Bind("GiantBricktron", "Speed", 3f, "Speed of everything a 3x bricktron does (work, walking, climbing, attacks).");
-		Health = Plugin.Cfg.Bind("GiantBricktron", "Health", 3f, "Health of a 3x bricktron (it takes 1/Health of the damage).");
-		Size = Plugin.Cfg.Bind("GiantBricktron", "Size", 2f, "Drawn size of a 3x bricktron. It still walks in one voxel.");
+		Speed = Plugin.Cfg.Bind("GiantBricktron", "Speed", 2f, "Speed of everything a giant bricktron does (work, walking, climbing, attacks).");
+		Health = Plugin.Cfg.Bind("GiantBricktron", "Health", 2f, "Health of a giant bricktron (it takes 1/Health of the damage).");
+		Size = Plugin.Cfg.Bind("GiantBricktron", "Size", 1.25f, "Drawn size of a giant bricktron. It still walks in one voxel.");
+		Carry = Plugin.Cfg.Bind("GiantBricktron", "Carry", 2.5f, "How much a giant bricktron carries, times what a worker carries.");
 		CostMultiplier = Plugin.Cfg.Bind("GiantBricktron", "CostMultiplier", 1.5f, "Upgrade cost without the DarkCrystals feature: the energy of this many new bricktrons, paid from the home crystal (plus one sacrificed worker).");
 		DarkCrystalCost = Plugin.Cfg.Bind("GiantBricktron", "DarkCrystalCost", 50, "Upgrade cost with the DarkCrystals feature: dark crystals taken from the stockpiles (plus one sacrificed worker).");
-		BricktronsPerGiant = Plugin.Cfg.Bind("GiantBricktron", "BricktronsPerGiant", 5, "One 3x bricktron allowed per this many bricktrons.");
+		BricktronsPerGiant = Plugin.Cfg.Bind("GiantBricktron", "BricktronsPerGiant", 5, "One giant bricktron allowed per this many bricktrons.");
 		_enabled = true;
 		WorkerStats.Changed += (CharacterState state) => Pending.Add(state);
 		Plugin.Root.AddComponent<GiantBricktron>();
@@ -118,7 +126,7 @@ internal class GiantBricktron : MonoBehaviour
 		return count;
 	}
 
-	// The sacrificed worker is gone before the new 3x bricktron is counted.
+	// The sacrificed worker is gone before the new giant bricktron is counted.
 	public static int Limit(Faction faction)
 	{
 		return Mathf.Max(0, faction.UnitCount - 1) / Mathf.Max(1, BricktronsPerGiant.Value);
@@ -126,7 +134,7 @@ internal class GiantBricktron : MonoBehaviour
 
 	public static FireflyNest HomeNest(Faction faction)
 	{
-		foreach (FireflyNest nest in UnityEngine.Object.FindObjectsOfType<FireflyNest>())
+		foreach (FireflyNest nest in Live<FireflyNest>.Active())
 		{
 			if (nest != null && nest.isHome && nest.faction == faction && nest.mainRecepteur != null)
 			{
@@ -206,12 +214,16 @@ internal class GiantBricktron : MonoBehaviour
 		}
 		if (IsGiant(upgrade) || IsGiant(sacrifice))
 		{
-			return "A 3x bricktron cannot be upgraded or sacrificed.";
+			return "A giant bricktron cannot be upgraded or sacrificed.";
 		}
 		Faction faction = FactionOf(upgrade);
 		if (faction == null || FactionOf(sacrifice) != faction)
 		{
 			return "Both workers must be yours.";
+		}
+		if (!Upgrades.UpgradeLines.IsResearched(faction, Upgrades.UpgradeLines.Giants))
+		{
+			return "Research Giant Bricktrons at the research station first.";
 		}
 		int giants = CountGiants(faction);
 		int limit = Limit(faction);
@@ -270,7 +282,7 @@ internal class GiantBricktron : MonoBehaviour
 			receiver.Kill();
 		}
 		WorkerStats.Modify(upgrade.state, (WorkerStats s) => s.Tier = 1);
-		Plugin.Log.LogInfo("3x bricktron: " + NameOf(upgrade) + " upgraded for " + cost + (UsesDarkCrystals ? " dark crystals, " : " energy, ") + NameOf(sacrifice) + " sacrificed");
+		Plugin.Log.LogInfo("giant bricktron: " + NameOf(upgrade) + " upgraded for " + cost + (UsesDarkCrystals ? " dark crystals, " : " energy, ") + NameOf(sacrifice) + " sacrificed");
 		return null;
 	}
 
@@ -327,7 +339,7 @@ internal class GiantBricktron : MonoBehaviour
 		{
 			Labor = labor,
 			Scaled = scaled,
-			OriginalScale = (scaled != null) ? scaled.localScale : Vector3.one
+			OriginalScale = OriginalScaleOf(scaled)
 		};
 		if (scaled != null)
 		{
@@ -338,6 +350,7 @@ internal class GiantBricktron : MonoBehaviour
 			renderer.updateWhenOffscreen = true;
 		}
 		SetAnimatorSpeed(labor, Speed.Value);
+		ScaleCarry(labor, applied);
 		AppliedTo[state] = applied;
 	}
 
@@ -351,7 +364,53 @@ internal class GiantBricktron : MonoBehaviour
 		if (applied.Labor != null)
 		{
 			SetAnimatorSpeed(applied.Labor, 1f);
+			RestoreCarry(applied.Labor, applied);
 		}
+	}
+
+	// Its own storage holds Carry times as much of every resource (not tools), so it takes that much more per trip.
+	private static void ScaleCarry(Labor labor, Applied applied)
+	{
+		Recepteur recepteur = labor.recepteur;
+		if (recepteur == null || Mathf.Approximately(Carry.Value, 1f))
+		{
+			return;
+		}
+		Description capacity = recepteur._baseCapacity;
+		applied.OriginalCarry = new Dictionary<Type, int>();
+		foreach (KeyValuePair<Type, Adjectif> entry in new List<KeyValuePair<Type, Adjectif>>(capacity.DicoAdjectif))
+		{
+			if (entry.Value == null || entry.Value.quantifiable == null || typeof(Outil).IsAssignableFrom(entry.Key))
+			{
+				continue;
+			}
+			int original = entry.Value.quantifiable.valeur;
+			applied.OriginalCarry[entry.Key] = original;
+			SetCapacity(capacity, entry.Key, Mathf.Max(original, Mathf.FloorToInt(original * Carry.Value + 0.5f)));
+		}
+		recepteur.ResetDescriptions();
+	}
+
+	private static void RestoreCarry(Labor labor, Applied applied)
+	{
+		Recepteur recepteur = labor.recepteur;
+		if (recepteur == null || applied.OriginalCarry == null)
+		{
+			return;
+		}
+		foreach (KeyValuePair<Type, int> entry in applied.OriginalCarry)
+		{
+			SetCapacity(recepteur._baseCapacity, entry.Key, entry.Value);
+		}
+		recepteur.ResetDescriptions();
+	}
+
+	// A new entry, not a changed one: the old Adjectif may be shared with the bricktron's template.
+	private static void SetCapacity(Description capacity, Type type, int amount)
+	{
+		capacity.DicoAdjectif.Remove(type);
+		capacity.DicoAdjectif.Add(Adjectif.New(type, amount));
+		capacity.DicoAdjectif.Preloaded = false;
 	}
 
 	private static void SetAnimatorSpeed(Labor labor, float speed)
@@ -361,6 +420,22 @@ internal class GiantBricktron : MonoBehaviour
 		{
 			locomotion.animator.speed = speed;
 		}
+	}
+
+	// The model's scale before any giant was made of it, remembered the first time: a pooled bricktron reused while
+	// still scaled would otherwise be scaled again on top (1.5 x 1.5).
+	private static Vector3 OriginalScaleOf(Transform scaled)
+	{
+		if (scaled == null)
+		{
+			return Vector3.one;
+		}
+		if (!UnscaledModels.TryGetValue(scaled, out Vector3 original))
+		{
+			original = scaled.localScale;
+			UnscaledModels[scaled] = original;
+		}
+		return original;
 	}
 
 	// The top of the skeleton (the child of the bricktron that holds the skinned mesh's bones). Scaling it

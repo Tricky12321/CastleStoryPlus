@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using BepInEx.Configuration;
 using Brix.Components;
+using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
@@ -11,6 +12,8 @@ using Brix.Game.Components;
 using Brix.Game.Semantique;
 using Brix.Input;
 using Brix.Lifecycle.Pooling;
+using Brix.Pathfinding;
+using Brix.Pathfinding.Test;
 using Brix.UI.Icons;
 using Brix.Utils;
 using CastleStoryPlus.Core;
@@ -23,7 +26,10 @@ using UnityEngine.Networking;
 namespace CastleStoryPlus.WorkerAI;
 
 // Idle chore: pick up loose items lying on the ground near the base (home crystal and stockpiles) or near the
-// worker, and store them, without a cleanup zone. Only offered by IdleProject, so any real work comes first.
+// worker, and store them, without a cleanup zone. Only offered by IdleProject, so any real work comes first. An item
+// the worker cannot get to (on top of a building or a stockpile, or pushed partly into a wall) is picked up from the
+// foot of it instead, from a place beside it, level with it or up to 12 blocks lower (the ground beside a building
+// for an item on its roof), that the worker can stand on.
 [Feature(Features.AutoCleanup, Features.AutoCleanupInfo)]
 internal static class AutoCleanup
 {
@@ -39,6 +45,14 @@ internal static class AutoCleanup
 
 	private static readonly Collider[] Hits = new Collider[512];
 
+	private static readonly List<GameObject> PlanItems = new List<GameObject>();
+
+	private static readonly HashSet<GameObject> PlanSeen = new HashSet<GameObject>();
+
+	private static Vector3 SortFrom;
+
+	private static readonly System.Comparison<GameObject> NearestFirst = (GameObject a, GameObject b) => (a.transform.position - SortFrom).sqrMagnitude.CompareTo((b.transform.position - SortFrom).sqrMagnitude);
+
 	private static readonly Dictionary<Faction, List<GameObject>> Candidates = new Dictionary<Faction, List<GameObject>>();
 
 	private static readonly Dictionary<Faction, float> RefreshedAt = new Dictionary<Faction, float>();
@@ -52,11 +66,30 @@ internal static class AutoCleanup
 
 	private const float FailedSeconds = 120f;
 
+	// Items a worker could not pick up from the foot of what they lie on either, left alone for a while.
+	private static readonly Dictionary<GameObject, float> FootFailed = new Dictionary<GameObject, float>();
+
+	// Where a worker stands to pick up an item it cannot walk to.
+	private static readonly Dictionary<Labor, XYZ> Feet = new Dictionary<Labor, XYZ>();
+
+	// How far up a worker reaches from where it stands, in blocks: far enough to take an item off the roof of a
+	// building from the ground beside it.
+	private const int ReachUp = 12;
+
+	// How many columns out from the item a place to stand is looked for.
+	private const int Beside = 2;
+
+	// Places to stand that failed for an item (the worker could not get there): the next try uses another one.
+	private static readonly Dictionary<GameObject, List<XYZ>> BadFeet = new Dictionary<GameObject, List<XYZ>>();
+
 	public static readonly LaborInstruction<GameObject> Cleanup = new LaborInstruction<GameObject>("AutoCleanup", IconKeys.PickUp, (Labor labor, GameObject item) => CleanupNode(labor, item));
 
 	private static void Enable()
 	{
-		Radius = Plugin.Cfg.Bind("AutoCleanup", "Radius", 15, "Idle workers pick up loose items within this many blocks of the home crystal, a stockpile or themselves.");
+		Radius = Plugin.Cfg.Bind("AutoCleanup", "Radius", 15, "Idle workers pick up loose items within this many blocks of the home crystal, a stockpile or themselves (" + BaseRanges.Min + " to " + BaseRanges.Max + "; also set on the home crystal's task).");
+		BaseRanges.Register(Features.AutoCleanup, Radius, "Auto cleanup range (blocks)", "PickUp", new Color(0.3f, 0.65f, 1f, 1f), false);
+		// A changed range applies at once, not after the cached item lists expire.
+		Radius.SettingChanged += (object sender, System.EventArgs args) => RefreshedAt.Clear();
 		GameSession.OnLeave(() =>
 		{
 			Candidates.Clear();
@@ -64,6 +97,9 @@ internal static class AutoCleanup
 			Claims.Clear();
 			Plans.Clear();
 			Failed.Clear();
+			FootFailed.Clear();
+			Feet.Clear();
+			BadFeet.Clear();
 		});
 	}
 
@@ -75,10 +111,21 @@ internal static class AutoCleanup
 			return null;
 		}
 		ExpireClaims();
-		List<GameObject> items = new List<GameObject>(BaseCandidates(labor.faction));
-		Collect(labor.transform.position, items, null);
-		Vector3 position = labor.transform.position;
-		items.Sort((GameObject a, GameObject b) => (a.transform.position - position).sqrMagnitude.CompareTo((b.transform.position - position).sqrMagnitude));
+		// Asked by every idle worker each time it looks for work: one list, set and comparer reused for all.
+		List<GameObject> items = PlanItems;
+		items.Clear();
+		PlanSeen.Clear();
+		foreach (GameObject candidate in BaseCandidates(labor.faction))
+		{
+			if (PlanSeen.Add(candidate))
+			{
+				items.Add(candidate);
+			}
+		}
+		Collect(labor.transform.position, items, PlanSeen);
+		PlanSeen.Clear();
+		SortFrom = labor.transform.position;
+		items.Sort(NearestFirst);
 		foreach (GameObject item in items)
 		{
 			if (!IsLoose(item) || Claims.ContainsKey(item) || Knowledge.Instance.IsReserved(item) || ResourceReservation.IsReservedByOther(item, labor))
@@ -86,12 +133,30 @@ internal static class AutoCleanup
 				continue;
 			}
 			GameComponent component = item.GetComponent<GameComponent>();
-			if (component == null || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null || !CanReach(labor, item, component))
+			if (component == null || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null)
 			{
 				continue;
 			}
+			bool fromFoot = false;
+			XYZ foot = XYZ.zero;
+			if (!CanReach(labor, item, component))
+			{
+				if (Waiting(FootFailed, item) || !FindFoot(item, out foot))
+				{
+					continue;
+				}
+				fromFoot = true;
+			}
 			Claims[item] = Time.time + ClaimSeconds;
 			Plans[labor] = item;
+			if (fromFoot)
+			{
+				Feet[labor] = foot;
+			}
+			else
+			{
+				Feet.Remove(labor);
+			}
 			return item;
 		}
 		return null;
@@ -140,7 +205,18 @@ internal static class AutoCleanup
 			}
 			else if (!CanReach(labor, item, component))
 			{
-				why = "the worker cannot reach it";
+				if (Waiting(FootFailed, item))
+				{
+					why = "the worker cannot reach it, nor pick it up from the foot of it";
+				}
+				else if (!FindFoot(item, out XYZ foot))
+				{
+					why = "the worker cannot reach it and there is no place to stand right below it";
+				}
+				else
+				{
+					why = null;
+				}
 			}
 			result.Add(new KeyValuePair<GameObject, string>(item, why));
 		}
@@ -153,11 +229,67 @@ internal static class AutoCleanup
 	// while.
 	private static bool CanReach(Labor labor, GameObject item, GameComponent component)
 	{
+		// An item pushed partly into a wall or a block has its place inside that block, where no worker can stand:
+		// walking to it fails at once, every time. It is picked up from beside it instead.
+		if (Voxel.IsFull(XYZ.FromVector3(item.transform.position)))
+		{
+			return false;
+		}
 		if (Knowledge.Instance.KnowsAbout(item))
 		{
 			return Knowledge.Instance.CanReach(labor, component);
 		}
-		return !Failed.TryGetValue(item, out float until) || Time.time > until;
+		return !Waiting(Failed, item);
+	}
+
+	private static bool Waiting(Dictionary<GameObject, float> table, GameObject item)
+	{
+		return table.TryGetValue(item, out float until) && Time.time <= until;
+	}
+
+	// A place beside the item (its own column or up to Beside columns out), level with it or 1 to ReachUp blocks
+	// lower, that a worker can stand on: from there it reaches out or up and takes the item. The nearest one to the
+	// item that has not already failed for it (a roof next to the item, which no worker can get onto, then the ground).
+	private static bool FindFoot(GameObject item, out XYZ foot)
+	{
+		foot = XYZ.zero;
+		TestPathfinding pathfinding = TestPathfinding.Instance;
+		if (pathfinding == null || !pathfinding.Initialized || pathfinding.terrainLod == null)
+		{
+			return false;
+		}
+		XYZ at = XYZ.FromVector3(item.transform.position);
+		float best = float.MaxValue;
+		bool found = false;
+		BadFeet.TryGetValue(item, out List<XYZ> bad);
+		for (int dx = -Beside; dx <= Beside; dx++)
+		{
+			for (int dz = -Beside; dz <= Beside; dz++)
+			{
+				for (int down = (dx == 0 && dz == 0) ? 1 : 0; down <= ReachUp; down++)
+				{
+					XYZ p = new XYZ(at.x + dx, at.y - down, at.z + dz);
+					if (!(pathfinding.terrainLod.GetPathNode(p) is WalkablePathNode node) || node.IsEmpty || Voxel.IsFull(p))
+					{
+						continue;
+					}
+					if (bad != null && bad.Contains(p))
+					{
+						continue;
+					}
+					// The highest place in the column: the one under the item's support.
+					float distance = dx * dx + dz * dz + down * down;
+					if (distance < best)
+					{
+						best = distance;
+						foot = p;
+						found = true;
+					}
+					break;
+				}
+			}
+		}
+		return found;
 	}
 
 	// The worker is carrying a loose item to storage.
@@ -171,6 +303,7 @@ internal static class AutoCleanup
 		if (labor != null && Plans.TryGetValue(labor, out GameObject item))
 		{
 			Plans.Remove(labor);
+			Feet.Remove(labor);
 			if (item != null)
 			{
 				Claims.Remove(item);
@@ -186,9 +319,10 @@ internal static class AutoCleanup
 			return Node.Empty;
 		}
 		GameComponent itemComponent = item.GetComponent<GameComponent>();
+		bool fromFoot = Feet.TryGetValue(labor, out XYZ foot);
 		return Node.Sequence.Label("Auto cleanup")
-			.Do(labor.GoPickUp(itemComponent, -1))
-			.Label("Pick up loose item")
+			.Do((Labor l) => fromFoot ? PickUpFromFoot(l, itemComponent, foot) : l.GoPickUp(itemComponent, -1), labor)
+			.Label(fromFoot ? "Pick up loose item from below" : "Pick up loose item")
 			.Do((Labor l) =>
 			{
 				// Carrying now: stop being interruptible so the load is not dropped again.
@@ -201,10 +335,44 @@ internal static class AutoCleanup
 				// Still lying where it was: the worker could not get to it or was called away.
 				if (IsLoose(item))
 				{
-					Failed[item] = Time.time + FailedSeconds;
+					if (fromFoot)
+					{
+						if (!BadFeet.TryGetValue(item, out List<XYZ> bad))
+						{
+							bad = new List<XYZ>();
+							BadFeet[item] = bad;
+						}
+						bad.Add(foot);
+						// No other place to stand: wait a while, then try them all again.
+						if (!FindFoot(item, out XYZ _))
+						{
+							FootFailed[item] = Time.time + FailedSeconds;
+							BadFeet.Remove(item);
+						}
+					}
+					else
+					{
+						Failed[item] = Time.time + FailedSeconds;
+					}
+				}
+				else
+				{
+					BadFeet.Remove(item);
 				}
 				Release(l);
 			}, labor);
+	}
+
+	// As the game's pick-up, but the worker walks to the foot instead of to the item, and takes it from there.
+	private static Node PickUpFromFoot(Labor labor, GameComponent item, XYZ foot)
+	{
+		return Node.Sequence
+			.Do((Labor l, GameComponent target) =>
+			{
+				Knowledge.Instance.ReserveUntil(target.gameObject, l.signal.WorkEnded);
+			}, labor, item)
+			.Do((Labor l, XYZ at) => l.RunToExactly(new SpaceLocation(at.ToVector3(), Quaternion.identity)), labor, foot)
+			.Do((Labor l, GameComponent target) => (!IsLoose(target.gameObject) || !l.recepteur.HasRoomFor(target.gameObject)) ? (Node)Node.FailWork<Exceptions.NullTarget>() : l.TakeSome(target, -1), labor, item);
 	}
 
 	// Loose items around the home crystal and the stockpiles, cached per faction for a few seconds.
@@ -244,7 +412,7 @@ internal static class AutoCleanup
 
 	private static void Collect(Vector3 center, List<GameObject> result, HashSet<GameObject> seen)
 	{
-		int count = Physics.OverlapSphereNonAlloc(center, Radius.Value, Hits, Layers);
+		int count = Physics.OverlapSphereNonAlloc(center, BaseRanges.Clamped(Radius), Hits, Layers);
 		for (int i = 0; i < count; i++)
 		{
 			GameObject go = SignificantParent.Of(Hits[i].gameObject);
@@ -314,6 +482,7 @@ internal static class AutoCleanup
 		foreach (Labor labor in stale)
 		{
 			Plans.Remove(labor);
+			Feet.Remove(labor);
 		}
 	}
 }
@@ -325,11 +494,12 @@ internal static class AutoCleanup
 [HarmonyPriority(Priority.High)]
 internal static class AutoCleanupPatch
 {
-	private static bool Prefix(IdleProject __instance, Labor labor, Var<OrderPackage<Labor>> result)
+	private static bool Prefix(IdleProject __instance, Labor labor, Var<OrderPackage<Labor>> result, bool __runOriginal)
 	{
-		if (!labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
+		// An earlier patch already gave the worker an order: keep it.
+		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
 		{
-			return true;
+			return __runOriginal;
 		}
 		GameObject item = AutoCleanup.TryPlan(labor);
 		if (item == null)

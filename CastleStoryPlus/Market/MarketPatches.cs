@@ -8,8 +8,7 @@ using UnityEngine;
 
 namespace CastleStoryPlus.Market;
 
-// Server: a finished trade produces what the current prices give instead of a fixed amount. When the prices have
-// risen so far that nothing would come out, the given resource comes back instead.
+// Server: a finished trade produces what was paid for at the current prices (its lot, at least one).
 [Feature(Features.Market, Features.MarketInfo)]
 [HarmonyPatch(typeof(Recipe), nameof(Recipe.SpawnAll))]
 internal static class MarketTradePatch
@@ -21,16 +20,14 @@ internal static class MarketTradePatch
 		{
 			return true;
 		}
-		int output = MarketPrices.Output(trade);
-		if (output > 0)
+		int given = __instance.ingredients.Value(trade.Give.Resource);
+		if (given <= 0)
 		{
-			MarketPrices.Traded(trade, output);
-			Spawn(gos, trade.Get, output, pos);
+			given = trade.GiveAmount;
 		}
-		else
-		{
-			Spawn(gos, trade.Give, trade.GiveAmount, pos);
-		}
+		int output = MarketPrices.OutputFor(trade, given);
+		MarketPrices.Traded(trade, given, output);
+		Spawn(gos, trade.Get, output, pos);
 		return false;
 	}
 
@@ -67,5 +64,20 @@ internal static class MarketBlueprintMappingPatch
 	private static bool Prefix(BlueprintMapper __instance, Blueprint bp)
 	{
 		return !__instance.blueprint2Concrete.ContainsKey(bp.AssetKey);
+	}
+}
+
+// The trades with coal and steel, after the metallurgy recipes and the research station's (made first here if
+// their own postfixes have not run yet: the order of postfixes is not guaranteed).
+[Feature(Features.Market, Features.MarketInfo)]
+[HarmonyPatch(typeof(Brix.Lua.LuaCrafting), nameof(Brix.Lua.LuaCrafting.Register))]
+[HarmonyPriority(Priority.VeryLow)]
+internal static class MarketLateTradesPatch
+{
+	private static void Postfix()
+	{
+		Metallurgy.MetallurgyLuaPatch.Run();
+		Upgrades.UpgradeLines.RegisterRecipes(Upgrades.UpgradeHall.Research);
+		MarketPrices.RegisterLateTrades();
 	}
 }

@@ -40,6 +40,18 @@ internal static class MoveStructure
 	// Client: the building being moved while its blueprint is held.
 	internal static GameObject Source;
 
+	// Client: the click that picked a building to move is still going on (its blueprint is being put in the hand,
+	// which can take a few frames, or the button is not yet released). The game places a held blueprint on that same
+	// click otherwise: a new blueprint next to the building instead of a move.
+	private static bool _picking;
+
+	private static bool _waitRelease;
+
+	internal static bool PickClickActive
+	{
+		get { return _picking || _waitRelease; }
+	}
+
 	// Server: a building waiting to be demolished by a move, the materials it cost and the blueprint they go to.
 	private class PendingMove
 	{
@@ -74,12 +86,20 @@ internal static class MoveStructure
 			Source = null;
 		};
 		GameSignals.Connect(GameSignals.LevelReady, RestorePending);
+		LuaInjection.AddFunction("MovingStructure", (MoonSharp.Interpreter.ScriptExecutionContext context, MoonSharp.Interpreter.CallbackArguments args) => MoonSharp.Interpreter.DynValue.NewBoolean(PickClickActive || Source != null));
+		// Putting a building's blueprint in the hand opens the blocks or structures catalogue (GameMenu's
+		// OnReopenBuild); not while it is being moved.
+		LuaInjection.AddPatch(Features.MoveStructure, "LUI/Menus/GameMenu.lua", "\t\tif _m.IsHeldBlueprintOfMetaType(Meta.StoneBlock) then\n", LuaInjection.Mode.InsertBefore, "\t\tif CastleStoryPlus.MovingStructure() then return end\n");
 	}
 
 	// Client, every frame from InputModeController.Update.
 	internal static void Update()
 	{
 		CheckDemolished();
+		if (_waitRelease && !Input.GetMouseButton(0) && !Input.GetMouseButtonUp(0))
+		{
+			_waitRelease = false;
+		}
 		if (Source != null && InputModeController._mode != InputMode.blueprint)
 		{
 			Source = null;
@@ -97,20 +117,38 @@ internal static class MoveStructure
 		{
 			return;
 		}
+		_picking = true;
+		_waitRelease = true;
 		Picking.Instance.StartCoroutine(Pick(building, blueprintKey));
 	}
 
 	private static System.Collections.IEnumerator Pick(GameObject building, Factory.AssetKey blueprintKey)
 	{
-		System.Collections.IEnumerator select = Eyedropper.SelectForBuilding(blueprintKey);
-		while (select.MoveNext())
+		try
 		{
-			yield return select.Current;
+			// No build task is selected (that opens its menus) or made: the host puts the move into the team's build task.
+			InputModeController.PlaceBlueprint(blueprintKey);
+			yield return null;
+			if (InputModeController._mode == InputMode.blueprint)
+			{
+				Source = building;
+			}
 		}
-		if (InputModeController._mode == InputMode.blueprint)
+		finally
 		{
-			Source = building;
+			_picking = false;
 		}
+	}
+
+	// The move key is held over a building that can be moved: the game's own key action on the same key (the
+	// machine shop on M) must not fire, or it puts that building in the hand and the click places it.
+	internal static bool KeyClaimed()
+	{
+		if (_key == null || !Input.GetKey(_key.Value) || InputModeController.DefaultMode != InputMode.command)
+		{
+			return false;
+		}
+		return BuildingUnderCursor(out Factory.AssetKey _) != null;
 	}
 
 	private static GameObject BuildingUnderCursor(out Factory.AssetKey blueprintKey)
@@ -211,19 +249,32 @@ internal static class MoveStructure
 	private static void Move(UNetBlueprint cmd, GameObject building, Factory.AssetKey key, Vector3 position, Quaternion rotation, GameObject buildProject)
 	{
 		User user = cmd.GetComponent<User>();
-		if (building.IsNullOrReleased() || buildProject == null || Pending.ContainsKey(building) || !user.faction.IsSame(building))
+		if (building.IsNullOrReleased() || Pending.ContainsKey(building) || !user.faction.IsSame(building))
 		{
+			Plugin.Log.LogInfo("MoveStructure: move refused (" + (building.IsNullOrReleased() ? "the building is gone" : Pending.ContainsKey(building) ? "already being moved" : "not the player's building") + ")");
 			return;
 		}
 		FactoryImprint imprint = building.GetComponent<FactoryImprint>();
 		if (imprint == null || BlueprintAssetKeyResolver.Resolve(imprint.AssetKey) != key)
 		{
+			Plugin.Log.LogInfo("MoveStructure: move of " + building.name + " refused (its blueprint is not " + key + ")");
 			return;
 		}
+		// The team's build task with the most workers (GlobalBuildJob), not the project the client sent: that was
+		// the repair task, or a new empty build task made after loading, which nobody works on, so the old building
+		// was never demolished and the move never happened.
+		BuildProject team = GlobalBuildJob.TeamProject(user);
+		if (team == null)
+		{
+			Plugin.Log.LogInfo("MoveStructure: move of " + building.name + " refused (no build task)");
+			return;
+		}
+		buildProject = team.gameObject;
 		BuildGoalProvider provider = buildProject.GetComponent<BuildGoalProvider>();
 		Blueprint blueprint = cmd._PrepareSpawnBlueprint(key, position, rotation, spawnSelected: false);
 		if (provider == null || blueprint == null)
 		{
+			Plugin.Log.LogInfo("MoveStructure: move of " + building.name + " refused (no room for its blueprint there)");
 			return;
 		}
 		Description cost = blueprint.recepteur != null ? blueprint.recepteur.BaseCapacity.Clone() : null;
@@ -236,7 +287,12 @@ internal static class MoveStructure
 		}
 		anti.GetComponent<Blueprint>().Network_isAnti = true;
 		provider.AddObject(anti);
+		// Committed at once (as when the build task is deselected), whether or not that task is selected: both are
+		// worked on right away.
+		GlobalBuildJob.Commit(blueprint);
+		GlobalBuildJob.Commit(anti.GetComponent<Blueprint>());
 		Pending[building] = new PendingMove { Cost = cost, Target = blueprint };
+		Plugin.Log.LogInfo("MoveStructure: " + building.name + " moves to " + position + " in " + buildProject.name + " (" + team.CrewCount() + " workers)");
 	}
 
 	// The pending moves are saved next to the save's gameobjects.json, so a building whose move was ordered
@@ -489,6 +545,24 @@ internal static class MoveStructureInputPatch
 }
 
 // While a building is being moved, the placement click sends the move instead of a new blueprint.
+// Key actions on the move key (the machine shop on M) do not fire while it is held to move a building.
+[Feature(Features.MoveStructure, Features.MoveStructureInfo)]
+[HarmonyPatch(typeof(Brix.Utils.UI.KeyBindingsUtility), nameof(Brix.Utils.UI.KeyBindingsUtility.RegisterAction))]
+internal static class MoveStructureKeyActionPatch
+{
+	private static void Prefix(ref Action<Rewired.InputActionEventData> action)
+	{
+		Action<Rewired.InputActionEventData> inner = action;
+		action = (Rewired.InputActionEventData data) =>
+		{
+			if (!MoveStructure.KeyClaimed())
+			{
+				inner(data);
+			}
+		};
+	}
+}
+
 [Feature(Features.MoveStructure, Features.MoveStructureInfo)]
 [HarmonyPatch(typeof(BlueprintPlacementPicker), nameof(BlueprintPlacementPicker.PlaceBlueprint))]
 internal static class MoveStructurePlacePatch
@@ -498,7 +572,7 @@ internal static class MoveStructurePlacePatch
 
 	private static bool Prefix(Slave s)
 	{
-		if (_sentFrame == Time.frameCount)
+		if (_sentFrame == Time.frameCount || MoveStructure.PickClickActive)
 		{
 			return false;
 		}
@@ -522,7 +596,7 @@ internal static class MoveStructurePlacePatch
 		}
 		MoveStructure.Source = null;
 		_sentFrame = Time.frameCount;
-		Project project = UIGameObserver.projects.CurrentSelected;
+		Project project = UIGameObserver.projects.LastSelectedBuild;
 		MoveStructure.Send(source, held, project != null ? project.gameObject : null);
 		Brix.Audio.SoundEngine.Play("Brick_Place");
 		InputModeController.SetCurrentMode(InputModeController.DefaultMode);

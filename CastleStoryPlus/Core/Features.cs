@@ -9,7 +9,7 @@ internal static class Features
 
 	public const string Pathfinding = "Pathfinding";
 
-	public const string PathfindingInfo = "Shorter routes, bigger search budgets, no pause after picking something up, stairs usable under walkways.";
+	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame.";
 
 	public const string StockpileChoice = "StockpileChoice";
 
@@ -18,6 +18,10 @@ internal static class Features
 	public const string BlueprintsVisible = "BlueprintsVisible";
 
 	public const string BlueprintsVisibleInfo = "Pending blueprints are always visible, not only in build mode.";
+
+	public const string DeconstructColour = "DeconstructColour";
+
+	public const string DeconstructColourInfo = "Blueprints marked for deconstruction stay dark orange, also while their build task is not selected.";
 
 	public const string WorkerAI = "WorkerAI";
 
@@ -33,7 +37,7 @@ internal static class Features
 
 	public const string SaveAndLeave = "SaveAndLeave";
 
-	public const string SaveAndLeaveInfo = "SAVE & LEAVE button in the Quit Game dialog.";
+	public const string SaveAndLeaveInfo = "SAVE AND RETURN TO MAIN MENU and SAVE AND QUIT GAME (with a confirmation) buttons in the Quit Game dialog.";
 
 	public const string FastQuit = "FastQuit";
 
@@ -65,7 +69,7 @@ internal static class Features
 
 	public const string ResourceList = "ResourceList";
 
-	public const string ResourceListInfo = "Resource list (icon, name, count) in the top-right corner instead of the icon grid under the minimap.";
+	public const string ResourceListInfo = "Resource list (icon, name, count) in the top-right corner instead of the icon grid under the minimap; a resource stays listed from the first time it is stocked (saved with the world), with storage used and free (also as a percentage); a \"Resources\" button on the right-hand bar shows and hides it.";
 
 	public const string CallToArms = "CallToArms";
 
@@ -74,6 +78,10 @@ internal static class Features
 	public const string FasterLoading = "FasterLoading";
 
 	public const string FasterLoadingInfo = "Faster map loading that keeps the window responsive (background file reading, time-budgeted loading loops).";
+
+	public const string CsMenus = "CsMenus";
+
+	public const string CsMenusInfo = "Game menus drawn in C# instead of the game's Lua menus, which take long to build when a map loads. Each menu is switched on on its own in [LuaUi]; all are off by default.";
 
 	public const string PlusLogo = "PlusLogo";
 
@@ -101,7 +109,7 @@ internal static class Features
 
 	public const string GiantBricktron = "GiantBricktron";
 
-	public const string GiantBricktronInfo = "3x bricktrons: select two workers and upgrade one (2x size, 3x speed for everything it does, 3x health) for 50 dark crystals (with DarkCrystals; otherwise 1.5x the energy of a new bricktron); the other is sacrificed. One 3x bricktron per 5 bricktrons.";
+	public const string GiantBricktronInfo = "Giant bricktrons: select two workers and upgrade one (1.25x size, 2x speed for everything it does, 2x health, 2.5x carrying) for 50 dark crystals (with DarkCrystals; otherwise 1.5x the energy of a new bricktron); the other is sacrificed. One giant bricktron per 5 bricktrons. With Upgrades, Giant Bricktrons must first be researched at the research station.";
 
 	public const string EnergyHint = "EnergyHint";
 
@@ -143,13 +151,21 @@ internal static class Features
 
 	public const string WaveWarningInfo = "Invasion: big warning before the next wave at 30 and 15 seconds, and a countdown for the last 5 seconds.";
 
+	public const string WaveDirection = "WaveDirection";
+
+	public const string WaveDirectionInfo = "Invasion: the next wave's spawn point is picked ahead, and from 30 seconds before the wave an arrow on the screen points where it will come from.";
+
 	public const string AutoCleanup = "AutoCleanup";
 
-	public const string AutoCleanupInfo = "Idle workers pick up loose items near the base or near themselves and store them, without a cleanup zone (see [AutoCleanup] Radius).";
+	public const string AutoCleanupInfo = "Idle workers pick up loose items near the base or near themselves and store them, without a cleanup zone (see [AutoCleanup] Radius). Items on top of a building or stockpile are taken from its foot. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a blue ring around the crystal while its task is selected.";
+
+	public const string AutoRepair = "AutoRepair";
+
+	public const string AutoRepairInfo = "Idle builders repair damaged blocks near the base (home crystal and stockpiles, see [AutoRepair] Radius), without a repair zone. No materials; blocks under attack are left alone. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a green ring around the crystal while its task is selected.";
 
 	public const string Market = "Market";
 
-	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time, with a fee, so trading never makes resources (see [Market]). Workers walk inside.";
+	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). Up to 3 more workers help fetch for the current trade. Workers walk inside.";
 
 	public const string Retreat = "Retreat";
 
@@ -159,6 +175,10 @@ internal static class Features
 
 	public const string MixedStockpilesInfo = "A stockpile holds several resources at once: each of its four columns holds one resource type.";
 
+	public const string MixedRacks = "MixedRacks";
+
+	public const string MixedRacksInfo = "A weapon stand holds the weapons and armour of all soldier classes at once (as many weapons, props and hats as before, any classes mixed); equipping takes one whole kit of a single class (see [MixedRacks]).";
+
 	public const string TreeStumps = "TreeStumps";
 
 	public const string TreeStumpsInfo = "Tree harvest areas also remove the stumps of felled trees: more axe work than a tree, fewer logs (see [TreeStumps]).";
@@ -166,6 +186,10 @@ internal static class Features
 	public const string GameLeakFixes = "GameLeakFixes";
 
 	public const string GameLeakFixesInfo = "Fixes memory leaks in the game itself, so memory no longer climbs during long games or after playing several games.";
+
+	public const string LuaHeapShrink = "LuaHeapShrink";
+
+	public const string LuaHeapShrinkInfo = "Shorter garbage collection pauses: the Lua value heap (10 million slots, 280 MB, read by every collection) starts at 1 million slots and grows only when needed.";
 
 	public const string BuildNeeds = "BuildNeeds";
 
@@ -177,7 +201,19 @@ internal static class Features
 
 	public const string CustomBlocks = "CustomBlocks";
 
-	public const string CustomBlocksInfo = "New blocks in the brick wheel: stone bricks of 2 x 2 and 2 x 4, wooden slabs (half a block high) of 1 x 1, 2 x 1, 2 x 2 and 2 x 4 that also hold on to the side of stone.";
+	public const string CustomBlocksInfo = "New blocks in the brick wheel: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 that stand on one supported block (the long ones can bridge a gap between two walls), a brick on end (1 x 1, 2 high), wooden slabs (half a block high) of 1 x 1, 2 x 1, 2 x 2 and 2 x 4 that also hold on to the side of stone, and a wood ladder.";
+
+	public const string Ladders = "Ladders";
+
+	public const string LaddersInfo = "Wood ladder in the build menu (wood group): bricktrons climb it straight up and down, slower than stairs ([Ladders] ClimbSpeed, RouteCost) and only with free hands or a bag.";
+
+	public const string GlobalBuildJob = "GlobalBuildJob";
+
+	public const string GlobalBuildJobInfo = "One build task per team: every placed blueprint goes into it, other build tasks are merged into it, and placing with the idle group or the repair task selected no longer fails.";
+
+	public const string DragRelease = "DragRelease";
+
+	public const string DragReleaseInfo = "A drag build (a row of blocks) stops when the mouse button is no longer held, also when it was let go over the interface or outside the window.";
 
 	public const string Warehouse = "Warehouse";
 
@@ -193,7 +229,11 @@ internal static class Features
 
 	public const string DebugMenu = "DebugMenu";
 
-	public const string DebugMenuInfo = "F8 opens a debug menu (host only): add energy, spawn builders, heal, drop resources, spawn or kill enemies, and move, start or freeze the next invasion wave.";
+	public const string DebugMenuInfo = "F8 opens a debug menu (host only): add energy, spawn builders, heal, drop resources, spawn or kill enemies, move, start or freeze the next invasion wave, change the time between waves, and draw the selected bricktrons' routes (coarse, straightened, walked), and make every hit of your bricktrons critical (100% critrate).";
+
+	public const string Performance = "Performance";
+
+	public const string PerformanceInfo = "F7 opens a performance window: frame rate, frame times (1% low, p95, p99), garbage collections, graphs of the last frames, what takes the time each frame and the last spikes; frames over 100 ms are logged with what took their time.";
 
 	public const string QuarryLimit = "QuarryLimit";
 
@@ -219,6 +259,22 @@ internal static class Features
 
 	public const string CraftLoopLimitInfo = "A workshop's looping queue can loop until a stock limit (on/off button with - and + next to the loop button): it waits while the stockpiles hold enough and starts again when the stock drops.";
 
+	public const string BuildPriority = "BuildPriority";
+
+	public const string BuildPriorityInfo = "The context wheel over a blueprint (e.g. a warehouse being built) has a Top priority button: builders work on it before everything else; a yellow ring marks it; saved with the blueprint.";
+
+	public const string WorkLimit = "WorkLimit";
+
+	public const string WorkLimitInfo = "How many bricktrons work on a task at a time (e.g. a quarry with 4): a Workers at a time button among the task's actions with + and -; All when there is no limit; saved with the task.";
+
+	public const string PauseTasks = "PauseTasks";
+
+	public const string PauseTasksInfo = "A task can be paused instead of deleted (pause button next to delete): no bricktron works on it until it is resumed, and it keeps its blueprints and zones; its crew are released and put back when it is resumed; saved with the task.";
+
+	public const string WorkshopPriority = "WorkshopPriority";
+
+	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's with - and + in its queue menu: locked, low, medium or high (the game keeps every workshop at high).";
+
 	public const string DropGearOnDeath = "DropGearOnDeath";
 
 	public const string DropGearOnDeathInfo = "A dying bricktron drops its gear (weapons, shields, hats, bags) on the ground instead of losing it with the corpse.";
@@ -226,6 +282,10 @@ internal static class Features
 	public const string ArtificerHealing = "ArtificerHealing";
 
 	public const string ArtificerHealingInfo = "Artificers heal the most wounded team mate in attack range with green healing bolts: 10% health per bolt, one at a time, before attacking.";
+
+	public const string CriticalHits = "CriticalHits";
+
+	public const string CriticalHitsInfo = "From combat level 3 a sword strike or shot can be a critical hit for double damage (5% at level 3, 10% at 5, 15% at 8, 20% at 10): a red \"2x damage\" rises over the bricktron and its weapon glows red for that hit.";
 
 	public const string BlueCrystalDeposits = "BlueCrystalDeposits";
 
@@ -237,7 +297,7 @@ internal static class Features
 
 	public const string DarkCrystals = "DarkCrystals";
 
-	public const string DarkCrystalsInfo = "Slain enemies drop dark crystals (5 with a 1 in 3 chance, biftrons 15 with a 1 in 2 chance). The crystal tier of the upgrades costs dark crystals instead of blue crystal, and a 3x bricktron costs 50 dark crystals instead of energy.";
+	public const string DarkCrystalsInfo = "Slain enemies drop dark crystals (5 with a 1 in 3 chance, biftrons 15 with a 1 in 2 chance). The crystal tier of the upgrades costs dark crystals instead of blue crystal, and a giant bricktron costs 50 dark crystals instead of energy.";
 
 	public const string Metallurgy = "Metallurgy";
 
@@ -245,5 +305,5 @@ internal static class Features
 
 	public const string Upgrades = "Upgrades";
 
-	public const string UpgradesInfo = "Smithy and armoury buildings (build menu, crafting): research weapon and armour upgrades in three tiers (iron, steel, crystal) for the whole team. Workers walk inside.";
+	public const string UpgradesInfo = "Smithy, armoury and research station buildings (build menu, crafting): research weapon and armour upgrades in three tiers (iron, steel, crystal), and colony upgrades for dark crystals (more bricktrons, work speed, storage room (+33% per tier, stockpiles stack up to 4 layers high), cheaper bricktrons, walking speed, firefly energy, giant bricktrons, time between waves, more yield from digging and mining), for the whole team. Workers walk inside.";
 }

@@ -18,6 +18,8 @@ SIZE = 128
 INK = "#1b1b1f"
 
 STONE = ("#d3d1cb", "#aeaba3", "#8d8a83")
+# The game's brick icons: top, short end (front), long side (right).
+GAME_STONE = ("#b3b3b3", "#4c4d4c", "#656565")
 WOOD = ("#c99652", "#9c6c33", "#7a5226")
 WOOD_DARK = ("#8a5d2e", "#6d4520", "#553418")
 BRICK = ("#c96a4a", "#a5512f", "#863f24")
@@ -28,6 +30,10 @@ AWNING_WHITE = ("#f5efe2", "#d8d0bf", "#bcb3a0")
 DARK = ("#3a2a1e", "#2c2017", "#211811")
 FIRE = ("#ffd34d", "#ff9a2e", "#e0701a")
 CRYSTAL = ("#9be0ff", "#58c4ff", "#2a8fd0")
+DARK_CRYSTAL = ("#c78bff", "#9a4ee0", "#6e2ab0")
+BOOKS = [("#c05048", "#9a3a32", "#7a2a24"), ("#4f8a56", "#3a6a40", "#2a5030"), ("#4f6ea8", "#3a5488", "#2a3e68"),
+         ("#c8a050", "#a07c38", "#7c5e28")]
+PAPER = ("#fbf4e0", "#e6dcc0", "#cbbf9e")
 
 
 class Scene:
@@ -84,14 +90,32 @@ class Scene:
 # The projected size of the largest block (4 x 1 x 2), which fills the icon.
 BLOCK_SPAN = (4 + 2) * math.cos(math.radians(30))
 
-def stone(w, d):
-    s = Scene(BLOCK_SPAN)
-    s.box(0, 0, 0, w, 1, d, STONE)
-    # faint joints where the blocks would be
-    for i in range(1, w):
-        s.line((i, 1, 0), (i, 1, d), "#b9b6ae", 2)
-    for i in range(1, d):
-        s.line((0, 1, i), (w, 1, i), "#b9b6ae", 2)
+class GameView(Scene):
+    """The view of the game's own brick icons: the length (z) runs to the right and a little up, the width (x) to the
+    left and a little up, and blocks are drawn a bit taller than wide. The visible faces are the top, the long side
+    at x = 0 (right) and the short end at z = 0 (left)."""
+
+    @staticmethod
+    def project(x, y, z):
+        return (z * 1.0 - x * 0.98, -z * 0.33 - x * 0.31 - y * 1.3)
+
+    def brick(self, x, y, z, w, h, d, colours, width=4.0):
+        top, end, side = colours
+        self.poly([(x, y + h, z), (x + w, y + h, z), (x + w, y + h, z + d), (x, y + h, z + d)], top, width)
+        self.poly([(x, y, z), (x + w, y, z), (x + w, y + h, z), (x, y + h, z)], end, width)
+        self.poly([(x, y, z), (x, y, z + d), (x, y + h, z + d), (x, y + h, z)], side, width)
+
+
+# The projected size of the largest brick (2 x 4), which fills the icon.
+GAME_SPAN = 4 * 1.0 + 2 * 0.98
+
+
+def stone(w, d, h=1):
+    """Like the game's own brick icons: flat grey faces (light top, dark short end, mid long side), a thick outline.
+    One whole stone the size of the block, as the blocks are drawn in the game."""
+    s = GameView(GAME_SPAN)
+    length, width = max(w, d), min(w, d)
+    s.brick(0, 0, 0, width, h, length, GAME_STONE)
     return s
 
 
@@ -105,6 +129,17 @@ def slab(w, d):
     else:
         for i in range(1, 2 * w):
             s.line((i / 2, 0.45, 0), (i / 2, 0.45, d), "#8a5d2e", 2.5)
+    return s
+
+
+def ladder():
+    s = Scene(BLOCK_SPAN)
+    # a stone wall with the ladder leaning on its front
+    s.box(0, 0, 0, 2, 3, 1, STONE)
+    for i in range(6):
+        s.box(0.45, 0.35 + i * 0.5, 1.0, 1.1, 0.1, 0.08, WOOD_DARK)
+    for x in (0.45, 1.4):
+        s.box(x, 0, 1.0, 0.15, 3.1, 0.15, WOOD)
     return s
 
 
@@ -176,17 +211,52 @@ def market():
     return s
 
 
+def research():
+    s = Scene()
+    s.box(0, 0, 0, 4, 0.3, 3, STONE)
+    s.box(0, 0.3, 0, 0.15, 2.6, 3, WOOD)
+    # bookshelf along the back, full of coloured books
+    s.box(0.15, 0.3, 0, 3.7, 2.2, 0.15, WOOD_DARK)
+    for row in range(3):
+        y = 0.4 + row * 0.7
+        for i in range(9):
+            colours = BOOKS[(i + row * 2) % len(BOOKS)]
+            height = 0.45 + ((i * 7 + row * 3) % 4) * 0.05
+            s.box(0.3 + i * 0.38, y, 0.15, 0.3, height, 0.35, colours, width=1.0)
+        s.box(0.15, y - 0.08, 0.15, 3.7, 0.08, 0.4, WOOD_DARK, width=1.5)
+    # reading desk with an open book and the glowing dark crystal
+    s.box(1.9, 0.3, 1.4, 0.2, 0.9, 0.2, WOOD_DARK)
+    s.box(1.6, 1.2, 1.2, 0.8, 0.1, 0.6, WOOD)
+    s.box(1.65, 1.3, 1.25, 0.34, 0.05, 0.5, PAPER, width=1.5)
+    s.box(2.01, 1.3, 1.25, 0.34, 0.05, 0.5, PAPER, width=1.5)
+    s.box(2.8, 0.3, 1.0, 0.4, 0.8, 0.4, STONE)
+    s.poly([(3.0, 1.1, 1.2), (2.85, 1.5, 1.2), (3.0, 1.95, 1.2), (3.15, 1.5, 1.2)], DARK_CRYSTAL[1])
+    # a pile of books in the front corner
+    for i, colours in enumerate(BOOKS[:3]):
+        s.box(3.1 + i * 0.03, 0.3 + i * 0.16, 2.3, 0.6 - i * 0.06, 0.16, 0.45, colours, width=1.5)
+    for x, z in ((3.85, 2.85), (0, 2.85), (3.85, 0)):
+        s.box(x, 0.3, z, 0.15, 2.6, 0.15, WOOD_DARK)
+    # only the back slope of the roof, so the shelves and the desk show
+    s.poly([(-0.2, 2.9, -0.2), (4.2, 2.9, -0.2), (4.2, 3.6, 0.9), (-0.2, 3.6, 0.9)], ROOF[0])
+    return s
+
+
 ICONS = {
     "stone_brick_2x2": lambda: stone(2, 2),
     "stone_brick_2x4": lambda: stone(4, 2),
+    "stone_brick_1x3": lambda: stone(3, 1),
+    "stone_brick_1x4": lambda: stone(4, 1),
+    "stone_brick_tall": lambda: stone(1, 1, 2),
     "wood_slab_1x1": lambda: slab(1, 1),
     "wood_slab_2x1": lambda: slab(2, 1),
     "wood_slab_2x2": lambda: slab(2, 2),
     "wood_slab_2x4": lambda: slab(4, 2),
+    "wood_ladder": ladder,
     "warehouse": warehouse,
     "smithy": smithy,
     "armoury": armoury,
     "market": market,
+    "research": research,
 }
 
 
