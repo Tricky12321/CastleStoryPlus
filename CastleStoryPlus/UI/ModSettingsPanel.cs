@@ -357,6 +357,12 @@ end
 			AddFloatStepper("Speed of the third speed key", SpeedKeys.Speed3, 0.5f, 1f, 10f, "0.0x");
 		}
 
+		if (RendererChoice.Available)
+		{
+			AddSection("GRAPHICS");
+			AddRendererRows();
+		}
+
 		AddSection("DEBUG");
 		AddToggleRow("Debug mode (F7, F8 and F9 windows)", DebugMode.Entry);
 
@@ -437,6 +443,37 @@ end
 		{
 			value.text = entry.Value ? "ON" : "OFF";
 			value.color = entry.Value ? On : Off;
+		});
+	}
+
+	// The graphics API to start with (Default, OpenGL, Vulkan), and a button that saves and starts the game again with it
+	// while it differs from the running one.
+	private void AddRendererRows()
+	{
+		Transform row = CreateRow(_window.transform, 26f);
+		Text label = CreateText(row, string.Empty, 14, TextColor, TextAnchor.MiddleLeft);
+		Flexible(label.gameObject);
+		Button button = CreateButton(row, string.Empty, 90f, () =>
+		{
+			RendererChoice.Cycle();
+			Refresh();
+		});
+		Text value = button.GetComponentInChildren<Text>();
+		Transform restartRow = CreateRow(_window.transform, 26f);
+		Flexible(CreateRect("Spacer", restartRow).gameObject);
+		Button restart = CreateButton(restartRow, "Save and restart now", 190f, () =>
+		{
+			if (!RendererChoice.Restart(true))
+			{
+				_feedbackText.text = "Could not restart (see the log); the choice applies at the next start.";
+			}
+		});
+		_refreshers.Add(() =>
+		{
+			label.text = "Renderer (now " + RendererChoice.Current + ")";
+			value.text = RendererChoice.Entry.Value;
+			value.color = Yellow;
+			restart.gameObject.SetActive(RendererChoice.NeedsRestart);
 		});
 	}
 

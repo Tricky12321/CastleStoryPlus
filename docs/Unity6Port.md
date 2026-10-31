@@ -78,7 +78,8 @@ a release: no assets, no code, no shaders, and not the game's project settings e
      index file.
    - Preload tables come from PreloadData, or from walking each asset's PPtr references.
    - Shaders are converted to Unity 6's format (`ShaderConverter`), keeping the programs for the player's graphics
-     API (read from `engine-types.assets`): OpenGL Core from a Linux install, Direct3D 11 from a Windows install.
+     APIs (read from `engine-types.assets`): OpenGL Core from a Linux install, Direct3D 11 from a Windows install,
+     and Vulkan as well when the player was built with it (see below).
      Both versions keep a GL program as GLSL (hlslcc output) and a Direct3D 11 program as DXBC, so the code is taken
      as it is. Each program gets the new format version and its vertex channels in Unity 6's order.
      - GL: all of a shader's programs share the empty parameter entry. 5.6's GL programs list no parameters, and the
@@ -90,7 +91,16 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        buffers with their slots). Unity 6 keeps them in a parameter entry of their own, which programs with the same
        parameters share. Shader Model 5 programs (the eye adaptation) get Unity 6's Shader Model 5 requirements.
      - In the parsed form the variants become player subprograms, with indices into the shader's own keyword list.
-     - Vulkan (experimental, `CSP_VULKAN=1` with a player built by `PlayerBuild.VulkanTestLinux`): the Linux 5.6 data
+     - A player built with more than one API (`PlayerBuild.VulkanTestLinux`: Vulkan and OpenGL Core) gets each
+       shader's programs for all of them, laid out as Unity 6 lays out its own shader in that player's
+       `engine-types.assets`: `platforms`, `offsets`, `compressedLengths`, `decompressedLengths` and `stageCounts` have
+       an entry per platform in the player's order (15 GL Core, 18 Vulkan; each one blob, compressed one after the
+       other), and each program's player subprograms list the GL ones first, then the Vulkan ones, in the same tier;
+       blob and parameter indices point into the subprogram's own platform blob. Unity takes the programs of the API
+       it runs on, so one install starts with `-force-glcore` as well as `-force-vulkan`. A shader whose Vulkan programs
+       cannot all be made (a compile failure, or a GL variant without a Vulkan one) keeps its GL programs only; the
+       install log says so per shader.
+     - Vulkan (experimental, a player built by `PlayerBuild.VulkanTestLinux`): the Linux 5.6 data
        also holds SPIR-V (stored as SMOL-V) for 144 of its 179 shaders. These programs are repacked: the code header
        grows from 0x2C to 0xB0 bytes (taken from the player's own Vulkan program), the SMOL-V streams are copied as
        they are, vertex inputs move up by one and the parameters go through the Direct3D 11 path with their binding
@@ -101,8 +111,9 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        GL programs are rewritten to Vulkan GLSL (`GlslToVulkan`: version 450, uniforms in std140 blocks in set 1,
        textures in set 0, explicit locations, the depth range and the y flip of Unity's own Vulkan programs), compiled
        with shaderc (`Shaderc`, native library shipped in `Installer/`) and stored as SMOL-V (`SmolV`). The install
-       log lists per shader the programs reused, compiled and failed. `CSP_VULKAN_GLSL=<regex>` sends matching shaders
-       through the compiler even when 5.6 has SPIR-V for them (debugging).
+       log lists per shader what each platform got (GL programs; Vulkan programs reused, compiled and failed).
+       `CSP_VULKAN_GLSL=<regex>` sends matching shaders through the compiler even when 5.6 has SPIR-V for them
+       (debugging).
        Vulkan stays opt-in until these are fixed:
        - Converted forward shaders other than the crystals (glass, sky, bricktron face) are not checked against
          OpenGL yet. The crystals were fixed on 31-10-2026: the converted vertex stage now takes its clip position from
@@ -117,7 +128,10 @@ a release: no assets, no code, no shaders, and not the game's project settings e
    - The Windows game keeps its 64-bit plugins directly in `Plugins`; they are copied to `Plugins/x86_64`, where Unity
      6's Windows player loads them.
    - `catalog.txt` lists the bundles, the scenes in the game's build order and the Resources paths. `game.txt` holds
-     the game's folder. `installed.sha256` lists the converted files.
+     the game's folder. `graphics.txt` lists, a line each, the graphics APIs the converted shaders have programs for,
+     with Unity's `GraphicsDeviceType` names (`OpenGLCore`, `Vulkan`, `Direct3D11`); Vulkan only when every shader got
+     its Vulkan programs (otherwise the install log says which did not). The mod reads it to offer the renderer
+     choice. `installed.sha256` lists the converted files.
 
 At start the player loads every bundle and every MonoScript, as the 5.6 player did; without that the scripts do not
 bind. It routes `Resources.Load` and `Shader.Find` to the bundles (`ContentResources`). `UNetUpdate` runs UNet's message pump

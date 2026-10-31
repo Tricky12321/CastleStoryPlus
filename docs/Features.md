@@ -208,6 +208,7 @@ New blocks, new buildings and faster ways to build.
 | Faster map loading that keeps the window responsive. | `FasterLoading` |
 | Checks GitHub for a new release at startup and offers to update from the main menu (see [Updates](Installation.md#updates)). | `UpdateCheck` |
 | **Castle Story Plus settings** in the in-game Settings menu: autosave interval, firefly energy, giant bricktron values, debug mode, keys and feature switches. | (always on) |
+| **Renderer choice (Unity 6 port, Linux):** OpenGL Core or Vulkan (`[Graphics] Renderer`, Default is OpenGL Core), in Castle Story Plus settings with a "Save and restart now" button. Unity picks the graphics API only when the game starts, so a choice that differs from the running one starts the game again with `-force-glcore` or `-force-vulkan` (also when it was started from Steam or a shortcut). Offered when the install converted the shaders for both (`Content/graphics.txt`); a start that does not get the chosen API goes back to Default. | (always on) |
 
 **C# menus:** the whole in-game menu (`[LuaUi] CsGameMenu`, on by default; the game's GameMenu.lua is then not loaded at all), the gamemodes' intro, victory and defeat dialogs (`CsModals`) and the title screen's buttons (`CsMainMenu`) are drawn in C#. The other `[LuaUi]` switches draw parts of the Lua menu in C# when `CsGameMenu` is off.
 
