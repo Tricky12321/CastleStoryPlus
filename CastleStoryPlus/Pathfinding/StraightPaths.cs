@@ -1,3 +1,4 @@
+#if UNITY6
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -660,3 +661,4 @@ internal static class StraightPathsSteerPatch
 		return !steered;
 	}
 }
+#endif
