@@ -17,6 +17,10 @@ public static class GameTools
 	// After a speed change, how long game_speed lets the game run before it measures the speed reached.
 	private const int SpeedSettleMs = 2500;
 
+	// Widest screenshot game_screenshot sends: a 1920 x 1080 PNG of the game, a third larger as base64, can pass the
+	// 10 MB an MCP client takes in one message.
+	private const int DefaultImageWidth = 1280;
+
 	public static List<McpTool> Build(GameApi api)
 	{
 		return new List<McpTool>
@@ -324,22 +328,28 @@ public static class GameTools
 		return new McpTool
 		{
 			Name = "game_screenshot",
-			Description = "Takes a screenshot of the game window and shows it.",
-			InputSchema = Schema(Array.Empty<(string, JsonObject, bool)>()),
+			Description = "Takes a screenshot of the game window and shows it, at most 1280 pixels wide (an MCP client closes a connection that sends more than 10 MB in one message); the full-size file stays at the path given.",
+			InputSchema = Schema(new[]
+			{
+				Prop("maxWidth", "number", "Widest picture sent, in pixels (default 1280)")
+			}),
 			Handler = async (JsonObject arguments) =>
 			{
-				JsonObject answer = await api.CallJsonAsync("POST", "/api/screenshot");
+				int maxWidth = arguments["maxWidth"] != null ? (int)arguments["maxWidth"].GetValue<double>() : DefaultImageWidth;
+				JsonObject answer = await api.CallJsonAsync("POST", "/api/screenshot", new Dictionary<string, string> { ["maxWidth"] = maxWidth.ToString() });
 				string path = (string)answer["path"];
+				// The small copy is written a frame after the capture; an older game answers without one.
+				string sent = (string)answer["smallPath"] ?? path;
 				for (int i = 0; i < 50; i++)
 				{
 					await Task.Delay(100);
-					if (File.Exists(path) && new FileInfo(path).Length > 0)
+					if (File.Exists(sent) && new FileInfo(sent).Length > 0)
 					{
 						await Task.Delay(200);
-						return McpTool.Image(Convert.ToBase64String(await File.ReadAllBytesAsync(path)), path);
+						return McpTool.Image(Convert.ToBase64String(await File.ReadAllBytesAsync(sent)), path);
 					}
 				}
-				return McpTool.Text("The screenshot was not written within 5 s: " + path, isError: true);
+				return McpTool.Text("The screenshot was not written within 5 s: " + sent, isError: true);
 			}
 		};
 	}
