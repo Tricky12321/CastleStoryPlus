@@ -44,9 +44,9 @@ internal static class VisionScan
 
 	private static readonly AccessTools.FieldRef<SharedFactionVision, List<TrackingGroup>> TrackingGroups = AccessTools.FieldRefAccess<SharedFactionVision, List<TrackingGroup>>("_trackingGroups");
 
-	private static readonly AccessTools.FieldRef<SharedFactionVision, List<LocalFactionVision>> WhoSeesMe = AccessTools.FieldRefAccess<SharedFactionVision, List<LocalFactionVision>>("_whoSeesMe");
+	internal static readonly AccessTools.FieldRef<SharedFactionVision, List<LocalFactionVision>> WhoSeesMe = AccessTools.FieldRefAccess<SharedFactionVision, List<LocalFactionVision>>("_whoSeesMe");
 
-	private static readonly AccessTools.FieldRef<SharedFactionVision, List<LocalFactionVision>> TrackingCollisions = AccessTools.FieldRefAccess<SharedFactionVision, List<LocalFactionVision>>("_trackingCollisions");
+	internal static readonly AccessTools.FieldRef<SharedFactionVision, List<LocalFactionVision>> TrackingCollisions = AccessTools.FieldRefAccess<SharedFactionVision, List<LocalFactionVision>>("_trackingCollisions");
 
 	private static readonly AccessTools.FieldRef<TrackingRegistry, Dictionary<XYZ, TrackingGroup>> Groups = AccessTools.FieldRefAccess<TrackingRegistry, Dictionary<XYZ, TrackingGroup>>("_groups");
 
@@ -370,7 +370,11 @@ internal static class VisionScan
 				Plugin.Log.LogWarning("VisionScan: CollisionTrackingId=" + vision.CollisionTrackingId + ", _whoSeesMe.Count=" + whoSeesMe.Count + ", collisions=" + collisions.Count);
 				continue;
 			}
+#if UNITY6
+			if (!VisionCollisions.Responsible(vision))
+#else
 			if (!LocalFactionVision.IsResponsibleForVision(vision))
+#endif
 			{
 				continue;
 			}

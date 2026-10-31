@@ -215,6 +215,29 @@ frame rate rows say little; the per-system rows are what changed.
   call, measured), and each entry is bookkeeping on the game's objects (`CollisionTrackingId`, `IsResponsibleForVision`,
   the faction's lists), which a job cannot reach. A list of the entries with a vision per group was tried and removed:
   it skipped almost nothing.
+- **Faction vision, held items passed over (`VisionCollisions`, Unity 6 port only):** counted per call
+  (`AssignCollisionsFromFullGroup`): some 300 entries on average, 2300 in the biggest group (a stockpile area), 95 %
+  of them of another faction and with a vision, and almost none answering for their own visibility: a stored item's
+  vision is its stockpile's. Nothing happens for such an entry, yet each cost about 0.6 us, mostly waiting on memory
+  (the entry, its component, its vision, its parent tracker, the tracker's pair; `IsResponsibleForVision` itself 0.25
+  us, of which the stockpile's two `GetComponent` calls were a third). Held entries are now remembered per group and
+  passed over without being looked at while nothing they depend on changed (see the file's header for what is
+  watched). `CSP_VISION_VERIFY=1` runs the game's steps for every entry passed over: 4.5 million passed over, none of
+  which the game would have counted, and our responsibility check never differed from the game's.
+  Measured as above but 45 s after loading, 30 s windows, idle and then 25 s after 40 corruptrons (level 3) were sent
+  at the base; off and on alternate, three of each (the A/B switch was a temporary environment variable):
+
+  | | Off (3 runs) | On (3 runs) |
+  |---|---:|---:|
+  | `update: SharedFactionVision`, idle | 0.42 ms/frame, worst 9.1 ms | 0.03 ms/frame, worst 0.66 ms |
+  | `vision: AssignCollisionsFromFullGroup`, idle | 0.23 ms/call | 0.011 ms/call |
+  | `update: SharedFactionVision`, fight | 0.60 ms/frame, worst 8.5 ms | 0.05 ms/frame, worst 0.65 ms |
+  | Frames over 16 ms in 30 s (monitor off), idle | 142 | 57 |
+  | Frames over 16 ms in 30 s (monitor off), fight | 702 | 510 |
+
+  An earlier series of the same build (before the counters used for the second one were added, same code otherwise)
+  had two of its three on-runs at the off cost, with nothing logged to say why; the nine runs since (with the
+  counters) all pass over 95 % of the entries, with no cache dropped or rebuilt.
 - **Pallet animation on Unity's worker threads (`ProgressionOnWorkers`, `[Performance] ProgressionOnWorkers`):** the
   game stepped a storage's animator by hand (`Animator.Update`) every frame for a second after its content changed,
   0.41 ms a call on the main thread. The animator is now switched on for that time and Unity's animation pass works it
