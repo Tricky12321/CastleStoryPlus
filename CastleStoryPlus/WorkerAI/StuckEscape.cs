@@ -34,6 +34,10 @@ internal class StuckEscape : MonoBehaviour
 	// An escape not done by then is given up (looked at again later).
 	private const float EscapeSeconds = 180f;
 
+	// A SmartTransfer order that has left its worker standing idle for this long is stuck: a stockpile it cannot
+	// step up to leaves the task waiting for ever (the game has no timeout for a current task).
+	private const float StuckTransferSeconds = 10f;
+
 	private static readonly XYZ[] Sides = { new XYZ(1, 0, 0), new XYZ(-1, 0, 0), new XYZ(0, 0, 1), new XYZ(0, 0, -1) };
 
 	// Dig goals of an escape keep nothing: the blocks are broken without a drop.
@@ -61,6 +65,8 @@ internal class StuckEscape : MonoBehaviour
 
 	private float _nextCheck;
 
+	private float _nextStuckCheck;
+
 	private static void Enable()
 	{
 		Plugin.Root.AddComponent<StuckEscape>();
@@ -77,6 +83,11 @@ internal class StuckEscape : MonoBehaviour
 			return;
 		}
 		Advance();
+		if (Time.time >= _nextStuckCheck)
+		{
+			_nextStuckCheck = Time.time + 2f;
+			CancelStuckTransfers();
+		}
 		if (Time.time < _nextCheck)
 		{
 			return;
@@ -130,6 +141,36 @@ internal class StuckEscape : MonoBehaviour
 		escape.Blocks.AddRange(blocks);
 		_escapes[labor] = escape;
 		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " is shut in at " + start + " (" + pocket.Count + " places), digging " + blocks.Count + " blocks out to " + exit);
+	}
+
+	// SmartTransfer orders that have left their worker standing still for too long: the game's stockpile order has
+	// no timeout, and a stockpile no worker can step up to leaves the task current for ever.
+	private static void CancelStuckTransfers()
+	{
+		foreach (Labor labor in Live<Labor>.Active())
+		{
+			if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI)
+			{
+				continue;
+			}
+			Task task = labor.CurrentTask;
+			if (task == null || task.Description != "SmartTransfer" || labor.Activity != Activity.Idle)
+			{
+				continue;
+			}
+			if (Time.time - task.TaskStartedTimestamp < StuckTransferSeconds)
+			{
+				continue;
+			}
+			Locomotion4 locomotion = (labor.navigation != null) ? labor.navigation.Locomotion : null;
+			if (locomotion == null || !locomotion.IsInPlace())
+			{
+				continue;
+			}
+			Plugin.Log.LogInfo("StuckTransfer: " + labor.gameObject.name + " cancels its SmartTransfer order after " + (int)(Time.time - task.TaskStartedTimestamp) + " s standing idle");
+			labor.AbortWorkSignal.Invoke(TaskResult.ReceivedNewInstruction);
+			labor.PendingTask = null;
+		}
 	}
 
 	// The places reachable from the node, or null when there are more than MaxPocket (not shut in).

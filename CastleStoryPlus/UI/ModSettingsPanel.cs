@@ -381,6 +381,7 @@ end
 		AddKeyRow("Normal game speed", "GameSpeed", "NormalSpeedKey", string.Empty);
 		AddKeyRow("Second game speed", "GameSpeed", "Speed2Key", string.Empty);
 		AddKeyRow("Third game speed", "GameSpeed", "Speed3Key", string.Empty);
+		AddNote("A stuck SmartTransfer order ends by itself after 10 s standing idle.");
 
 		AddSection("FEATURES (APPLY AFTER A RESTART)");
 		List<ConfigEntry<bool>> switches = new List<ConfigEntry<bool>>(Plugin.FeatureSwitches);

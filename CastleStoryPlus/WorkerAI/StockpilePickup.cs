@@ -69,3 +69,44 @@ internal static class StockpilePickup
 		return labor.TakeSome(component, upTo);
 	}
 }
+
+// The game's SmartTransfer on a stockpile hands GoPickUp the stockpile object itself. Its RunToExactly then waits
+// for the worker to stand on an access cell of the whole stockpile and the task never ends (all selected workers
+// stand idle at it). Pick an item of the stockpile instead, as a normal right-click on an item does.
+[Feature(Features.StockpilePickup, Features.StockpilePickupInfo)]
+[HarmonyPatch(typeof(Labor), nameof(Labor.GetSmartTransferNode))]
+internal static class SmartTransferStockpilePatch
+{
+	private static bool Prefix(Labor __instance, GameObject o, bool alternateAction, ref Node __result)
+	{
+		if (o == null || __instance == null || __instance.recepteur == null)
+		{
+			return true;
+		}
+		Recepteur target = o.GetComponent<Recepteur>();
+		if (target == null || target.Fonction != FonctionDeContenant.entrepot || target.IsEmpty())
+		{
+			return true;
+		}
+		if (!__instance.recepteur.IsEmpty() && target.HasRoomForSomeOf(__instance.gameObject))
+		{
+			GameComponent storage = o.GetComponent<GameComponent>();
+			if (storage != null)
+			{
+				__result = __instance.GoStoreIn(storage);
+				return false;
+			}
+		}
+		GameObject item = target.FirstThatFitsIn(__instance.recepteur);
+		if (item != null)
+		{
+			GameComponent component = item.GetComponent<GameComponent>();
+			if (component != null)
+			{
+				__result = __instance.GoPickUp(component, -1);
+				return false;
+			}
+		}
+		return true;
+	}
+}
