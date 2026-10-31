@@ -177,21 +177,29 @@ internal static class JobBoard
 		bool storage = worker.StorageFailure;
 		worker.Asking = false;
 		worker.StorageFailure = false;
-		string type = project.GetType().Name;
+		// The counts' names are only put together while the performance window measures: each is a new string.
+		bool counting = FrameMonitor.Detailed;
+		string type = counting ? project.GetType().Name : null;
 		if (error == null)
 		{
 			worker.Memos.Remove(project);
-			Count("jobboard: success");
-			Count("jobboard: success " + type);
-			if (wouldSkip)
+			if (counting)
 			{
-				Count("jobboard: false skip");
-				Count("jobboard: false skip " + type);
+				Count("jobboard: success");
+				Count("jobboard: success " + type);
+				if (wouldSkip)
+				{
+					Count("jobboard: false skip");
+					Count("jobboard: false skip " + type);
+				}
 			}
 			return;
 		}
-		Count("jobboard: fail " + type);
-		Count("jobboard: fail reason " + error.GetType().Name);
+		if (counting)
+		{
+			Count("jobboard: fail " + type);
+			Count("jobboard: fail reason " + error.GetType().Name);
+		}
 		if (error is Exceptions.WorkFailedException failed && failed.Problem != null && IsStorageThought(failed.Problem.thought))
 		{
 			storage = true;
