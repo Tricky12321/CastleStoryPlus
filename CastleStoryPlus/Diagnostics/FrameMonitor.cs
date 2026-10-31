@@ -459,6 +459,11 @@ internal static class FrameMonitor
 		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.KnowledgeExcluder", "knowledge: excluder.", "AreExclusive");
 		AddMethods(methods, "Brix.Game.AI.GoalSelector", "goals: ", "ProcessGoalAndReturnIsBest");
 		AddMethods(methods, "Brix.Game.AI.SearchPathRequest", "path: ", "Work", "LoopImprovePath");
+		// The parts of a route search outside the budgeted slices, each run once per search in a single tick: setting
+		// the start and target up, turning the coarse route into a fine one (PathUnroll, its local searches run to the
+		// end), the scan of every visited node after a failed search, and copying the route out.
+		AddMethods(methods, "Brix.Game.AI.SearchPathRequest", "path: ", "InitOrginAndDestination", "InitSearch", "ConcludeSearch", "get_VisitedInvalidNodes");
+		AddMethods(methods, "Brix.Game.AI.Navigation+NavigateOrderData", "path: ", "CopyResultLocally");
 		AddMethods(methods, "Brix.Game.Network.GameObjectSerializer", "save: ", "GetJsonGameState");
 		// UNet's per-frame pass over every networked object for changes to send (NetworkCallbacks.LateUpdate).
 		AddMethods(methods, "UnityEngine.Networking.NetworkServer", "net: ", "UpdateServerObjects");

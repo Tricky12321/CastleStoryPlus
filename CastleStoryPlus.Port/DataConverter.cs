@@ -12,13 +12,16 @@ namespace CastleStoryPlus.Port;
 public static class DataConverter
 {
 	public const string CatalogName = "catalog.txt";
+	// The graphics APIs the converted shaders have programs for, a line each (Unity's GraphicsDeviceType names:
+	// OpenGLCore, Vulkan, Direct3D11). Vulkan only when every shader has its Vulkan programs.
+	public const string GraphicsName = "graphics.txt";
 
 	// engineTypes: the player's engine-types.assets, for converting the shaders to the player's format.
 	public static void ConvertAll(string classPackage, string dataDir, string outDir, Action<string> log, string engineTypes = null)
 	{
 		Directory.CreateDirectory(outDir);
 		// A fresh conversion: bundles of an earlier one (perhaps of another layout) must not linger.
-		foreach (string old in Directory.GetFiles(outDir, "*.bundle").Concat(Directory.GetFiles(outDir, CatalogName)))
+		foreach (string old in Directory.GetFiles(outDir, "*.bundle").Concat(Directory.GetFiles(outDir, CatalogName)).Concat(Directory.GetFiles(outDir, GraphicsName)))
 		{
 			File.Delete(old);
 		}
@@ -65,11 +68,19 @@ public static class DataConverter
 			File.WriteAllLines(Path.Combine(outDir, CatalogName), catalog);
 			if (converter.Shaders != null)
 			{
-				log("shaders: " + converter.Shaders.Converted + " converted, " + converter.Shaders.WithoutPrograms + " without programs for the player's graphics API");
-				foreach (string line in converter.Shaders.Report.Distinct())
+				ShaderConverter shaders = converter.Shaders;
+				log("shaders: " + shaders.Converted + " converted, " + shaders.WithoutPrograms + " without programs for the player's graphics API");
+				foreach (string line in shaders.Report.Distinct())
 				{
 					log("  " + line);
 				}
+				List<string> apis = shaders.GraphicsApis.ToList();
+				if (shaders.Platforms.Contains((uint)ShaderConverter.VulkanPlatform) && !apis.Contains("Vulkan"))
+				{
+					log("graphics: Vulkan left out, " + shaders.VulkanFallbacks.Count + " shaders have no Vulkan programs (" + string.Join(", ", shaders.VulkanFallbacks) + ")");
+				}
+				log("graphics: " + string.Join(", ", apis));
+				File.WriteAllLines(Path.Combine(outDir, GraphicsName), apis);
 			}
 		}
 	}

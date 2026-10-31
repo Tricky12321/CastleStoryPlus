@@ -68,9 +68,8 @@ namespace CastleStoryPlus.Player.Editor
 			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"), BuildOptions.Development);
 		}
 
-		// Experiment: a Linux player that has Vulkan as well as OpenGL Core, in Build/VulkanTest/Linux (an empty folder each
-		// time). Its engine-types.assets then holds our shader compiled for Vulkan too, which the installer takes the
-		// Vulkan program format from (CSP_VULKAN=1). The project goes back to OpenGL Core only afterwards.
+		// A Linux player with Vulkan first (the default when no API is forced), in Build/VulkanTest/Linux (an empty folder
+		// each time), for testing Vulkan without the mod. The project goes back to its normal list afterwards.
 		public static void VulkanTestLinux()
 		{
 			string dir = Path.Combine("Build", "VulkanTest", "Linux");
@@ -134,9 +133,11 @@ namespace CastleStoryPlus.Player.Editor
 			PlayerSettings.SetScriptingBackend(standalone, ScriptingImplementation.Mono2x);
 			PlayerSettings.SetApiCompatibilityLevel(standalone, ApiCompatibilityLevel.NET_Unity_4_8);
 			PlayerSettings.SetManagedStrippingLevel(standalone, ManagedStrippingLevel.Disabled);
-			// OpenGL Core: the game's shaders are GLSL, which this backend takes as they are.
+			// OpenGL Core first (the default): the game's shaders are GLSL, which this backend takes as they are. Vulkan as
+			// well, chosen with -force-vulkan ([Graphics] Renderer in the mod): the installer converts the shaders for both
+			// (5.6's SPIR-V, or the GLSL rewritten and compiled), and the player's own shader gives the Vulkan format.
 			PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneLinux64, false);
-			PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneLinux64, new[] { GraphicsDeviceType.OpenGLCore });
+			PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneLinux64, new[] { GraphicsDeviceType.OpenGLCore, GraphicsDeviceType.Vulkan });
 			// Direct3D 11: the game's Windows shaders are DXBC for it (the other one, Direct3D 9, Unity 6 dropped).
 			PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneWindows64, false);
 			PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneWindows64, new[] { GraphicsDeviceType.Direct3D11 });

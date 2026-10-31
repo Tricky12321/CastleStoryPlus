@@ -297,7 +297,7 @@ internal static class Program
 			case "glsl-vulkan":
 				{
 					// glsl-vulkan <file or folder of .glsl> [out dir]: a 5.6 OpenGL Core program (as the blob command's GL
-					// entries hold it) rewritten for Vulkan and compiled, as the installer does with CSP_VULKAN=1; the
+					// entries hold it) rewritten for Vulkan and compiled, as the installer does for a Vulkan player; the
 					// Vulkan GLSL goes to the out dir
 					var files = Directory.Exists(args[1]) ? Directory.GetFiles(args[1], "*.glsl").OrderBy(f => f, StringComparer.Ordinal).ToArray() : new[] { args[1] };
 					int failed = 0;

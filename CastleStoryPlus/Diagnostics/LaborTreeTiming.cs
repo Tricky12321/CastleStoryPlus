@@ -16,7 +16,8 @@ namespace CastleStoryPlus.Diagnostics;
 // instruction's name. What "fixed: Labor" has beyond the five is the tree's root itself.
 // Only the root's own parallel node is timed (the first one a worker's tick runs); the others inside the work are
 // part of their sequence. The root's loop is run here as the game runs it (ParallelSequencer.AllDone), with a clock
-// read around each sequence. Timed on its own, not on FrameMonitor's stack, like LuaFunctionTiming.
+// read around each sequence. Timed on its own, not on FrameMonitor's stack, like LuaFunctionTiming. With
+// [Performance] MeasureAllocations each sequence and kind of work is also charged what it allocated.
 internal static class LaborTreeTiming
 {
 	// Labor.Initialize adds its sequences in this order.
@@ -76,6 +77,9 @@ internal static class LaborTreeTiming
 		{
 			NodeRun nodeRun = runs[i];
 			Task task = (named && i == 0) ? labor.CurrentTask : null;
+			bool allocations = FrameMonitor.Allocations;
+			int gcs = allocations ? GC.CollectionCount(0) : 0;
+			long used = allocations ? GC.GetTotalMemory(false) : 0L;
 			long start = Stopwatch.GetTimestamp();
 			NodeState state;
 			try
@@ -85,10 +89,12 @@ internal static class LaborTreeTiming
 			finally
 			{
 				long ticks = Stopwatch.GetTimestamp() - start;
-				Charge(named ? Sequences[i] : OtherSequence(i), ticks);
+				// What the sequence allocated, as FrameMonitor measures it (a call with a collection inside is left out).
+				long bytes = (allocations && GC.CollectionCount(0) == gcs) ? GC.GetTotalMemory(false) - used : 0L;
+				Charge(named ? Sequences[i] : OtherSequence(i), ticks, bytes);
 				if (task != null)
 				{
-					Charge(WorkBucket(task), ticks);
+					Charge(WorkBucket(task), ticks, bytes);
 				}
 			}
 			if (state != NodeState.Running)
@@ -107,12 +113,16 @@ internal static class LaborTreeTiming
 		return false;
 	}
 
-	private static void Charge(FrameMonitor.Bucket bucket, long ticks)
+	private static void Charge(FrameMonitor.Bucket bucket, long ticks, long bytes)
 	{
 		if (bucket != null)
 		{
 			bucket.FrameTicks += ticks;
 			bucket.FrameCalls++;
+			if (bytes > 0)
+			{
+				bucket.FrameBytes += bytes;
+			}
 		}
 	}
 

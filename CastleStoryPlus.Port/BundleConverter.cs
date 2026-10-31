@@ -186,6 +186,7 @@ public sealed class BundleConverter : IDisposable
 				preload.Add((pptr["m_FileID"].AsInt, pptr["m_PathID"].AsLong));
 			}
 		}
+		RemoveMissingScripts(level);
 		Prepare(level, scenes, mount, mount);
 		Prepare(shared, scenes, mount, sharedInner);
 		preload.AddRange(SceneReferences(level, shared, ArchivePath(sharedName, scenes)).Where(r => !preload.Contains(r)));
@@ -369,6 +370,42 @@ public sealed class BundleConverter : IDisposable
 			ScriptTypeIndex = info.ScriptTypeIndex,
 			Replacer = new ContentReplacerFromBuffer(field.WriteToByteArray()),
 		});
+	}
+
+	// Components whose script the game's own build had already lost: a MonoBehaviour with a null m_Script and no fields
+	// (the factory templates StorageLocator, Construction, Lumber, Mine, Repair, ... and a few objects in the menus). The
+	// 5.6 player warned about them too ("The referenced script on this Behaviour ... is missing!"); each load and each
+	// Instantiate of their object logs it again, with a stack trace. They do nothing (no class, so nothing can get them;
+	// the game skips null components), so the scene leaves them out and their game objects no longer list them. Only in
+	// the scene file: nothing outside a scene can point at its objects, so no other file or preload list is affected.
+	private void RemoveMissingScripts(AssetsFileInstance inst)
+	{
+		AssetsFile file = inst.file;
+		var removed = new HashSet<long>();
+		foreach (AssetFileInfo info in file.GetAssetsOfType(AssetClassID.MonoBehaviour).ToList())
+		{
+			AssetTypeValueField script = manager.GetBaseField(inst, info, AssetReadFlags.SkipMonoBehaviourFields)["m_Script"];
+			if (script["m_FileID"].AsInt == 0 && script["m_PathID"].AsLong == 0)
+			{
+				removed.Add(info.PathId);
+				file.Metadata.RemoveAssetInfo(info);
+			}
+		}
+		if (removed.Count == 0)
+		{
+			return;
+		}
+		foreach (AssetFileInfo info in file.GetAssetsOfType(AssetClassID.GameObject))
+		{
+			AssetTypeValueField field = manager.GetBaseField(inst, info);
+			List<AssetTypeValueField> components = field["m_Component"]["Array"].Children;
+			int count = components.Count;
+			components.RemoveAll(pair => pair["component"]["m_FileID"].AsInt == 0 && removed.Contains(pair["component"]["m_PathID"].AsLong));
+			if (components.Count != count)
+			{
+				info.SetNewData(field);
+			}
+		}
 	}
 
 	private static void RemovePreloadData(AssetsFile file)

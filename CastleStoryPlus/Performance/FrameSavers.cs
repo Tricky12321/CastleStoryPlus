@@ -242,13 +242,13 @@ internal static class FrameSaversOverheadSortPatch
 		{
 			return false;
 		}
-		Camera camera = Camera.main;
+		// The camera's position is read once per frame (OverheadDistance).
 		Transform pivot = __instance.pivot;
-		if (camera == null || pivot == null)
+		if (pivot == null || !OverheadDistance.CameraPosition(out Vector3 camera))
 		{
 			return false;
 		}
-		int order = -(int)Mathf.Abs(Vector3.Distance(pivot.position, camera.transform.position));
+		int order = -(int)Mathf.Abs(Vector3.Distance(pivot.position, camera));
 		if (canvas.sortingOrder != order)
 		{
 			canvas.sortingOrder = order;
