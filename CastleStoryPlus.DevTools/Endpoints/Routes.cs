@@ -24,6 +24,9 @@ internal static class Routes
 		DiagnosticsEndpoints.Add(routes);
 		PathEndpoints.Add(routes);
 		PathStatsEndpoints.Add(routes);
+#if UNITY6_PLAYER
+		NavMeshEndpoints.Add(routes);
+#endif
 		FrameEndpoints.Add(routes);
 		FramePhaseEndpoints.Add(routes);
 		BenchmarkEndpoints.Add(routes);

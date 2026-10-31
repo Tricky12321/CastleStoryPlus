@@ -170,6 +170,7 @@ New blocks, new buildings and faster ways to build.
 |---|---|
 | Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, and a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it. | `Pathfinding` |
 | Bricktrons walk through each other (allies never block a path; enemies still do), and a bricktron in a doorway no longer makes the area behind it unreachable. | `PassThroughAllies` |
+| Experiment, Unity 6 port only, off by default: Unity's navigation mesh is built from the route graph on Unity's worker threads and kept up to date when the terrain changes, to measure it against the game's route search ([NavMesh](NavMesh.md)); nothing walks by it yet (`[Pathfinding] NavMeshExperiment`). | `Pathfinding` |
 
 ## UI
 

@@ -269,6 +269,11 @@ Mono 2.6 workarounds of `CastleStoryPlus.Bootstrap`.
   `DuplicateEventSystemFix` (`Core/NestedCanvasFix.cs`) now runs in the player too: the game scene has two
   EventSystems, and the second is switched off.
 
+## Navigation mesh experiment
+
+`[Pathfinding] NavMeshExperiment` (off by default) builds Unity's navigation mesh from the game's route graph on
+Unity's worker threads and keeps it up to date, to measure it against the game's A\*; see [NavMesh](NavMesh.md).
+
 ## Not done yet
 
 - **Compute shader:** the game's one compute shader (`EyeHistogram`) loads with its kernel, but it has not been seen
