@@ -3,7 +3,7 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
-## Unreleased
+## 0.7.0 — 2026-11-01
 
 - [ADD] **All settings in the game:** Castle Story Plus settings has an "All settings" button that opens every value of the mod's config file, by section, with a search over names and descriptions and the description of the value under the mouse. Switches toggle, enums and lists of accepted values step through their choices, keys take the next key pressed, numbers have -/+ (a step that fits the value's range or size) and a field, other values a text field; every change is saved at once. Values of a feature that is off are shown as the text in the file and apply when the feature runs.
 - [ADD] **DevTools:** `POST /api/ui/click?text=` clicks a shown button of the mod's windows by its label (in reading order on the screen with `index`).
