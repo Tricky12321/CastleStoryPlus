@@ -169,6 +169,7 @@ New blocks, new buildings and faster ways to build.
 | Feature | Switch |
 |---|---|
 | Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, and a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it. | `Pathfinding` |
+| Bricktrons walk straight lines across flat open ground instead of a voxel-by-voxel staircase: runs of plain flat steps of a route are pulled tight onto a straight line where the line, and the ground beside it the body brushes, is free and level (climbs, stairs, ladders, doors and forest stay as the search found them). Switch off with `[Pathfinding] StraightPaths`. | `Pathfinding` |
 | Bricktrons walk through each other (allies never block a path; enemies still do), and a bricktron in a doorway no longer makes the area behind it unreachable. | `PassThroughAllies` |
 
 ## UI

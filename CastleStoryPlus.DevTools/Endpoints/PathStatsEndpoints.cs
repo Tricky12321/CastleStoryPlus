@@ -23,6 +23,7 @@ internal static class PathStatsEndpoints
 	private static object Reset(ApiRequest request)
 	{
 		PathStats.Reset();
+		CastleStoryPlus.Pathfinding.StraightPaths.ResetStats();
 		return Obj("reset", true);
 	}
 
@@ -59,10 +60,28 @@ internal static class PathStatsEndpoints
 			"distance", Spread(ended.Select((PathStats.Record r) => (double)r.Distance)),
 			"lengthPerDistance", Spread(ended.Where((PathStats.Record r) => r.Distance > 0 && r.Length > 0).Select((PathStats.Record r) => (double)r.Length / r.Distance)),
 			"repeats", Repeats(records),
+			"straight", Straight(),
 			"targets", records.GroupBy((PathStats.Record r) => r.Target).OrderByDescending((IGrouping<string, PathStats.Record> g) => g.Count()).Take(top).Select((IGrouping<string, PathStats.Record> g) => Obj("target", g.Key, "count", g.Count(), "avgMs", Round((float)g.Average((PathStats.Record r) => r.Milliseconds)), "avgCoarse", Round((float)g.Average((PathStats.Record r) => r.Coarse)))).ToList(),
 			"targetCells", records.GroupBy((PathStats.Record r) => PathStats.CellKey(r.To)).OrderByDescending((IGrouping<string, PathStats.Record> g) => g.Count()).Take(top).Select((IGrouping<string, PathStats.Record> g) => Obj("cell", g.Key, "count", g.Count(), "targets", g.Select((PathStats.Record r) => r.Target).Distinct().Take(3).ToList())).ToList(),
 			"pairs", records.GroupBy(PairKey).OrderByDescending((IGrouping<string, PathStats.Record> g) => g.Count()).Take(top).Select((IGrouping<string, PathStats.Record> g) => Obj("pair", g.Key, "count", g.Count(), "target", g.First().Target)).ToList(),
 			"recent", PathStats.Recent.Where((PathStats.Record r) => side == null || r.Enemy == (side == "true")).Reverse().Take(request.Int("recent", 20)).Select(RecordJson).ToList());
+	}
+
+	// Routes pulled tight into straight lines (StraightPaths) since the last reset.
+	private static object Straight()
+	{
+		return Obj(
+			"routes", CastleStoryPlus.Pathfinding.StraightPaths.Routes,
+			"routesPulled", CastleStoryPlus.Pathfinding.StraightPaths.RoutesPulled,
+			"runs", CastleStoryPlus.Pathfinding.StraightPaths.RunsPulled,
+			"voxelsReplaced", CastleStoryPlus.Pathfinding.StraightPaths.VoxelsReplaced,
+			"steeredFrames", CastleStoryPlus.Pathfinding.StraightPaths.Steered,
+			"walksBlocked", CastleStoryPlus.Pathfinding.StraightPaths.Blocked,
+			"walksBlockedOnRun", CastleStoryPlus.Pathfinding.StraightPaths.BlockedOnLine,
+			"trackedNodes", CastleStoryPlus.Pathfinding.StraightPaths.TrackedNodes,
+			"totalMs", Round((float)CastleStoryPlus.Pathfinding.StraightPaths.Milliseconds),
+			"steerMs", Round((float)CastleStoryPlus.Pathfinding.StraightPaths.SteerMilliseconds),
+			"perRouteMs", (CastleStoryPlus.Pathfinding.StraightPaths.Routes > 0) ? (float)(CastleStoryPlus.Pathfinding.StraightPaths.Milliseconds / CastleStoryPlus.Pathfinding.StraightPaths.Routes) : 0f);
 	}
 
 	private static string PairKey(PathStats.Record r)
