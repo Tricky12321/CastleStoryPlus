@@ -1,9 +1,9 @@
-# Unity navigation mesh (experiment)
+# Unity navigation mesh
 
 Whether Unity's own navigation mesh (`UnityEngine.AI`: Recast tiles built on Unity's worker threads, Detour queries
 in native code) could take over the game's route search, which runs on the main thread over some 135 000 voxel
-places. Unity 6 port only, off by default: `[Pathfinding] NavMeshExperiment = true` builds it when a game is loaded,
-or `POST /api/navmesh/start` at any time. With `[Pathfinding] NavMeshRoutes = true` as well (off by default) the
+places. Unity 6 port only, on by default: `[Pathfinding] NavMeshExperiment` builds it when a game is loaded (or
+`POST /api/navmesh/start` at any time), and `[Pathfinding] NavMeshRoutes` (also on by default) routes the
 player's own units are routed over it (see [Routes for the player's units](#routes-for-the-players-units-navmeshroutes));
 DevTools measures it against the game's A\*.
 
@@ -102,7 +102,7 @@ a change elsewhere). `/api/path/stats` counts a search the mesh routed as outcom
 
 ## Routes for the player's units (NavMeshRoutes)
 
-`[Pathfinding] NavMeshRoutes` (off by default; needs `NavMeshExperiment`): the route searches of the player's own
+`[Pathfinding] NavMeshRoutes` (on by default; needs `NavMeshExperiment`): the route searches of the player's own
 units are answered by the mesh, and the game's A\* stays for enemies and as the fallback.
 
 - **Which searches.** A `SearchPathRequest` of a unit whose faction is not the AI's, that does not break its way
@@ -201,7 +201,10 @@ times faster per route, with routes about a fifth shorter and straight, while it
 costs the main thread about 3 ms a frame for half a second when built from scratch and about 1 ms per change.
 
 With `NavMeshRoutes` the player's units get their routes in 2 frames instead of 6 to 14 (median), the search CPU of a
-one-faction base drops by 80 to 90%, and in the runs above no unit got stuck and as many worked. It stays off by
-default until it has run in longer games: 3 to 21% of the requests still go to the A\* (full stockpile fields,
-unreachable targets), a door's locked state is not in the mesh, and in an enemy-heavy world the enemies' searches,
-which keep the A\*, are most of the cost.
+one-faction base drops by 80 to 90%, and in the runs above no unit got stuck and as many worked. Both switches are on
+by default since 31-10-2026. On the Benchmark save (6 runs of 4 minutes, OpenGL Core and Vulkan) 91 to 95% of the
+requests were routed by the mesh and the search CPU fell from 3.5 s to 0.5 s per run, while the frame rate stayed the
+same within the runs' spread (OpenGL 1x 170 and 169 fps with routes against 177 and 170 without): the game's A\* was
+already spread over many frames, about 0.14 ms a frame. Still open: 3 to 21% of the requests go to the A\* (full
+stockpile fields, unreachable targets), a door's locked state is not in the mesh, and in an enemy-heavy world the
+enemies' searches, which keep the A\*, are most of the cost.

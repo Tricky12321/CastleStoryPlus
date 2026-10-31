@@ -280,7 +280,7 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	private static void Enable()
 	{
-		Enabled = Plugin.Cfg.Bind("Pathfinding", "NavMeshExperiment", false, "Experiment, Unity 6 port only: builds Unity's navigation mesh from the route graph next to it and keeps it up to date, to measure it against the game's route search (DevTools: /api/navmesh). Nothing walks by it.");
+		Enabled = Plugin.Cfg.Bind("Pathfinding", "NavMeshExperiment", true, "Unity 6 port only: builds Unity's navigation mesh from the route graph next to it and keeps it up to date; NavMeshRoutes routes the player's units over it (DevTools: /api/navmesh).");
 		GameSession.OnLeave(Leave);
 		Plugin.Root.AddComponent<NavMeshExperiment>();
 		Active = Enabled.Value;
