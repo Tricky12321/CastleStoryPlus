@@ -3,10 +3,13 @@
 Whether Unity's own navigation mesh (`UnityEngine.AI`: Recast tiles built on Unity's worker threads, Detour queries
 in native code) could take over the game's route search, which runs on the main thread over some 135 000 voxel
 places. Unity 6 port only, off by default: `[Pathfinding] NavMeshExperiment = true` builds it when a game is loaded,
-or `POST /api/navmesh/start` at any time. Nothing walks by it yet; DevTools measures it against the game's A\*.
+or `POST /api/navmesh/start` at any time. With `[Pathfinding] NavMeshRoutes = true` as well (off by default) the
+player's own units are routed over it (see [Routes for the player's units](#routes-for-the-players-units-navmeshroutes));
+DevTools measures it against the game's A\*.
 
-Code: `CastleStoryPlus/Pathfinding/NavMeshExperiment.cs` (`#if UNITY6_PLAYER`) and
-`CastleStoryPlus.DevTools/Endpoints/NavMeshEndpoints.cs`.
+Code: `CastleStoryPlus/Pathfinding/NavMeshExperiment.cs`, `CastleStoryPlus/Pathfinding/NavMeshRoutes.cs` (both
+`#if UNITY6_PLAYER`), `CastleStoryPlus.DevTools/Endpoints/NavMeshEndpoints.cs` and
+`CastleStoryPlus.DevTools/Tests/NavMeshRouteTests.cs`.
 
 ## How it is built
 
@@ -21,7 +24,20 @@ Code: `CastleStoryPlus/Pathfinding/NavMeshExperiment.cs` (`#if UNITY6_PLAYER`) a
   block, kept by the graph only for breaking into it and for walking off it; its top as a floor let routes onto
   blocks under a low ceiling (the place to stand on a block is the empty voxel above it).
 - **Areas** (Unity has 32 per agent): 0 ground, 3 near trees (the game's `Forest` branches), 4 climb, 5 step down, 6
-  ladder, 7 ground under a building's obstacle, 8 ground under a door (an obstacle some units pass).
+  ladder, 8 a stockpile's pallets, 9 to 31 ground under a door, one area per faction that owns doors.
+  - Ground under a building (an obstacle with the null pass-through, which no unit's search crosses) is left out of
+    the mesh. As an area of its own (7) it bordered the walkable ground with no agent radius in between, so routes
+    ran along a building's very edge and, on the voxels, through its first row.
+  - Doors (`Porte`): the game lets a unit through a door that is open, or not locked and of an allied or neutral
+    faction (`Porte.CanPassThrough`; enemies that break their way may search through any). The mesh keeps one area
+    per door-owning faction (given out as doors are met, 23 at most; more are left out like buildings), and a
+    unit's filter takes the door areas of the factions that are its friends (`Affiliation.IsAlliedOrNeutral`).
+    Whether a door is locked or held shut is not in the mesh: the route's voxels are checked against the door by the
+    unit's own branch evaluator, which asks the door, and a route through a door it may not pass is left to the A\*.
+  - Pallets (`PassThroughStockpile`) are walkable only while empty, and nothing signals when that changes, so they
+    are an area with cost 3 (routes keep off them where they can) and a route over a full one is mended on the graph
+    or left to the A\*.
+  - Other obstacles everybody passes (a plain `PassThroughObstacle`) are ground.
 - **Links** for the graph's `Climbing`, `StepDown` and `Ladder` branches, one-way between the two places' top
   centres, cost = the game's weight / 10 per metre (a flat step is 10). A ladder block's place (a 1 x 1 floor 1 block
   above the next) is dropped by Recast as a ledge on every side, so a run of ladder places becomes one link from each
@@ -32,9 +48,16 @@ Code: `CastleStoryPlus/Pathfinding/NavMeshExperiment.cs` (`#if UNITY6_PLAYER`) a
   within 2 blocks (the graph rebuilds branches one further). Once no build runs, those chunks get new meshes and
   links, and `UpdateNavMeshDataAsync` rebuilds the tiles over them (`preserveTilesOutsideBounds`), with the sources of
   the chunks round them.
+  - Obstacles change without a graph rebuild: a building, door or other volume placed, built (a blueprint becoming
+    a building registers its volume again) or removed only changes its places' obstacle counts. Every volume
+    registered or unregistered (`VolumeRegistrator.RegisterVolume`, `UnregisterVolume_Internal`) marks the chunks
+    of its obstacle voxels.
+  - Links reach out of their chunk (a climb onto the next chunk, a ladder up a whole wall). Each chunk keeps the
+    chunks its links pass through; when one of those changes, the owner's links are made again too (without new
+    meshes), so a ladder whose top changed no longer keeps a stale link at its bottom.
 - **Queries:** `NavMesh.SamplePosition` at both ends (1 block), then `NavMesh.CalculatePath` with a filter from the
   unit's rules, as the game's `BranchEvaluator` has them: climb and ladder links only for units that may climb,
-  forest only for units that walk in forest, doors only for player units, building ground never by default.
+  forest only for units that walk in forest, the door areas of the unit's friends, pallets at their cost.
 
 ## Measured (31-10-2026)
 
@@ -69,49 +92,116 @@ under a ceiling), doors (an area of their own; before that every route through a
 | `POST /api/navmesh/stop` | removes it |
 | `GET /api/navmesh/path?to=&from=&unit=&enemy=&obstacles=&shortest=&nodes=` | one route over the mesh next to the game's A\* (and with `shortest=true` the whole graph's answer): time, length, corners |
 | `GET /api/navmesh/bench?count=&radius=&seed=&unit=&enemy=&obstacles=&samples=` | random pairs of places round the bricktron, one pair a frame: the three answers, times, lengths, agreement, and the pairs they disagree on |
+| `POST /api/navmesh/routes?enabled=&reset=` | switches `NavMeshRoutes` on or off for the session and/or zeroes its counters; answers with them |
 
-## What is missing before anything walks by it
+`GET /api/navmesh` also has `routes` (the routes made over the mesh: attempts, routed, fallbacks and why, time per
+route, voxels per route, stretches mended, climbs, steps down and ladders taken, the last 40 fallbacks) and, under
+`updates`, `volumeMarks` (volumes registered or removed) and `relinkedChunks` (chunks whose links were made again for
+a change elsewhere). `/api/path/stats` counts a search the mesh routed as outcome `navmesh`. In-game tests
+`NavMeshRouteTests` (a walk routed by the mesh, a wall built across the way, a ledge climbed).
 
-- **Obstacles that change without a terrain signal.** Buildings and doors register their volumes
-  (`TestPathfinding.RegisterVolume`/`UnregisterVolume`) without a graph rebuild; their chunks must be marked too.
-  Units on a voxel (`VProperty.character`) are ignored, as `PassThroughAllies` lets allies walk through each other.
-- **Doors of several factions.** One area marks every door; a door that lets only its own faction through needs an
-  area per faction (Unity has 32 areas) or the other factions' doors as a high query cost.
+## Routes for the player's units (NavMeshRoutes)
+
+`[Pathfinding] NavMeshRoutes` (off by default; needs `NavMeshExperiment`): the route searches of the player's own
+units are answered by the mesh, and the game's A\* stays for enemies and as the fallback.
+
+- **Which searches.** A `SearchPathRequest` of a unit whose faction is not the AI's, that does not break its way
+  (`CanBreakVoxels`) and does not search away from something (`SearchAway`). The request is set up as usual
+  (`InitSearch`); its first slice (`Work`, after the frame budget and the DevTools measurement) asks the mesh.
+- **Goal.** The places of the graph round the target where the game's own search would stop
+  (`Location.TargetReached`: an access voxel of a building, the voxel itself, a voxel next to a unit), in the same
+  bounds as the A\*'s goal (the object's volume and one voxel round it), nearest to the unit first; a route is asked
+  to up to 5 of them.
+- **Corners to voxels.** `CalculatePath` gives corners; each stretch between two corners becomes the voxels a
+  straight line passes through (4-connected), each reached by a branch of the graph from the one before, at the height
+  the mesh has there, and one the unit's own `BranchEvaluator` accepts (branch types it may use, doors it may pass,
+  units in the way). A line that cuts a corner closely goes round it through the other voxel beside it. A corner
+  where the route bends is moved 0.15 block away from the bend first: where two areas meet (forest, a pallet, a door
+  of a foe) Unity keeps no distance from the border, and the line along it ran through the voxels on the far side as
+  often as not. A pair of corners that is one of the mesh's links becomes that branch of the graph (climbing,
+  stepping down) or the run of ladder branches to the exit (a search over ladder branches only).
+- **Mending.** Where the line is blocked (a full pallet, a unit, a door the unit may not pass) the shortest way over
+  the graph to a voxel of the line up to 16 further on is searched, within 10 blocks and 400 places, by the unit's
+  rules. Only when that fails is the request left to the A\*.
+- **Result.** The voxels up to the first one that reaches the target become the search's result, a chain of the
+  graph's own links (`PathLink`, the result accepter's `Result`), and the search is done; the finer search
+  (`LoopImprovePath`) is skipped. The rest is the game's: `PathLodUnroller` unrolls it (nothing to unroll at the
+  finest level), `PathUnroll` checks it, `StraightPaths` pulls it straight and `Locomotion4` walks it.
+- **Fallback.** No route on the mesh, a goal or origin off the mesh, a voxel with no branch, a link gone stale, a
+  blocked line with no way round: the request goes on as the game's A\* search, as if nothing had happened.
+
+### Measured (31-10-2026)
+
+Unity 6 port player (OpenGL Core, release), A/B windows of 150 s on one running game, `NavMeshRoutes` switched
+between windows, another test player running on the same machine (frame rates are noisy).
+
+Benchmark save (one faction, 41 bricktrons, digging, building, a stockpile field, 7 gates, ladders):
+
+| | routes off (2 windows) | routes on (2 windows) |
+|---|---|---|
+| route searches | 290, 335 | 337, 349 |
+| search CPU on the main thread | 2.59 s, 2.63 s | 0.57 s, 0.22 s |
+| CPU per search (mean / p95) | 8.9 / 37 ms, 7.9 / 40 ms | 1.7 / 17 ms, 0.6 / 1.2 ms |
+| frames until the route is there (p50 / p95) | 14 / 266, 6 / 275 | 2 / 109, 2 / 2 |
+| routed by the mesh | | 305 of 337 (9.5% to the A\*), 338 of 349 (3.2%) |
+| mesh route time (mean / worst) | | 0.32 / 2.0 ms, 0.29 / 1.6 ms |
+| route length per distance (mean) | 1.37, 1.29 | 1.19, 1.22 |
+| stuck units (walking 20 s without moving a voxel) | 0, 0 | 0, 0 |
+| units waiting or without a task (share of samples) | 0.578, 0.574 | 0.585, 0.579 |
+| walks the game found blocked | 42, 44 | 33, 58 |
+
+Another session on the same save: of 380 mesh routes 356 were routed (6.3% to the A\*), with 324 climbs, 175 steps
+down and 99 ladder runs taken; the in-game tests `StraightPathTests` (pillar, wall built on the line, pit dug on the
+line) and `PathfindingTests.DetourAroundWall` passed with the mesh routing.
+
+70-unit world (140 units in all, 70 of them an enemy army whose searches stay with the A\*):
+
+| | routes off | routes on |
+|---|---|---|
+| route searches (player side / enemies) | about 1 200 to 1 400 / 3 500 | 1 351 / 3 556 |
+| routed by the mesh | | 1 038 of 1 312 (21% to the A\*) |
+| main-thread search CPU (all) | 27.5 s, 30.1 s | 28.4 s, 30.1 s |
+| stuck units | 0, 0 | 0, 0 |
+
+Here the enemies' searches are three quarters of the search CPU, and of the player side's fallbacks nearly all were
+"no route on the mesh" for targets the A\* did not reach either (its search ran on and was abandoned: 216 searches,
+most of the player side's remaining 9.3 s). Frame times went up and down with the machine's load in both modes (in
+4 windows of 60 s: 28.7 and 25.9 fps off, 24.5 and 28.1 on; 1% lows 10.8 and 9.6 off, 15.5 and 16.5 on); no frame
+cost of the routing itself shows in the frame's systems.
+
+Mesh updates while the game runs (both saves): 0.9 ms main thread per update (3.2 ms worst), 25 to 60 ms from the
+graph's change to the new tiles (190 ms worst on the big world).
+
+## What is missing
+
+- **Doors' state.** A locked door, or one held shut (`ForceClose`), is still its faction's door area; a route
+  through it is refused at the voxels and mended or left to the A\*. Lock changes could mark the door's chunk (a
+  closed-door area), so the mesh routes round it.
+- **Pallets.** Whether a pallet is empty is not in the mesh (no signal); a route over a full stockpile field with no
+  way round within 10 blocks goes to the A\* (most of the benchmark save's fallbacks).
+- **Unreachable targets.** The mesh agrees with the whole graph on reachability (99%); a target it has no route to is
+  still handed to the A\*, which searches on until it gives up. Failing those requests at once (exact ones, mesh not
+  busy) would save most of the player side's remaining search CPU on the 70-unit world.
 - **Breaking (enemies).** Corruptrons that break their way route through blocks (the graph's `Breaking` branches,
   cost by the block's health). A mesh of floors cannot say that. Either a second agent type whose mesh also has every
   breakable block's top as an area with a cost per block (walls become floor with a price), or the enemies keep the
   A\*. Enemies that do not break could use the workers' mesh with their own filter.
-- **Ladders changed far away.** A ladder's link reaches up the whole ladder; a change at its top marks only the chunks
-  near the top, so a long ladder's bottom chunk may keep a stale link until it is rebuilt itself.
-- **Queries on the main thread.** `CalculatePath` is synchronous; at 0.2 ms it is 40 times cheaper than the A\* and
+- **Queries on the main thread.** `CalculatePath` is synchronous; at 0.3 ms a route (corners to voxels included) it
   needs no slicing over frames. Moving it off the main thread needs `Unity.Experimental.AI.NavMeshQuery` (jobs,
-  experimental) or a native Detour query; not needed at these times.
+  experimental) or a native Detour query.
+- **The repath while walking** (`Locomotion4.RepathMoveNext`, a blocked walk searching the rest of its route again)
+  is still the game's own search.
 - **Unit size.** Radius 0.25 keeps the corner points 0.25 to 0.4 blocks from a wall's corner. Bricktrons walk
-  1-block corridors, which a much larger radius erodes to nothing, so the walker has to accept corners this close.
-
-## How walking would follow it (Locomotion4)
-
-Locomotion4 walks the game's route as a list of voxel places and occupies each voxel it enters (`VoxelPresence`),
-with climbing and stepping down played as their own moves (target matching). The least invasive way:
-1. Ask the mesh for the route (`CalculatePath`), then walk straight from corner to corner on the horizontal plane,
-   with the height taken from the voxels under the feet (`GetSurfaceHeightDelta`) instead of the mesh's polygons
-   (Recast heights are approximate).
-2. Turn each straight segment back into the voxels it crosses (a 2D line walk, 4-connected) and hand those to the
-   existing walker as its path nodes: occupancy, the game's per-voxel checks (`PopOuterOfObstacle`, blocked paths and
-   their repath) and the animations stay as they are, only the line between them is straight.
-3. A corner pair that is a link's two ends (kept in a dictionary by position) is played as the game's climb, step
-   down or ladder move between those two places.
-4. A route the mesh has but the walk cannot follow (a stale tile, a unit in a doorway) falls back to the A\* for that
-   walk.
+  1-block corridors, which a much larger radius erodes to nothing.
 
 ## Assessment
 
 Unity's navigation mesh answers the same reachability as the game's graph (99%, better than the game's own A\*), 40
 times faster per route, with routes about a fifth shorter and straight, while its build runs on Unity's workers and
-costs the main thread about 3 ms a frame for half a second when built from scratch and about 1 ms per terrain change.
+costs the main thread about 3 ms a frame for half a second when built from scratch and about 1 ms per change.
 
-Recommendation: do not replace the A\* in one step. Use the mesh for player units (workers, soldiers that do not
-break) first, with the gaps above closed (volume signals, doors per faction) and walking as described, the A\* staying
-as the fallback and for enemies that break their way. The ReachMap flood (up to 0.4 ms a frame) is a candidate to
-follow: Unity does not expose the mesh's connected regions, but a route query to each candidate is cheap enough to
-ask per task instead of keeping a map.
+With `NavMeshRoutes` the player's units get their routes in 2 frames instead of 6 to 14 (median), the search CPU of a
+one-faction base drops by 80 to 90%, and in the runs above no unit got stuck and as many worked. It stays off by
+default until it has run in longer games: 3 to 21% of the requests still go to the A\* (full stockpile fields,
+unreachable targets), a door's locked state is not in the mesh, and in an enemy-heavy world the enemies' searches,
+which keep the A\*, are most of the cost.

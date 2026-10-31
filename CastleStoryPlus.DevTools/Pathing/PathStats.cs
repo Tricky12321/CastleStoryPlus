@@ -252,6 +252,12 @@ internal static class PathStats
 		{
 			record.Outcome = "improved";
 		}
+#if UNITY6_PLAYER
+		if (request.Succeeded && CastleStoryPlus.Pathfinding.NavMeshRoutes.IsRouted(request))
+		{
+			record.Outcome = "navmesh";
+		}
+#endif
 		record.Length = (request.SuccessLink != null) ? request.SuccessLink.length : 0;
 		End(request, record, record.Outcome);
 	}
