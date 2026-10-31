@@ -49,8 +49,10 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/path?to=x,y,z&from=&unit=&enemy=&nodes=` | Runs the game's route search for a bricktron and compares it with the shortest route |
 | `GET /api/path/node?at=x,y,z` | The navigation node at a voxel and its links (kind, weight) |
 | `GET /api/path/ground?x=&z=` | The highest voxel a bricktron can stand on in a column |
+| `GET /api/path/straight?from=x,y,z&to=x,y,z&unit=` | Whether a bricktron may walk straight from one voxel to another (the `StraightPaths` line test), and where and why not; with the kinds of the steps of the route search's own route between them |
 | `GET /api/path/stats?enemy=&top=&recent=` | Measurements of the route searches the game ran since the last reset |
 | `POST /api/path/stats/reset` | Starts the route search measurements again from zero |
+| `GET /api/navmesh`, `POST /api/navmesh/start`, `POST /api/navmesh/stop`, `GET /api/navmesh/path`, `GET /api/navmesh/bench` | Unity 6 port: the navigation mesh experiment, its build and update times, and routes over it against the game's A\* (see [NavMesh](NavMesh.md)) |
 | `GET /api/speed?seconds=` | Game speed: chosen speed, `Time.timeScale`, paused, fixed timestep, `maximumDeltaTime`, and the speed actually reached over the last seconds (game seconds per real second), with fps and fixed steps per frame |
 | `POST /api/speed?speed=&forSeconds=` | Sets the game speed for testing, 0.25 to 20 (single player or host only). `forSeconds`: back to 1x by itself after that many real seconds |
 | `GET /api/worlds?q=` | The maps a new single-player game can start on (codename, name, size) with their modes and presets |

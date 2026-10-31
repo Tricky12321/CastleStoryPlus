@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using Brix.Engine;
 using Brix.Game.AI;
 using CastleStoryPlus.Core;
@@ -29,7 +28,8 @@ internal static class TunnelGoalRefresh
 		internal readonly List<XYZ> Next = new List<XYZ>(Chunk);
 	}
 
-	private static readonly ConditionalWeakTable<TunnelProject, Pass> Passes = new ConditionalWeakTable<TunnelProject, Pass>();
+	// Only tunnels with a pass under way (net35 has no ConditionalWeakTable); an ended pass leaves the table.
+	private static readonly Dictionary<TunnelProject, Pass> Passes = new Dictionary<TunnelProject, Pass>();
 
 	private static readonly Stopwatch Watch = new Stopwatch();
 
@@ -41,13 +41,14 @@ internal static class TunnelGoalRefresh
 		{
 			return true;
 		}
-		Pass pass = Passes.GetOrCreateValue(__instance);
-		if (pass.Voxels == null)
+		if (!Passes.TryGetValue(__instance, out Pass pass))
 		{
 			if (!__instance.ScheduledRefresh)
 			{
 				return false;
 			}
+			pass = new Pass();
+			Passes[__instance] = pass;
 			__instance.ScheduledRefresh = false;
 			digs.RemoveOutdatedGoals();
 			stairs.RemoveOutdatedGoals();
@@ -71,7 +72,7 @@ internal static class TunnelGoalRefresh
 				}
 				if (pass.Next.Count < Chunk)
 				{
-					End(pass);
+					End(__instance, pass);
 					return false;
 				}
 			}
@@ -80,16 +81,15 @@ internal static class TunnelGoalRefresh
 		catch (InvalidOperationException)
 		{
 			// The tunnel changed under the pass: look again from the start.
-			End(pass);
+			End(__instance, pass);
 			__instance.ScheduledRefresh = true;
 		}
 		return false;
 	}
 
-	private static void End(Pass pass)
+	private static void End(TunnelProject tunnel, Pass pass)
 	{
 		pass.Voxels.Dispose();
-		pass.Voxels = null;
-		pass.Next.Clear();
+		Passes.Remove(tunnel);
 	}
 }

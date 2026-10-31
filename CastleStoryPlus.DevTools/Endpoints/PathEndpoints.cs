@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Brix.Engine;
 using Brix.Engine.Nature;
 using Brix.Game.AI;
+using Brix.Game.AI.Pathfinding;
 using Brix.Game.Components.Volumes;
 using Brix.Pathfinding;
 using Brix.Pathfinding.Test;
@@ -23,6 +24,12 @@ internal static class PathEndpoints
 			Parameters = "to (x,y,z, required), from (x,y,z; default: where the bricktron stands), unit (bricktron id; default: the player's first builder), enemy (true: an enemy unit searches), nodes (true: list the routes' voxels), shortest (false: skip the comparison)",
 			TimeoutMs = 60000
 		});
+#if UNITY6
+		routes.Add(new Route("GET", "/api/path/straight", "Whether a bricktron may walk straight from one voxel to another (the mod's StraightPaths line test: flat route nodes, plain steps, no obstacle or unit on the line, flat ground beside it), and where and why not; with the route search's own route between them and the kinds of its steps", Straight)
+		{
+			Parameters = "from, to (x,y,z, required), unit (bricktron id; default: the player's first builder; its presence test is used)"
+		});
+#endif
 		routes.Add(new Route("GET", "/api/path/node", "The navigation node at a voxel: kind, obstacles and its links (to, kind, weight)", Node)
 		{
 			Parameters = "at (x,y,z, required)"
@@ -71,6 +78,36 @@ internal static class PathEndpoints
 			"shortest", RouteJson(report.Shortest, withNodes),
 			"costRatio", Round(report.CostRatio));
 	}
+
+#if UNITY6
+	private static object Straight(ApiRequest request)
+	{
+		NeedGraph();
+		Labor labor = Units.Find(request.Int("unit", 0), false);
+		XYZ from = XYZ.FromVector3(request.Vector("from"));
+		XYZ to = XYZ.FromVector3(request.Vector("to"));
+		string line = CastleStoryPlus.Pathfinding.StraightPaths.Explain(from, to, (labor != null && labor.presence != null) ? labor.presence.BuildPresenceTest() : null, (labor != null) ? labor.gameObject : null);
+		Dictionary<string, int> kinds = new Dictionary<string, int>();
+		string firstOther = null;
+		if (labor != null)
+		{
+			PathProbe.Report report = PathProbe.Run(labor, from, to, false);
+			if (report.AStar != null && report.AStar.Found)
+			{
+				for (int i = 1; i < report.AStar.Nodes.Count; i++)
+				{
+					string kind = PathNodeRegistry.PermissionVers(report.AStar.Nodes[i - 1], report.AStar.Nodes[i]).ToString();
+					kinds[kind] = kinds.TryGetValue(kind, out int n) ? n + 1 : 1;
+					if (firstOther == null && kind != "Full")
+					{
+						firstOther = report.AStar.Nodes[i] + " (" + kind + ")";
+					}
+				}
+			}
+		}
+		return Obj("line", line, "routeSteps", kinds, "firstStepNotPlain", firstOther);
+	}
+#endif
 
 	private static object RouteJson(PathProbe.Route route, bool withNodes)
 	{

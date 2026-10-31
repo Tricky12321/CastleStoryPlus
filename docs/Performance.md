@@ -179,6 +179,84 @@ The 1% low went from 43 to 64 fps in the port player. All changes are part of `F
   Unity's collector does not move objects; every collection reads the whole heap. The known big holders are the
   terrain's colour buffers (`Color32[]` in pools, about 250 MB). See also [Lua memory leaks](LuaMemoryLeaks.md).
 
+## Jobs of the player's own (Unity 6 port), 31-10-2026
+
+The port's player is built by us, so it can carry jobs of our own: `CastleStoryPlus.Compute`
+(`CastleStoryPlus.Player/Assets/Compute`), compiled by Burst when the player is built (`Plugins/lib_burst_generated.so`;
+Burst also compiles ahead of time for a Mono player). The mod takes snapshots on the main thread into native arrays,
+schedules the job on Unity's worker threads and applies the results later in the frame or in the next one
+(`PlayerJobs`, `[Performance] PlayerJobs`). See [Unity 6 port](Unity6Port.md) for the build.
+
+**Method.** The test player (`Build/VulkanFix`, OpenGL Core), the "Benchmark" save from a fresh copy each run, the camera
+over the base (`at=515,100,555`), 60 s after loading: every frame for 30 s (`/api/frames/raw`), Unity's player loop for
+15 s (`/api/frames/loop`), then the systems table for 30 s (`/api/frames`, with the frame monitor's own cost). Runs
+with the changes on and off alternate, four of each (two more runs with the vision job alone agree).
+
+| | Off (4 runs) | On (4 runs) |
+|---|---:|---:|
+| Frame time, monitor off (`/api/frames/raw`) | 10.9 ms | 9.4 ms |
+| Player loop fps | 91.3 | 100.7 |
+| Update scripts (player loop step) | 5.15 ms | 4.44 ms |
+| `update: SharedFactionVision` | 0.56 ms/frame | 0.55 ms/frame |
+| `AnimatedProgression.Update` | 0.40 ms/call, 0.46 ms/frame | 0.08 ms/call, about 0.09 ms/frame (see below) |
+| Animation (`DirectorUpdateAnimationBegin`) | 0.85 ms | 0.83 ms |
+
+Runs of the same setup differ by up to 30 % in frame rate (the game's own course, see the Vulkan benchmark below), so the
+frame rate rows say little; the per-system rows are what changed.
+
+- **Faction vision, detection step as a Burst job (`VisionJobs`, `CastleStoryPlus.Compute.VisionDetect`):** which
+  tracking groups each faction sees fully or partly is worked out by a parallel job over the groups, with VisionScan's
+  buckets, and applied at the pass's next step. Checked in game against the game's own sums for every vision
+  (`CSP_COMPUTE_VERIFY=1`): 400 passes, no group differed, with Burst on. It changes nothing measurable here: after
+  VisionScan this step already took next to nothing (`vision: AssignDetectionStatusFromAllVisions` below 0.001 ms a
+  call, both ways). The frame monitor now times each step of the pass (`vision:` rows), and they show where the 0.6 ms
+  goes: `AssignCollisionsFromFullGroup`, 0.43-0.62 ms a frame and up to 15 ms in one call. It goes over every entry of
+  ten fully seen groups a step; the stored items of a base have a vision each too (about 250 entries with a vision per
+  call, measured), and each entry is bookkeeping on the game's objects (`CollisionTrackingId`, `IsResponsibleForVision`,
+  the faction's lists), which a job cannot reach. A list of the entries with a vision per group was tried and removed:
+  it skipped almost nothing.
+- **Faction vision, held items passed over (`VisionCollisions`, Unity 6 port only):** counted per call
+  (`AssignCollisionsFromFullGroup`): some 300 entries on average, 2300 in the biggest group (a stockpile area), 95 %
+  of them of another faction and with a vision, and almost none answering for their own visibility: a stored item's
+  vision is its stockpile's. Nothing happens for such an entry, yet each cost about 0.6 us, mostly waiting on memory
+  (the entry, its component, its vision, its parent tracker, the tracker's pair; `IsResponsibleForVision` itself 0.25
+  us, of which the stockpile's two `GetComponent` calls were a third). Held entries are now remembered per group and
+  passed over without being looked at while nothing they depend on changed (see the file's header for what is
+  watched). `CSP_VISION_VERIFY=1` runs the game's steps for every entry passed over: 4.5 million passed over, none of
+  which the game would have counted, and our responsibility check never differed from the game's.
+  Measured as above but 45 s after loading, 30 s windows, idle and then 25 s after 40 corruptrons (level 3) were sent
+  at the base; off and on alternate, three of each (the A/B switch was a temporary environment variable):
+
+  | | Off (3 runs) | On (3 runs) |
+  |---|---:|---:|
+  | `update: SharedFactionVision`, idle | 0.42 ms/frame, worst 9.1 ms | 0.03 ms/frame, worst 0.66 ms |
+  | `vision: AssignCollisionsFromFullGroup`, idle | 0.23 ms/call | 0.011 ms/call |
+  | `update: SharedFactionVision`, fight | 0.60 ms/frame, worst 8.5 ms | 0.05 ms/frame, worst 0.65 ms |
+  | Frames over 16 ms in 30 s (monitor off), idle | 142 | 57 |
+  | Frames over 16 ms in 30 s (monitor off), fight | 702 | 510 |
+
+  An earlier series of the same build (before the counters used for the second one were added, same code otherwise)
+  had two of its three on-runs at the off cost, with nothing logged to say why; the nine runs since (with the
+  counters) all pass over 95 % of the entries, with no cache dropped or rebuilt.
+- **Pallet animation on Unity's worker threads (`ProgressionOnWorkers`, `[Performance] ProgressionOnWorkers`):** the
+  game stepped a storage's animator by hand (`Animator.Update`) every frame for a second after its content changed,
+  0.41 ms a call on the main thread. The animator is now switched on for that time and Unity's animation pass works it
+  out with the same time steps on its worker threads; it is switched off again when the game would stop stepping it.
+  The main thread's call fell from 0.40 to 0.08 ms (what is left are the mod's patches that look at the pallet after
+  the step), about 0.36 ms a frame; the animation step of the player loop did not grow. (The frame monitor counts
+  fewer calls with it on, 0.1-0.3 a frame instead of 1.1, though the runs are as many and as long; the frame figure
+  above takes the off runs' count.) Checked with
+  `CSP_PROGRESSION_LOG=1` (each run's frames and end state): 267 runs either way in one session, all ending out of
+  transition in the same states.
+- **A vertex shader for the pallet animation:** not done. The clips switch objects on and off (the crate, each
+  resource's heap), the pieces are the game's meshes with the game's converted materials (a shader of ours would have to
+  stand in for each of them), and the mod's stacking and large stockpile code read and copy the pieces' transforms on
+  the CPU.
+- **ReachMap's flood as a job:** not done. A job needs the fine route graph in native arrays: some 150 000 nodes and
+  their branches, and whether each can be crossed, which asks the game's volume registry (doors, blockers) per node.
+  Making that snapshot walks the same nodes and branches the flood walks, on the main thread, so it costs what the flood
+  costs (at most 0.4 ms a frame, spread). It would pay only with a graph kept up to date as the world changes.
+
 ## Vulkan: initial benchmark, 31-10-2026
 
 The Unity 6 port on Linux with OpenGL Core against Vulkan (`CSP_VULKAN=1`, `-force-vulkan`), modded, on the

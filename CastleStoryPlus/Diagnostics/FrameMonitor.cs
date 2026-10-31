@@ -455,6 +455,9 @@ internal static class FrameMonitor
 		AddMethods(methods, "LaborInstinct", "instinct: ", "FightableEnemy");
 		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.Knowledge", "knowledge: ", "ClosestObjectToPickup", "CanReach", "ReacheableObjectsFromWithKey");
 		AddMethods(methods, "Brix.Game.Components.LocalFactionVision", "knowledge: vision.", "ObjectIsVisibleForFaction");
+		// The faction vision pass's steps (update: SharedFactionVision runs one per call).
+		AddMethods(methods, "Brix.Game.SharedFactionVision+RefreshActiveTrackingGroupsEnumerator", "vision: ", "FlagAllPreviousTrackingGroups", "AssignDetectionStatusFromAllVisions", "RemoveNoLongerDetectedTrackingGroups", "RemoveNoLongerDetectedFullGroups", "RemoveNoLongerDetectedPartialGroups", "UnflagStillDetectedGroups", "AddNewlyDetectedFullAndPartialGroups");
+		AddMethods(methods, "Brix.Game.SharedFactionVision+RefreshActiveCollisionsEnumerator", "vision: ", "MarkOldCollisions", "AssignCollisionsFromPartialGroup", "AssignCollisionsFromFullGroup", "RemoveNoLongerActiveCollisions", "AddNewCollisions");
 		AddMethods(methods, "Brix.Game.Semantique.Recepteur", "knowledge: recepteur.", "Carries");
 		AddMethods(methods, "Brix.Game.AI.KnowledgeSpace.KnowledgeExcluder", "knowledge: excluder.", "AreExclusive");
 		AddMethods(methods, "Brix.Game.AI.GoalSelector", "goals: ", "ProcessGoalAndReturnIsBest");

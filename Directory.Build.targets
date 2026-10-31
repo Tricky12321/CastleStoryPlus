@@ -43,4 +43,12 @@
     <Reference Include="$(PlayerManagedDir)CastleStoryPlus.Compat.dll" Private="false" />
     <Reference Include="$(FrameworkPathOverride)Facades/netstandard.dll" Private="false" />
   </ItemGroup>
+  <!-- The player's own Burst jobs (CastleStoryPlus.Player/Assets/Compute), in players built since 31-10-2026.
+       PLAYER_COMPUTE marks the code that uses them; at run time the mod still checks that the player has them. -->
+  <ItemGroup Condition="'$(UnityTarget)' == 'player' And Exists('$(PlayerManagedDir)CastleStoryPlus.Compute.dll')">
+    <Reference Include="$(PlayerManagedDir)CastleStoryPlus.Compute.dll" Private="false" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(UnityTarget)' == 'player' And Exists('$(PlayerManagedDir)CastleStoryPlus.Compute.dll')">
+    <DefineConstants>$(DefineConstants);PLAYER_COMPUTE</DefineConstants>
+  </PropertyGroup>
 </Project>

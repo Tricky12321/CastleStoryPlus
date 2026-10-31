@@ -183,7 +183,12 @@ internal static class UiEndpoints
 				"depth", renderer.absoluteDepth,
 				"components", components,
 				"color", renderer.GetColor().ToString(),
+#if UNITY6
 				"alpha", Round(renderer.GetInheritedAlpha()),
+#else
+				// 5.6 has no inherited alpha (the CanvasGroups above are not counted).
+				"alpha", Round(renderer.GetAlpha()),
+#endif
 				"material", material != null ? material.name + " (" + material.shader.name + ")" : null,
 				"texture", texture != null ? texture.name + " " + texture.width + "x" + texture.height : null,
 				"screenRect", Mathf.RoundToInt(min.x) + "," + Mathf.RoundToInt(Screen.height - maxCorner.y) + " " + Mathf.RoundToInt(maxCorner.x - min.x) + "x" + Mathf.RoundToInt(maxCorner.y - min.y))));

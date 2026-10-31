@@ -295,7 +295,7 @@ internal class BenchmarkRun : MonoBehaviour
 
 	private static string Write(object report)
 	{
-		string folder = Path.Combine(BepInEx.Paths.BepInExRootPath, "devtools", "benchmarks");
+		string folder = Path.Combine(Path.Combine(BepInEx.Paths.BepInExRootPath, "devtools"), "benchmarks");
 		Directory.CreateDirectory(folder);
 		string file = Path.Combine(folder, "benchmark-" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss") + ".json");
 		File.WriteAllText(file, JsonConvert.SerializeObject(report, Formatting.Indented));

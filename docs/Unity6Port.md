@@ -17,6 +17,14 @@ a release: no assets, no code, no shaders, and not the game's project settings e
     Core on Linux, `PlayerBuild.Linux`, and Direct3D 11 on Windows, `PlayerBuild.Windows`). The build also writes `engine-types.assets`, Unity's default settings and a shader of our own
     (`Assets/Types/EngineTypes.shader`) in the player's own format. The installer takes their type trees and the
     compiled shader format from it.
+  - Compute (`CastleStoryPlus.Compute.dll`, `Assets/Compute`): jobs of our own for the mod, compiled by Burst when the
+    player is built (`Plugins/lib_burst_generated.so`, SSE2 and AVX2), with a plain API of native arrays. The mod
+    references it in a port build when the player has it (`PLAYER_COMPUTE`) and checks at start that the player has it
+    (`PlayerJobs`). Burst and Mathematics are engine modules in Unity 6.6 (`UnityEngine.BurstModule`,
+    `UnityEngine.MathematicsModule`); the `com.unity.burst` and `com.unity.mathematics` packages in the manifest are
+    empty shims. `com.unity.collections` is not used: `NativeArray` is in the core module, and the package would bring
+    the test framework and Cecil along. Burst compiles ahead of time for a Mono player too: the jobs run as Burst code
+    (the log says `PlayerJobs: ... Burst on`), and without the library they run as Mono code.
   - `Assets/Dev`: probe shaders for comparing Unity 6's compiled shader format (`ShaderProbe.Build` for Linux,
     `ShaderProbe.BuildWindows` for Windows; development only).
 - `CastleStoryPlus.Port`: the converter (netstandard2.0, runs inside the player or via `CastleStoryPlus.Port.Cli`).
@@ -179,6 +187,18 @@ install deletes.
       CastleStoryPlus.Port/Data/game-files.sha256 "<Castle Story>/Castle Story_Data" \
       CastleStoryPlus.Player/Build/Linux/CastleStoryPlus_Data CastleStoryPlus.Player/Build/Linux/Content
 
+`PlayerBuild.LinuxTo` builds a Linux player into the folder named by `CSP_PLAYER_OUT` (or `-playerOut <folder>`), which
+must be empty or new; nothing else is touched. When only our own assemblies changed (the engine, `UnityPlayer.so`, is
+the same file), an installed player is brought up to date by copying `Managed/CastleStoryPlus.Compute.dll` (and the
+`Unity.Burst.dll`/`Unity.Mathematics.dll` shims) and `Plugins/lib_burst_generated.so` into it while it is stopped, and
+adding the three assemblies to its `ScriptingAssemblies.json`.
+
+Burst's library is planned by Unity's build program from what the Burst step left in
+`Library/Bee/artifacts/<Linux|Win>PlayerBuildProgram/AsyncPluginsFromLinker` the build before. A build made before the
+project had any Burst code leaves `no_plugins_were_generated.txt` there, and with it there the step is never run again
+(no library, no error). `PlayerBuild` deletes that note before every build. `UNITY_BURST_DEBUG=1` makes the editor log
+what Burst does.
+
 For measuring the port without the editor, `PlayerBuild.ProfilingLinux` builds a development player into
 `Build/Profiling/Linux` (an empty folder each time); install into it and add BepInEx as above, then attach the
 editor's Profiler to it (Profiler window, target list).
@@ -268,6 +288,11 @@ Mono 2.6 workarounds of `CastleStoryPlus.Bootstrap`.
   vertices (5.6 was silent), so terrain sections without solid blocks get no collider mesh instead of an empty one.
   `DuplicateEventSystemFix` (`Core/NestedCanvasFix.cs`) now runs in the player too: the game scene has two
   EventSystems, and the second is switched off.
+
+## Navigation mesh experiment
+
+`[Pathfinding] NavMeshExperiment` (off by default) builds Unity's navigation mesh from the game's route graph on
+Unity's worker threads and keeps it up to date, to measure it against the game's A\*; see [NavMesh](NavMesh.md).
 
 ## Not done yet
 

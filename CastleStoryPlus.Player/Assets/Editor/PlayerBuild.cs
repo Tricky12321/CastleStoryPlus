@@ -44,6 +44,42 @@ namespace CastleStoryPlus.Player.Editor
 			Build(BuildTarget.StandaloneWindows64, "Build/Windows/CastleStoryPlus.exe");
 		}
 
+		// A Linux player built into the folder named by CSP_PLAYER_OUT (or -playerOut <folder> on the command line), which
+		// must be empty or not exist yet: a build to take single files from (CastleStoryPlus.Compute.dll and the Burst
+		// library) without touching Build/Linux or an installed player.
+		public static void LinuxTo()
+		{
+			string dir = OutputFolder();
+			if (Directory.Exists(dir) && Directory.GetFileSystemEntries(dir).Length > 0)
+			{
+				Debug.LogError("[PlayerBuild] not empty: " + dir);
+				if (Application.isBatchMode)
+				{
+					EditorApplication.Exit(1);
+				}
+				return;
+			}
+			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"));
+		}
+
+		private static string OutputFolder()
+		{
+			string[] args = System.Environment.GetCommandLineArgs();
+			for (int i = 0; i + 1 < args.Length; i++)
+			{
+				if (args[i] == "-playerOut")
+				{
+					return Path.GetFullPath(args[i + 1]);
+				}
+			}
+			string env = System.Environment.GetEnvironmentVariable("CSP_PLAYER_OUT");
+			if (string.IsNullOrEmpty(env))
+			{
+				throw new System.ArgumentException("set CSP_PLAYER_OUT or pass -playerOut <folder>");
+			}
+			return Path.GetFullPath(env);
+		}
+
 		// A release starts from an empty folder (Build/Release/<platform>), never from one an install has run in, which
 		// holds the game's code, settings and content. tools/package-port.sh packs it.
 		public static void ReleaseLinux()
@@ -106,6 +142,7 @@ namespace CastleStoryPlus.Player.Editor
 				PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneLinux64, linuxApis);
 			}
 			EnsureBootstrapScene();
+			ForgetNoBurstPlugins();
 			var options = new BuildPlayerOptions
 			{
 				scenes = new[] { BootstrapScene },
@@ -184,6 +221,21 @@ namespace CastleStoryPlus.Player.Editor
 			ContentBuildInterface.WriteSerializedFile(temp, parameters);
 			File.Copy(Path.Combine(temp, name), path, true);
 			Debug.Log("[PlayerBuild] " + objects.Count + " engine types -> " + path);
+		}
+
+		// The build program plans the copy of Burst's library (CastleStoryPlus.Compute's jobs, lib_burst_generated) from what
+		// the Burst step left in Library/Bee the build before. A build from before there were jobs left a note that nothing
+		// was made, and with it there the step is never run again: no library, and the jobs run as Mono code.
+		private static void ForgetNoBurstPlugins()
+		{
+			foreach (string program in new[] { "LinuxPlayerBuildProgram", "WinPlayerBuildProgram" })
+			{
+				string note = Path.Combine("Library", "Bee", "artifacts", program, "AsyncPluginsFromLinker", "no_plugins_were_generated.txt");
+				if (File.Exists(note))
+				{
+					File.Delete(note);
+				}
+			}
 		}
 
 		private static void EnsureBootstrapScene()

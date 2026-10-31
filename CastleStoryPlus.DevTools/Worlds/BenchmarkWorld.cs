@@ -96,12 +96,13 @@ internal class BenchmarkWorld : MonoBehaviour
 	};
 
 	// Loose resources dropped by the stockpiles for the workers to store: key, count.
-	private static readonly (string Key, int Count)[] Loose =
+	// (No tuples: the .NET 3.5 build has no ValueTuple.)
+	private static readonly KeyValuePair<string, int>[] Loose =
 	{
-		("RawResources/RawStone", 300),
-		("RawResources/RawIron", 100),
-		("RawResources/RawFiber", 100),
-		("RawResources/RawClay", 50)
+		new KeyValuePair<string, int>("RawResources/RawStone", 300),
+		new KeyValuePair<string, int>("RawResources/RawIron", 100),
+		new KeyValuePair<string, int>("RawResources/RawFiber", 100),
+		new KeyValuePair<string, int>("RawResources/RawClay", 50)
 	};
 
 	internal static BenchmarkWorld Instance;
@@ -245,11 +246,11 @@ internal class BenchmarkWorld : MonoBehaviour
 
 		_state = "loose resources";
 		string near = Vec(_corner.x + 20, _corner.y, _corner.z + 36);
-		foreach ((string key, int count) in Loose)
+		foreach (KeyValuePair<string, int> loose in Loose)
 		{
-			for (int left = count; left > 0; left -= 50)
+			for (int left = loose.Value; left > 0; left -= 50)
 			{
-				TryCall("POST", "/api/cheat/items", "key", key, "count", Math.Min(50, left).ToString(), "at", near);
+				TryCall("POST", "/api/cheat/items", "key", loose.Key, "count", Math.Min(50, left).ToString(), "at", near);
 				yield return null;
 			}
 		}
