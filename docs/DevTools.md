@@ -51,6 +51,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/path/ground?x=&z=` | The highest voxel a bricktron can stand on in a column |
 | `GET /api/path/stats?enemy=&top=&recent=` | Measurements of the route searches the game ran since the last reset |
 | `POST /api/path/stats/reset` | Starts the route search measurements again from zero |
+| `GET /api/navmesh`, `POST /api/navmesh/start`, `POST /api/navmesh/stop`, `GET /api/navmesh/path`, `GET /api/navmesh/bench` | Unity 6 port: the navigation mesh experiment, its build and update times, and routes over it against the game's A\* (see [NavMesh](NavMesh.md)) |
 | `GET /api/speed?seconds=` | Game speed: chosen speed, `Time.timeScale`, paused, fixed timestep, `maximumDeltaTime`, and the speed actually reached over the last seconds (game seconds per real second), with fps and fixed steps per frame |
 | `POST /api/speed?speed=&forSeconds=` | Sets the game speed for testing, 0.25 to 20 (single player or host only). `forSeconds`: back to 1x by itself after that many real seconds |
 | `GET /api/worlds?q=` | The maps a new single-player game can start on (codename, name, size) with their modes and presets |
