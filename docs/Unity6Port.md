@@ -104,8 +104,12 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        log lists per shader the programs reused, compiled and failed. `CSP_VULKAN_GLSL=<regex>` sends matching shaders
        through the compiler even when 5.6 has SPIR-V for them (debugging).
        Vulkan stays opt-in until these are fixed:
-       - The crystals render wrong on Vulkan (seen in play, 31-10-2026); crystal shaders (CrystalShardsWarp and the
-         other crystal ones) are among the 35 compiled ones.
+       - Converted forward shaders other than the crystals (glass, sky, bricktron face) are not checked against
+         OpenGL yet. The crystals were fixed on 31-10-2026: the converted vertex stage now takes its clip position from
+         Unity's own Vulkan matrix (the OpenGL round trip `w - 2z` and back lost precision at world coordinates around
+         512, and whole triangles failed the depth test against the depth written before the forward pass), and forward
+         passes move their depth 0.01 % nearer (found by testing; G-buffer passes are left alone). The vertex code of
+         these shaders runs twice (once for the position, once for fog and the other outputs the OpenGL way).
        - Shadow bias of the compiled shaders is not checked yet.
        - Not yet faster than OpenGL Core: about even with native graphics jobs in the initial benchmark (see
          [Performance](Performance.md#vulkan-initial-benchmark-31-10-2026)).
@@ -255,7 +259,8 @@ Mono 2.6 workarounds of `CastleStoryPlus.Bootstrap`.
 
 - **Compute shader:** the game's one compute shader (`EyeHistogram`) loads with its kernel, but it has not been seen
   running: the eye adaptation that uses it is off in the game's profile.
-- **Log noise** that the original game has too: missing scripts on some prefabs made in a world (`StorageLocator` and
-  others), and GameAnalytics, which fails to reach its server and, when the game quits, its `GA_Settings`.
+- **Log noise** that the original game has too: GameAnalytics, which fails to reach its server and, when the game
+  quits, its `GA_Settings`. (The missing scripts on the factory templates, `StorageLocator` and others, are left out
+  by the converter since 31-10-2026; content converted before that still warns.)
 - **Audio** (Wwise 2015; it starts under Windows/Proton), and a test on a real Windows machine.
 - **Publishing:** `tools/release.sh` does not upload the port's zips yet.

@@ -19,10 +19,11 @@ namespace CastleStoryPlus.Port;
 // Clip space: the GL program was compiled for OpenGL's conventions (depth -w..w, near at -w), Unity's Vulkan renders
 // Direct3D's with reversed depth (w at near, 0 at far), and gives the shader matrices for that. So the vertex stage gets
 // unity_MatrixVP turned back into OpenGL's (z = w - 2z), which keeps everything the GL code derives from clip space
-// right (fog, the shadow caster's clamp to the near plane), and at its end the position goes back to Vulkan's
-// (z = (w - z) / 2) and gets its y flipped (Vulkan's clip space points down; without it the image is upside down and
-// the culling inverted, so the inside of the terrain showed). The shadow caster's depth bias, which the engine gives
-// with Vulkan's sign and scale, becomes -2 times that for the same reason.
+// right (fog, the shadow caster's clamp to the near plane). The position itself comes from a first run of the code with
+// Unity's matrix as it is (turning the GL one back loses too much of z), the shadow caster's bias and clamp then done
+// the Vulkan way, and its y is flipped (Vulkan's clip space points down; without it the image is upside down and the
+// culling inverted, so the inside of the terrain showed). The shadow caster's depth bias, which the engine gives with
+// Vulkan's sign and scale, becomes -2 times that for the GL run.
 public sealed class GlslToVulkan
 {
 	public const int UniformSet = 1;
@@ -37,6 +38,8 @@ public sealed class GlslToVulkan
 	private const string MatrixVP = "hlslcc_mtx4x4unity_MatrixVP";
 	private const string ShadowBias = "unity_LightShadowBias";
 	private const string MatrixPrefix = "hlslcc_mtx4x4";
+	// How much nearer the forward passes' depth is (reversed depth: a larger z; 0.01 % of the distance).
+	private const string DepthNearer = "1.0001";
 
 	private static readonly Regex UniformLine = new Regex(@"^\s*uniform\s+(\w+)\s+(\w+)\s*(?:\[\s*(\d+)\s*\])?\s*;\s*$");
 	private static readonly Regex InOutLine = new Regex(@"^\s*((?:(?:flat|centroid|noperspective|smooth)\s+)*)(in|out)\s+(\w+)\s+(\w+)\s*;\s*$");
@@ -60,6 +63,9 @@ public sealed class GlslToVulkan
 
 	private readonly List<Texture> textures = new List<Texture>();
 
+	// A deferred G-buffer pass (more than one render target): nothing is drawn before it to test against.
+	private readonly bool gBuffer;
+
 	// The two stages' Vulkan GLSL.
 	public string Vertex { get; private set; }
 
@@ -77,6 +83,8 @@ public sealed class GlslToVulkan
 	{
 		string vertex = Section(glsl, VertexStageMarker);
 		string fragment = Section(glsl, FragmentStageMarker);
+		uint targets = Targets(glsl);
+		gBuffer = (targets & (targets - 1)) != 0;
 		var fragmentUniforms = new List<Member>();
 		var vertexUniforms = new List<Member>();
 		var varyings = new Dictionary<string, int>();
@@ -281,6 +289,14 @@ public sealed class GlslToVulkan
 		bool usesShadowBias = vertex && uniforms.Any(u => u.Name == ShadowBias);
 		var output = new StringBuilder();
 		output.Append("#version 450\n");
+		if (vertex)
+		{
+			// Each pass of a shader is its own pipeline, and the driver may compile the same position code a little
+			// differently in each. A light's additive pass (ForwardAdd, depth test equal or less) then lands just behind
+			// the base pass in some pixels, and those flicker as the camera moves (seen on the crystals, whose vertex
+			// stage is long). Invariant makes every pass compute the same position bit for bit, as GL drivers did.
+			output.Append("invariant gl_Position;\n");
+		}
 		if (uniforms.Count > 0)
 		{
 			output.Append("layout(std140, set = " + UniformSet + ", binding = " + binding + ") uniform " + block + "\n{\n");
@@ -356,6 +372,21 @@ public sealed class GlslToVulkan
 			output.Append("void main()\n{\n");
 			if (usesMatrixVP)
 			{
+				// The position: the program run with Unity's own matrix, which gives Vulkan's clip space directly.
+				// Turning the GL position back ((w - z) / 2 of z = w - 2z') loses z to the cancellation (the w row's
+				// terms are the size of the world coordinates), and in the deferred path the forward-only objects (the
+				// crystals) are tested against a depth Unity draws first with a shadow caster (equal or less): whole
+				// triangles came out behind it and were dropped, so the shards looked moved and broken.
+				output.Append("\t" + MatrixVP + " = " + Prefix + MatrixVP + ";\n");
+				if (usesShadowBias)
+				{
+					// The shadow caster's linear bias and clamp to the near plane are GL's in its code: left out here
+					// (the normal offset, in world space, stays) and done after, as Unity's Vulkan programs do.
+					output.Append("\t" + ShadowBias + " = vec4(0.0, 0.0, " + Prefix + ShadowBias + ".zw);\n");
+				}
+				output.Append("\tcsp_main();\n");
+				output.Append("\tvec4 " + Prefix + "position = gl_Position;\n");
+				// Everything else (fog, the varyings) from the GL clip space the code was compiled for.
 				output.Append("\tfor (int i = 0; i < 4; i++)\n\t{\n");
 				output.Append("\t\t" + MatrixVP + "[i] = " + Prefix + MatrixVP + "[i];\n");
 				output.Append("\t\t" + MatrixVP + "[i].z = " + Prefix + MatrixVP + "[i].w - 2.0 * " + Prefix + MatrixVP + "[i].z;\n");
@@ -369,7 +400,19 @@ public sealed class GlslToVulkan
 			output.Append("\tcsp_main();\n");
 			if (usesMatrixVP)
 			{
-				output.Append("\tgl_Position.z = (gl_Position.w - gl_Position.z) * 0.5;\n");
+				output.Append("\tgl_Position = " + Prefix + "position;\n");
+				if (usesShadowBias)
+				{
+					// UnityApplyLinearShadowBias with reversed depth (near at w).
+					output.Append("\tgl_Position.z += clamp(" + Prefix + ShadowBias + ".x / gl_Position.w, -1.0, 0.0);\n");
+					output.Append("\tgl_Position.z = mix(gl_Position.z, min(gl_Position.z, gl_Position.w), " + Prefix + ShadowBias + ".y);\n");
+				}
+				else if (!gBuffer)
+				{
+					// Even so the depth Unity drew first is not quite ours (other code, other rounding; 0.001 % was not
+					// enough) and hid whole triangles: the forward passes come a hair nearer.
+					output.Append("\tgl_Position.z *= " + DepthNearer + ";\n");
+				}
 			}
 			// Vulkan's clip space has y pointing down; Unity's own Vulkan programs flip it at the end too.
 			output.Append("\tgl_Position.y = -gl_Position.y;\n");
