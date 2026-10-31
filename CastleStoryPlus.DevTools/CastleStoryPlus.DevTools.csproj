@@ -48,6 +48,10 @@
       <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameManagedDir)UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.Networking" Publicize="true">
       <HintPath>$(GameManagedDir)UnityEngine.Networking.dll</HintPath>
       <Private>false</Private>
