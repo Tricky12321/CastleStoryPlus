@@ -50,7 +50,7 @@ internal static class GameEndpoints
 		});
 		routes.Add(new Route("POST", "/api/screenshot", "Saves a screenshot; answers its file path (written at the end of the frame). ui=false draws the world's cameras only, without the menus over them (written at once)", Screenshot)
 		{
-			Parameters = "ui (default true), name (file name without .png, letters, digits, - and _); with ui=false also at (x,y,z), yaw, pitch, distance: the world's cameras drawn from there looking at 'at', put back after (the game's camera script cannot move them in between)"
+			Parameters = "ui (default true), name (file name without .png, letters, digits, - and _), maxWidth (also write a copy at most this many pixels wide, <name>_small.png, answered as smallPath; for tools that send the picture on, e.g. MCP with its message limit); with ui=false also at (x,y,z), yaw, pitch, distance: the world's cameras drawn from there looking at 'at', put back after (the game's camera script cannot move them in between)"
 		});
 	}
 
@@ -367,6 +367,12 @@ internal static class GameEndpoints
 			name = "screenshot_" + DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
 		}
 		string file = Path.Combine(folder, name + ".png");
+		int maxWidth = request.Int("maxWidth", 0);
+		string small = maxWidth > 0 ? Path.Combine(folder, name + "_small.png") : null;
+		if (small != null && File.Exists(small))
+		{
+			File.Delete(small);
+		}
 		if (request.Bool("ui", true))
 		{
 #if UNITY6
@@ -374,6 +380,11 @@ internal static class GameEndpoints
 #else
 			Application.CaptureScreenshot(file);
 #endif
+			if (small != null)
+			{
+				// The capture is written at the end of the frame: the copy is made once it is there.
+				ScreenshotCopy.After(file, small, maxWidth);
+			}
 		}
 		else
 		{
@@ -381,8 +392,13 @@ internal static class GameEndpoints
 			Vector3 at = posed ? request.Vector("at") : Vector3.zero;
 			Quaternion rotation = Quaternion.Euler(Mathf.Clamp(request.Float("pitch", 30f), 5f, 89f), request.Float("yaw", 0f), 0f);
 			Vector3 eye = at - rotation * Vector3.forward * Mathf.Clamp(request.Float("distance", 14f), 1f, 300f);
-			File.WriteAllBytes(file, WorldOnly(posed, eye, rotation));
+			byte[] png = WorldOnly(posed, eye, rotation);
+			File.WriteAllBytes(file, png);
+			if (small != null)
+			{
+				File.WriteAllBytes(small, ScreenshotCopy.Scaled(png, maxWidth));
+			}
 		}
-		return Obj("path", file);
+		return small != null ? Obj("path", file, "smallPath", small) : Obj("path", file);
 	}
 }

@@ -4,3 +4,4 @@ Everyone who has had a pull request merged into Castle Story Plus, by GitHub nam
 request is merged.
 
 - [Tricky12321](https://github.com/Tricky12321)
+- [Pabloks-png](https://github.com/Pabloks-png)

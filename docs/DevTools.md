@@ -38,7 +38,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/cleanup?unit=&max=` | What a worker's automatic cleanup sees: loose items and why each is not picked up |
 | `GET /api/reach?id=&unit=` | Whether a bricktron can get to a thing by the game's knowledge (regions, access cells with their route nodes, exclusions from failed walks) and by the mod's reachability map |
 | `GET /api/workshops/why?unit=&id=&cells=` | Why a workshop has or has not work for a bricktron: every check of the game's HasWorkFor (room, reach, store, fetch, work) with its answer |
-| `POST /api/screenshot?ui=&name=&at=&yaw=&pitch=&distance=` | Saves a screenshot under `BepInEx/devtools/screenshots/` and answers its path. `ui=false`: the world only, without the menus, the build jobs' markers and the icons over things; with `at` the world's cameras are put there for the picture (and back after) |
+| `POST /api/screenshot?ui=&name=&maxWidth=&at=&yaw=&pitch=&distance=` | Saves a screenshot under `BepInEx/devtools/screenshots/` and answers its path. `ui=false`: the world only, without the menus, the build jobs' markers and the icons over things; with `at` the world's cameras are put there for the picture (and back after). `maxWidth`: also a copy at most that wide, `<name>_small.png` (`smallPath`), scaled on the graphics card |
 | `GET /api/ui/rect?q=` | Where a shown menu part is on the screen, by its object's name (a station's window: `CS market`, `CS Research`, ...) |
 | `POST /api/quit` | Closes the game (its own Quit), half a second after answering; `tools/start-game.sh --restart` uses it |
 | `POST /api/testworld?width=` | Builds the test world round the home crystal: every research done, one of every building and block, an armour stand per soldier class, and a full 2 x 2 and 3 x 3 stockpile of every resource at every Stacking tier. `GET /api/testworld` follows it, `GET /api/testworld/pieces` lists the pieces with their place |
@@ -184,7 +184,7 @@ Claude Code then has these tools:
 - `game_move`
 - `game_problems`
 - `game_cleanup`
-- `game_screenshot`, which shows the image
+- `game_screenshot`, which shows the image at most 1280 pixels wide (`maxWidth`), so it fits in one MCP message; the full-size file stays at the path given
 - `path_find`
 - `path_node`
 - `path_stats` and `path_stats_reset`
