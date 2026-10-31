@@ -107,7 +107,7 @@ internal static class NavMeshRoutes
 
 	private static void Enable()
 	{
-		Enabled = Plugin.Cfg.Bind("Pathfinding", "NavMeshRoutes", false, "Unity 6 port only, needs NavMeshExperiment: routes of the player's own units are found on Unity's navigation mesh (well under a millisecond, in one go) instead of the game's search over the voxel graph, and turned back into the voxels the walk needs. Enemies, and any route the mesh cannot give, keep the game's search.");
+		Enabled = Plugin.Cfg.Bind("Pathfinding", "NavMeshRoutes", true, "Unity 6 port only, needs NavMeshExperiment: routes of the player's own units are found on Unity's navigation mesh (well under a millisecond, in one go) instead of the game's search over the voxel graph, and turned back into the voxels the walk needs. Enemies, and any route the mesh cannot give, keep the game's search.");
 		GameSession.OnLeave(Requests.Clear);
 	}
 

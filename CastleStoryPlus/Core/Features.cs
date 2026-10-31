@@ -9,7 +9,7 @@ internal static class Features
 
 	public const string Pathfinding = "Pathfinding";
 
-	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it, and, in the Unity 6 port, bricktrons walk straight lines across flat open ground instead of a staircase ([Pathfinding] StraightPaths).";
+	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it, and, in the Unity 6 port, bricktrons walk straight lines across flat open ground instead of a staircase ([Pathfinding] StraightPaths) and the player's own units get their routes from Unity's navigation mesh, the game's search staying for enemies and as the fallback ([Pathfinding] NavMeshExperiment, NavMeshRoutes).";
 
 	public const string StockpileChoice = "StockpileChoice";
 
