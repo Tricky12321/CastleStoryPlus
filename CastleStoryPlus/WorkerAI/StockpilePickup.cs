@@ -88,25 +88,30 @@ internal static class SmartTransferStockpilePatch
 		{
 			return true;
 		}
-		if (!__instance.recepteur.IsEmpty() && target.HasRoomForSomeOf(__instance.gameObject))
+		// As the game's own order: store first, or pick up first with the alternate action.
+		Node node = alternateAction ? (PickUp(__instance, target) ?? Store(__instance, target, o)) : (Store(__instance, target, o) ?? PickUp(__instance, target));
+		if (node == null)
 		{
-			GameComponent storage = o.GetComponent<GameComponent>();
-			if (storage != null)
-			{
-				__result = __instance.GoStoreIn(storage);
-				return false;
-			}
+			return true;
 		}
-		GameObject item = target.FirstThatFitsIn(__instance.recepteur);
-		if (item != null)
+		__result = node;
+		return false;
+	}
+
+	private static Node Store(Labor labor, Recepteur target, GameObject o)
+	{
+		if (labor.recepteur.IsEmpty() || !target.HasRoomForSomeOf(labor.gameObject))
 		{
-			GameComponent component = item.GetComponent<GameComponent>();
-			if (component != null)
-			{
-				__result = __instance.GoPickUp(component, -1);
-				return false;
-			}
+			return null;
 		}
-		return true;
+		GameComponent storage = o.GetComponent<GameComponent>();
+		return storage != null ? labor.GoStoreIn(storage) : null;
+	}
+
+	private static Node PickUp(Labor labor, Recepteur target)
+	{
+		GameObject item = target.FirstThatFitsIn(labor.recepteur);
+		GameComponent component = item != null ? item.GetComponent<GameComponent>() : null;
+		return component != null ? labor.GoPickUp(component, -1) : null;
 	}
 }

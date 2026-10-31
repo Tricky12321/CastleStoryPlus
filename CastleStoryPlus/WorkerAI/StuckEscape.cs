@@ -168,8 +168,8 @@ internal class StuckEscape : MonoBehaviour
 				continue;
 			}
 			Plugin.Log.LogInfo("StuckTransfer: " + labor.gameObject.name + " cancels its SmartTransfer order after " + (int)(Time.time - task.TaskStartedTimestamp) + " s standing idle");
+			// The game's own handler of this signal also clears the pending task.
 			labor.AbortWorkSignal.Invoke(TaskResult.ReceivedNewInstruction);
-			labor.PendingTask = null;
 		}
 	}
 
