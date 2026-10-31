@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using BepInEx.Configuration;
 using Brix.Engine;
+using Brix.Game;
 using Brix.Game.Components.Volumes;
+using Brix.Legacy;
 using Brix.Pathfinding;
 using Brix.Pathfinding.Test;
 using CastleStoryPlus.Core;
@@ -47,8 +49,21 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	internal const int AreaObstacle = 7;
 
-	// Ground a door stands on: its own faction walks through, others do not.
-	internal const int AreaDoor = 8;
+	// A stockpile's pallets: walkable while empty (PassThroughStockpile), which nothing signals, so they are ground at
+	// a higher cost (routes keep off them where they can) and a route across a full one is mended voxel by voxel.
+	internal const int AreaStockpile = 8;
+
+	internal const float StockpileCost = 3f;
+
+	// Ground a door stands on, one area per faction owning doors (9 to 31): a door lets its own and allied or neutral
+	// factions through (Porte.CanPassThrough), so a query takes the areas of the factions that are friends of the unit.
+	// Doors of more factions than that are left out as building ground.
+	internal const int AreaDoor = 9;
+
+	internal const int DoorAreas = 23;
+
+	// Mesh layers of a chunk: plain ground, forest, building ground (left out), stockpile, then one per door area.
+	private const int Layers = 4 + DoorAreas;
 
 	// Main-thread time a frame the chunk meshes may take while they are made.
 	private const double MeshBudgetMs = 3.0;
@@ -63,15 +78,34 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 		public readonly HashSet<XYZ> Nodes = new HashSet<XYZ>();
 
-		public readonly Mesh[] Meshes = new Mesh[4];
+		public readonly Mesh[] Meshes = new Mesh[Layers];
 
 		public readonly List<NavMeshLinkInstance> Links = new List<NavMeshLinkInstance>();
+
+		// The links out of this chunk's places (for routes to find them), and the other chunks they pass through.
+		public readonly List<LinkInfo> LinkInfos = new List<LinkInfo>();
+
+		public readonly HashSet<long> Touches = new HashSet<long>();
 
 		public int MinY = int.MaxValue;
 
 		public int MaxY = int.MinValue;
 
 		public int Quads;
+	}
+
+	// A link between two places: the places, their area (climb, step down, ladder) and the points Unity has.
+	internal sealed class LinkInfo
+	{
+		public XYZ From;
+
+		public XYZ To;
+
+		public int Area;
+
+		public Vector3 Start;
+
+		public Vector3 End;
 	}
 
 	// What a build or update cost; the API reads these.
@@ -122,6 +156,10 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		public double MarkMs;
 
 		public int Marks;
+
+		public int VolumeMarks;
+
+		public int Relinked;
 
 		public long FramesWithWork;
 
@@ -182,11 +220,48 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	private static readonly List<NavMeshBuildSource> Sources = new List<NavMeshBuildSource>();
 
-	private static readonly List<Vector3>[] Vertices = { new List<Vector3>(), new List<Vector3>(), new List<Vector3>(), new List<Vector3>() };
+	private static readonly List<Vector3>[] Vertices = NewLists<Vector3>();
 
-	private static readonly List<int>[] Triangles = { new List<int>(), new List<int>(), new List<int>(), new List<int>() };
+	private static readonly List<int>[] Triangles = NewLists<int>();
 
-	private static readonly int[] MeshAreas = { AreaWalk, AreaForest, AreaObstacle, AreaDoor };
+	private static readonly int[] MeshAreas = LayerAreas();
+
+	// The faction of each door area (index from AreaDoor), given out as doors of a new faction are met.
+	private static readonly List<Faction> DoorFactions = new List<Faction>();
+
+	// Owner chunks of the links passing through a chunk: a change there makes them anew (a ladder's top changed far
+	// from its bottom, where the link starts).
+	private static readonly Dictionary<long, HashSet<long>> LinkedBy = new Dictionary<long, HashSet<long>>();
+
+	// Links by the place they start from.
+	internal static readonly Dictionary<XYZ, List<LinkInfo>> LinksFrom = new Dictionary<XYZ, List<LinkInfo>>();
+
+	// Chunks whose links are made anew after the running update, without new meshes.
+	private static readonly HashSet<long> Relink = new HashSet<long>();
+
+	private static List<T>[] NewLists<T>()
+	{
+		List<T>[] lists = new List<T>[Layers];
+		for (int i = 0; i < lists.Length; i++)
+		{
+			lists[i] = new List<T>();
+		}
+		return lists;
+	}
+
+	private static int[] LayerAreas()
+	{
+		int[] areas = new int[Layers];
+		areas[0] = AreaWalk;
+		areas[1] = AreaForest;
+		areas[2] = AreaObstacle;
+		areas[3] = AreaStockpile;
+		for (int i = 0; i < DoorAreas; i++)
+		{
+			areas[4 + i] = AreaDoor + i;
+		}
+		return areas;
+	}
 
 	// Agent shape, kept small enough that every place of the graph survives (see the header). Set from the API.
 	internal static float Radius = 0.25f;
@@ -241,6 +316,8 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	internal static bool Ready => _data != null && Phase == "ready";
 
+	internal static TestPathfinding Graph => _graph;
+
 	internal static int AgentTypeId => Settings.agentTypeID;
 
 	// Starts (or starts again) a full build with the current agent shape.
@@ -289,6 +366,10 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		Dirty.Clear();
 		Updating.Clear();
 		Sources.Clear();
+		DoorFactions.Clear();
+		LinkedBy.Clear();
+		LinksFrom.Clear();
+		Relink.Clear();
 		Active = false;
 		Phase = "off";
 		Problem = null;
@@ -441,6 +522,15 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		Updating.AddRange(Dirty);
 		Dirty.Clear();
 		_updatingSince = _dirtySince;
+		Relink.Clear();
+		foreach (long key in Updating)
+		{
+			if (LinkedBy.TryGetValue(key, out HashSet<long> owners))
+			{
+				Relink.UnionWith(owners);
+			}
+		}
+		Relink.ExceptWith(Updating);
 		Bounds bounds = default;
 		bool first = true;
 		foreach (long key in Updating)
@@ -591,6 +681,15 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 				AddLinks(chunk);
 			}
 		}
+		foreach (long key in Relink)
+		{
+			if (Chunks.TryGetValue(key, out ChunkData chunk))
+			{
+				AddLinks(chunk);
+				Measured.Relinked++;
+			}
+		}
+		Relink.Clear();
 		double main = _updatingMainMs + Since(linkStart);
 		double latency = Since(_updatingSince);
 		Measured.Updates++;
@@ -667,6 +766,44 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		Measured.MarkMs += Since(start);
 	}
 
+	// A building, door or other obstacle was registered or removed (placed, built, torn down): the graph is not
+	// rebuilt for it (only its places' obstacle counts change), but the ground under it changes area.
+	internal static void OnVolumeChanged(IVolume volume)
+	{
+		if (!Active || _graph == null || volume == null)
+		{
+			return;
+		}
+		long start = Stopwatch.GetTimestamp();
+		bool any = false;
+		foreach (XYZ cell in volume.GetCases(VProperty.obstacle))
+		{
+			long key = KeyOf(cell);
+			if (!Chunks.ContainsKey(key))
+			{
+				continue;
+			}
+			if (!any && Dirty.Count == 0)
+			{
+				_dirtySince = start;
+			}
+			any = true;
+			if (_initial)
+			{
+				Queue(key);
+			}
+			else
+			{
+				Dirty.Add(key);
+			}
+		}
+		if (any)
+		{
+			Measured.VolumeMarks++;
+			Measured.MarkMs += Since(start);
+		}
+	}
+
 	// Whether the place is one a bricktron stands on: a walk (not only breaking through) leads from it. A ladder
 	// block's place, with only ladder branches, is not: it is a 1 x 1 floor between two others 1 block apart, which
 	// Unity drops as a ledge on every side, so its links would end nowhere. Ladders become one link from each place the ladder is entered at to each place it is left at.
@@ -735,19 +872,78 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		return new Vector3(p.x, p.y + Voxel.ComputeSurfaceHeightFromNiveaux(node.niveaux, 0f, 0f), p.z);
 	}
 
-	// An obstacle some units may pass (a door lets its own faction through): the game's presence test asks the volume
-	// each time; here it is an area of its own, which a query includes for the faction it would let through. Doors
-	// of several factions would need an area each (or the faction's doors as a query cost).
-	private static bool IsDoor(XYZ p)
+	// The mesh layer of ground under an obstacle: a door (Porte) gets its faction's door area, a stockpile's pallet
+	// the stockpile area, an obstacle everybody passes (the plain PassThroughObstacle) plain ground, anything else
+	// (buildings: the null pass-through) building ground, left out of the mesh. The game's presence test asks the door each time (open, locked, who asks); the
+	// area only says whose door it is, and a route through it is checked against the door when the walk is made.
+	private static int ObstacleLayer(XYZ p)
 	{
+		IVolume door = null;
+		bool stockpile = false;
 		foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(p, VProperty.obstacle))
 		{
-			if (volume != null && volume.PassThrough != null)
+			if (volume == null)
 			{
-				return true;
+				continue;
+			}
+			if (volume.PassThrough is Porte)
+			{
+				door = volume;
+			}
+			else if (volume.PassThrough is PassThroughStockpile)
+			{
+				stockpile = true;
+			}
+			else if (!(volume.PassThrough is PassThroughObstacle))
+			{
+				return 2;
 			}
 		}
-		return false;
+		if (door == null)
+		{
+			return stockpile ? 3 : 0;
+		}
+		Faction faction = door.Faction;
+		if (faction == null)
+		{
+			return 2;
+		}
+		int index = DoorFactions.IndexOf(faction);
+		if (index < 0)
+		{
+			if (DoorFactions.Count >= DoorAreas)
+			{
+				return 2;
+			}
+			DoorFactions.Add(faction);
+			index = DoorFactions.Count - 1;
+		}
+		return 4 + index;
+	}
+
+	// The door areas a unit of this faction may route through: doors of its own, allied and neutral factions.
+	internal static int DoorMask(Faction faction)
+	{
+		int mask = 0;
+		for (int i = 0; i < DoorFactions.Count; i++)
+		{
+			Faction owner = DoorFactions[i];
+			if (owner != null && faction != null && Affiliation.IsAlliedOrNeutral(owner, faction))
+			{
+				mask |= 1 << (AreaDoor + i);
+			}
+		}
+		return mask;
+	}
+
+	internal static int AllDoorsMask()
+	{
+		int mask = 0;
+		for (int i = 0; i < DoorAreas; i++)
+		{
+			mask |= 1 << (AreaDoor + i);
+		}
+		return mask;
 	}
 
 	private static float Corner(int niveaux, int shift)
@@ -776,11 +972,18 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 			int kind = 0;
 			if (node.ObstacleCount > 0 && TestPathfinding.IsAPermanentObstacle(p))
 			{
-				kind = IsDoor(p) ? 3 : 2;
+				kind = ObstacleLayer(p);
 			}
 			else if (TestPathfinding.IsSemiWalkableNatureBlocker(p))
 			{
 				kind = 1;
+			}
+			if (kind == 2)
+			{
+				// Ground under a building is no ground at all: no unit's search crosses it, and as an area of its own
+				// it bordered the walkable ground without the agent's radius in between, so routes ran along the
+				// building's very edge, through the voxels on its side of the border.
+				continue;
 			}
 			int n = node.niveaux;
 			List<Vector3> v = vertices[kind];
@@ -842,6 +1045,31 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		}
 		Measured.Links -= chunk.Links.Count;
 		chunk.Links.Clear();
+		long own = Key(chunk.X, chunk.Z);
+		foreach (long key in chunk.Touches)
+		{
+			if (LinkedBy.TryGetValue(key, out HashSet<long> owners))
+			{
+				owners.Remove(own);
+				if (owners.Count == 0)
+				{
+					LinkedBy.Remove(key);
+				}
+			}
+		}
+		chunk.Touches.Clear();
+		foreach (LinkInfo info in chunk.LinkInfos)
+		{
+			if (LinksFrom.TryGetValue(info.From, out List<LinkInfo> list))
+			{
+				list.Remove(info);
+				if (list.Count == 0)
+				{
+					LinksFrom.Remove(info.From);
+				}
+			}
+		}
+		chunk.LinkInfos.Clear();
 		foreach (XYZ p in chunk.Nodes)
 		{
 			if (!_graph.TerrainNodes.TryGetValue(p, out TerrainPathNode node) || node == null || node.IsEmpty || node.siblings == null)
@@ -878,10 +1106,25 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 					{
 						AddLink(chunk, node, exit.Key, area, exit.Value);
 					}
+					foreach (TerrainPathNode passed in LadderSeen.Keys)
+					{
+						chunk.Touches.Add(KeyOf(passed.position));
+					}
 					continue;
 				}
 				AddLink(chunk, node, target, area, branch.Weight);
+				chunk.Touches.Add(KeyOf(target.position));
 			}
+		}
+		chunk.Touches.Remove(own);
+		foreach (long key in chunk.Touches)
+		{
+			if (!LinkedBy.TryGetValue(key, out HashSet<long> owners))
+			{
+				owners = new HashSet<long>();
+				LinkedBy[key] = owners;
+			}
+			owners.Add(own);
 		}
 		Measured.Links += chunk.Links.Count;
 	}
@@ -906,6 +1149,14 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		if (instance.valid)
 		{
 			chunk.Links.Add(instance);
+			LinkInfo info = new LinkInfo { From = node.position, To = target.position, Area = area, Start = from, End = to };
+			chunk.LinkInfos.Add(info);
+			if (!LinksFrom.TryGetValue(info.From, out List<LinkInfo> list))
+			{
+				list = new List<LinkInfo>(2);
+				LinksFrom[info.From] = list;
+			}
+			list.Add(info);
 		}
 	}
 
@@ -913,7 +1164,7 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 	internal static NavMeshQueryFilter Filter(bool canClimb, bool forest, bool obstacles, bool doors)
 	{
 		NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = Settings.agentTypeID };
-		int mask = (1 << AreaWalk) | (1 << AreaStepDown);
+		int mask = (1 << AreaWalk) | (1 << AreaStepDown) | (1 << AreaStockpile);
 		if (canClimb || forest)
 		{
 			mask |= (1 << AreaClimb) | (1 << AreaLadder);
@@ -928,9 +1179,18 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		}
 		if (doors)
 		{
-			mask |= 1 << AreaDoor;
+			mask |= AllDoorsMask();
 		}
 		filter.areaMask = mask;
+		filter.SetAreaCost(AreaStockpile, StockpileCost);
+		return filter;
+	}
+
+	// The filter for a unit of a faction: as above, with the doors of its friends only.
+	internal static NavMeshQueryFilter Filter(bool canClimb, bool forest, Faction faction)
+	{
+		NavMeshQueryFilter filter = Filter(canClimb, forest, false, false);
+		filter.areaMask |= DoorMask(faction);
 		return filter;
 	}
 
@@ -973,6 +1233,44 @@ internal static class NavMeshExperimentRebuildPatch
 		try
 		{
 			NavMeshExperiment.OnVoxelsChanged(dirtyVoxels);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogWarning("NavMeshExperiment: " + ex.Message);
+		}
+	}
+}
+
+// Buildings, doors and other obstacles registered (placed, built, a blueprint becoming a building: each registers
+// the volume again) or removed: the ground under them changes area without a graph rebuild.
+[Feature(Features.Pathfinding, Features.PathfindingInfo)]
+[HarmonyPatch(typeof(VolumeRegistrator), nameof(VolumeRegistrator.RegisterVolume))]
+internal static class NavMeshExperimentVolumePatch
+{
+	private static void Postfix(IVolume volume)
+	{
+		NavMeshExperimentVolumeRemovedPatch.Mark(volume);
+	}
+}
+
+[Feature(Features.Pathfinding, Features.PathfindingInfo)]
+[HarmonyPatch(typeof(VolumeRegistrator), "UnregisterVolume_Internal")]
+internal static class NavMeshExperimentVolumeRemovedPatch
+{
+	private static void Prefix(IVolume v)
+	{
+		Mark(v);
+	}
+
+	internal static void Mark(IVolume volume)
+	{
+		if (!NavMeshExperiment.Active || volume == null)
+		{
+			return;
+		}
+		try
+		{
+			NavMeshExperiment.OnVolumeChanged(volume);
 		}
 		catch (System.Exception ex)
 		{

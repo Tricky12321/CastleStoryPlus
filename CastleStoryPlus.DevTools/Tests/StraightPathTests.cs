@@ -1,3 +1,4 @@
+#if UNITY6
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -276,3 +277,4 @@ internal static class StraightPathTests
 		GameSignals.Invoke(GameSignals.OnTerrainEdited);
 	}
 }
+#endif

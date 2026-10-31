@@ -24,10 +24,12 @@ internal static class PathEndpoints
 			Parameters = "to (x,y,z, required), from (x,y,z; default: where the bricktron stands), unit (bricktron id; default: the player's first builder), enemy (true: an enemy unit searches), nodes (true: list the routes' voxels), shortest (false: skip the comparison)",
 			TimeoutMs = 60000
 		});
+#if UNITY6
 		routes.Add(new Route("GET", "/api/path/straight", "Whether a bricktron may walk straight from one voxel to another (the mod's StraightPaths line test: flat route nodes, plain steps, no obstacle or unit on the line, flat ground beside it), and where and why not; with the route search's own route between them and the kinds of its steps", Straight)
 		{
 			Parameters = "from, to (x,y,z, required), unit (bricktron id; default: the player's first builder; its presence test is used)"
 		});
+#endif
 		routes.Add(new Route("GET", "/api/path/node", "The navigation node at a voxel: kind, obstacles and its links (to, kind, weight)", Node)
 		{
 			Parameters = "at (x,y,z, required)"
@@ -77,6 +79,7 @@ internal static class PathEndpoints
 			"costRatio", Round(report.CostRatio));
 	}
 
+#if UNITY6
 	private static object Straight(ApiRequest request)
 	{
 		NeedGraph();
@@ -104,6 +107,7 @@ internal static class PathEndpoints
 		}
 		return Obj("line", line, "routeSteps", kinds, "firstStepNotPlain", firstOther);
 	}
+#endif
 
 	private static object RouteJson(PathProbe.Route route, bool withNodes)
 	{

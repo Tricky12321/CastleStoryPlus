@@ -169,9 +169,9 @@ New blocks, new buildings and faster ways to build.
 | Feature | Switch |
 |---|---|
 | Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, and a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it. | `Pathfinding` |
-| Bricktrons walk straight lines across flat open ground instead of a voxel-by-voxel staircase: runs of plain flat steps of a route are pulled tight onto a straight line where the line, and the ground beside it the body brushes, is free and level (climbs, stairs, ladders, doors and forest stay as the search found them). Switch off with `[Pathfinding] StraightPaths`. | `Pathfinding` |
+| Unity 6 port: bricktrons walk straight lines across flat open ground instead of a voxel-by-voxel staircase: runs of plain flat steps of a route are pulled tight onto a straight line where the line, and the ground beside it the body brushes, is free and level (climbs, stairs, ladders, doors and forest stay as the search found them). Switch off with `[Pathfinding] StraightPaths`. | `Pathfinding` |
 | Bricktrons walk through each other (allies never block a path; enemies still do), and a bricktron in a doorway no longer makes the area behind it unreachable. | `PassThroughAllies` |
-| Experiment, Unity 6 port only, off by default: Unity's navigation mesh is built from the route graph on Unity's worker threads and kept up to date when the terrain changes, to measure it against the game's route search ([NavMesh](NavMesh.md)); nothing walks by it yet (`[Pathfinding] NavMeshExperiment`). | `Pathfinding` |
+| Experiment, Unity 6 port only, off by default: Unity's navigation mesh is built from the route graph on Unity's worker threads and kept up to date when the terrain changes, to measure it against the game's route search ([NavMesh](NavMesh.md)); with `[Pathfinding] NavMeshRoutes` (also off by default) the route searches of the player's own units are answered by it in one go and turned back into the voxels the walk needs, the A\* staying for enemies and as the fallback (`[Pathfinding] NavMeshExperiment`, `NavMeshRoutes`). | `Pathfinding` |
 
 ## UI
 

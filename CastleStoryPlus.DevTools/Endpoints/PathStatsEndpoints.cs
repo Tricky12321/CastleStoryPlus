@@ -23,7 +23,9 @@ internal static class PathStatsEndpoints
 	private static object Reset(ApiRequest request)
 	{
 		PathStats.Reset();
+#if UNITY6
 		CastleStoryPlus.Pathfinding.StraightPaths.ResetStats();
+#endif
 		return Obj("reset", true);
 	}
 
@@ -70,6 +72,10 @@ internal static class PathStatsEndpoints
 	// Routes pulled tight into straight lines (StraightPaths) since the last reset.
 	private static object Straight()
 	{
+#if !UNITY6
+		// Straight walks are a Unity 6 feature.
+		return null;
+#else
 		return Obj(
 			"routes", CastleStoryPlus.Pathfinding.StraightPaths.Routes,
 			"routesPulled", CastleStoryPlus.Pathfinding.StraightPaths.RoutesPulled,
@@ -82,6 +88,7 @@ internal static class PathStatsEndpoints
 			"totalMs", Round((float)CastleStoryPlus.Pathfinding.StraightPaths.Milliseconds),
 			"steerMs", Round((float)CastleStoryPlus.Pathfinding.StraightPaths.SteerMilliseconds),
 			"perRouteMs", (CastleStoryPlus.Pathfinding.StraightPaths.Routes > 0) ? (float)(CastleStoryPlus.Pathfinding.StraightPaths.Milliseconds / CastleStoryPlus.Pathfinding.StraightPaths.Routes) : 0f);
+#endif
 	}
 
 	private static string PairKey(PathStats.Record r)

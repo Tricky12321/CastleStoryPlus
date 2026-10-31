@@ -29,6 +29,10 @@ internal static class NavMeshEndpoints
 			Parameters = "radius (0.25), height (0.9), climb (0.6), slope (60), voxel (cell size, 0.125), tile (cells per tile, 128)"
 		});
 		routes.Add(new Route("POST", "/api/navmesh/stop", "Removes the navigation mesh and stops keeping it up to date", Stop));
+		routes.Add(new Route("POST", "/api/navmesh/routes", "Switches routing the player's units over the mesh (NavMeshRoutes) on or off for this session, and/or resets its counters", SetRoutes)
+		{
+			Parameters = "enabled (true/false; left as it is when not given), reset (true: zero the counters)"
+		});
 		routes.Add(new Route("GET", "/api/navmesh/path", "One route over the navigation mesh next to the game's A* for the same start and goal: time, length, corners, whether both reach the goal", Path)
 		{
 			Parameters = "to (x,y,z, required), from (x,y,z; default: where the bricktron stands), unit (bricktron id), enemy (true), obstacles (true: buildings' ground counts as walkable), shortest (true: also the whole graph's answer, a Dijkstra), nodes (true: list the A* voxels and the mesh's corners)",
@@ -80,6 +84,8 @@ internal static class NavMeshEndpoints
 				"lastLatencyMs", Ms(s.LastUpdateLatencyMs),
 				"lastAsyncMs", Ms(s.LastUpdateAsyncMs),
 				"markCalls", s.Marks,
+				"volumeMarks", s.VolumeMarks,
+				"relinkedChunks", s.Relinked,
 				"markMsAverage", Ms(Per(s.MarkMs, s.Marks))),
 			"frames", Obj(
 				"withWork", s.FramesWithWork,
@@ -90,7 +96,47 @@ internal static class NavMeshEndpoints
 				"idle", s.FramesIdle,
 				"frameMsIdle", Ms(Per(s.FrameDeltaIdleMs, s.FramesIdle))),
 			"memory", Obj("meshBytes", NavMeshExperiment.MeshBytes(), "navMeshDataBytes", NavMeshExperiment.DataBytes()),
+			"routes", Routes(),
 			"triangulation", triangles);
+	}
+
+	// The routes of the player's units made over the mesh (NavMeshRoutes): how many, their time, and why the others
+	// were left to the A*.
+	private static object Routes()
+	{
+		Dictionary<string, object> reasons = new Dictionary<string, object>();
+		foreach (KeyValuePair<string, int> pair in NavMeshRoutes.Reasons)
+		{
+			reasons[pair.Key] = pair.Value;
+		}
+		return Obj(
+			"enabled", NavMeshRoutes.Enabled != null && NavMeshRoutes.Enabled.Value,
+			"attempts", NavMeshRoutes.Attempts,
+			"routed", NavMeshRoutes.Routed,
+			"fallbacks", NavMeshRoutes.Fallbacks,
+			"fallbackRate", (NavMeshRoutes.Attempts > 0) ? System.Math.Round((double)NavMeshRoutes.Fallbacks / NavMeshRoutes.Attempts, 3) : 0.0,
+			"msAverage", Ms(Per(NavMeshRoutes.Milliseconds, NavMeshRoutes.Attempts)),
+			"msWorst", Ms(NavMeshRoutes.WorstMilliseconds),
+			"msTotal", Ms(NavMeshRoutes.Milliseconds),
+			"voxelsAverage", System.Math.Round(Per(NavMeshRoutes.RouteVoxels, NavMeshRoutes.Routed), 1),
+			"mended", NavMeshRoutes.Mended,
+			"linksTaken", Obj("climbs", NavMeshRoutes.Climbs, "stepDowns", NavMeshRoutes.StepDowns, "ladders", NavMeshRoutes.LadderRuns),
+			"reasons", reasons,
+			"recent", new List<string>(NavMeshRoutes.Recent));
+	}
+
+	private static object SetRoutes(ApiRequest request)
+	{
+		string enabled = request.Get("enabled");
+		if (!string.IsNullOrEmpty(enabled) && NavMeshRoutes.Enabled != null)
+		{
+			NavMeshRoutes.Enabled.Value = enabled == "true" || enabled == "1";
+		}
+		if (request.Bool("reset", false))
+		{
+			NavMeshRoutes.ResetStats();
+		}
+		return Routes();
 	}
 
 	private static object Start(ApiRequest request)
