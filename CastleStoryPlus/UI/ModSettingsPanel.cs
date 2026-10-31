@@ -279,6 +279,15 @@ end
 		Flexible(title.gameObject);
 		CreateButton(header, "X", 28f, () => SetVisible(false));
 
+		// Every value of the config file, not only the ones below.
+		Transform allRow = CreateRow(_window.transform, 28f);
+		Button all = CreateButton(allRow, "All settings (every value in the config file)...", 0f, () =>
+		{
+			SetVisible(false);
+			AllSettingsPanel.Toggle();
+		});
+		Flexible(all.gameObject);
+
 		// The window has more settings than fit on a screen: the body scrolls, the title stays put.
 		_body = CreateScrollList(_window.transform, out LayoutElement bodySize);
 		bodySize.minHeight = 720f;

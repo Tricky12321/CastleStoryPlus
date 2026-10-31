@@ -40,6 +40,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/workshops/why?unit=&id=&cells=` | Why a workshop has or has not work for a bricktron: every check of the game's HasWorkFor (room, reach, store, fetch, work) with its answer |
 | `POST /api/screenshot?ui=&name=&maxWidth=&at=&yaw=&pitch=&distance=` | Saves a screenshot under `BepInEx/devtools/screenshots/` and answers its path. `ui=false`: the world only, without the menus, the build jobs' markers and the icons over things; with `at` the world's cameras are put there for the picture (and back after). `maxWidth`: also a copy at most that wide, `<name>_small.png` (`smallPath`), scaled on the graphics card |
 | `GET /api/ui/rect?q=` | Where a shown menu part is on the screen, by its object's name (a station's window: `CS market`, `CS Research`, ...) |
+| `POST /api/ui/click?text=&index=` | Clicks a shown button of the mod's windows by (part of) its label; `index` picks a match in reading order on the screen |
 | `POST /api/quit` | Closes the game (its own Quit), half a second after answering; `tools/start-game.sh --restart` uses it |
 | `POST /api/testworld?width=` | Builds the test world round the home crystal: every research done, one of every building and block, an armour stand per soldier class, and a full 2 x 2 and 3 x 3 stockpile of every resource at every Stacking tier. `GET /api/testworld` follows it, `GET /api/testworld/pieces` lists the pieces with their place |
 | `GET /api/studio/plan` | The photo studio's pieces (the test world's plan) by index |

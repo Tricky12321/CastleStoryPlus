@@ -19,7 +19,45 @@ internal static class UiEndpoints
 		{
 			Parameters = "depth (path segments a group keeps, default 4)"
 		});
+		routes.Add(new Route("POST", "/api/ui/click", "Clicks a shown uGUI button (the mod's code-built windows) by its text, as a mouse click does: the first active, interactable button whose label contains the text", Click)
+		{
+			Parameters = "text (part of the button's label, case ignored; required), index (which match in reading order on the screen, default 0)"
+		});
 		routes.Add(new Route("GET", "/api/ui/overheads", "The overhead icons by kind (their parent's name): how many, how many show, how many of their canvases are on, how many are close enough to show", Overheads));
+	}
+
+	private static object Click(ApiRequest request)
+	{
+		string text = request.String("text", null);
+		if (string.IsNullOrEmpty(text))
+		{
+			throw new System.ArgumentException("'text' is missing");
+		}
+		int index = request.Int("index", 0);
+		List<string> labels = new List<string>();
+		// In reading order on the screen (top to bottom, then left to right), so an index names the same button each time.
+		List<UnityEngine.UI.Button> buttons = new List<UnityEngine.UI.Button>(Object.FindObjectsOfType<UnityEngine.UI.Button>());
+		buttons.Sort((UnityEngine.UI.Button a, UnityEngine.UI.Button b) =>
+		{
+			Vector3 pa = a.transform.position;
+			Vector3 pb = b.transform.position;
+			return (Mathf.Abs(pa.y - pb.y) > 1f) ? pb.y.CompareTo(pa.y) : pa.x.CompareTo(pb.x);
+		});
+		foreach (UnityEngine.UI.Button button in buttons)
+		{
+			UnityEngine.UI.Text label = button.GetComponentInChildren<UnityEngine.UI.Text>();
+			if (!button.isActiveAndEnabled || !button.IsInteractable() || label == null || label.text.IndexOf(text, System.StringComparison.OrdinalIgnoreCase) < 0)
+			{
+				continue;
+			}
+			labels.Add(label.text);
+			if (labels.Count - 1 == index)
+			{
+				button.onClick.Invoke();
+				return Obj("clicked", label.text, "path", button.name);
+			}
+		}
+		return Obj("clicked", null, "matches", labels);
 	}
 
 	// The canvases that draw (active and enabled), grouped by their path with numbers and names of clones left out, to
