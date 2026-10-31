@@ -35,7 +35,7 @@ internal static class VisionScan
 
 	private const int PartialId = -2;
 
-	private sealed class Bucket
+	internal sealed class Bucket
 	{
 		public int LoX, LoY, LoZ, HiX, HiY, HiZ, Range;
 
@@ -52,11 +52,14 @@ internal static class VisionScan
 
 	private static readonly Dictionary<long, Bucket> ByKey = new Dictionary<long, Bucket>();
 
-	private static readonly List<Bucket> Used = new List<Bucket>();
+	internal static readonly List<Bucket> Used = new List<Bucket>();
 
 	private static readonly Stack<Bucket> Spare = new Stack<Bucket>();
 
 	private static XYZ[] _points = new XYZ[256];
+
+	// The positions the buckets' members index, from the last AssignDetection.
+	internal static XYZ[] Points => _points;
 
 	// Counted up by every SharedFactionVision.BrixUpdate: one step of the pass runs per call.
 	internal static int Step;
@@ -75,6 +78,40 @@ internal static class VisionScan
 	private static int _snapshotCount = -1;
 
 	private static readonly List<int> Edge = new List<int>();
+
+#if UNITY6_PLAYER && PLAYER_COMPUTE
+	private static void Enable()
+	{
+		GameSession.OnLeave(() =>
+		{
+			if (PlayerJobs.Loaded)
+			{
+				DropJobs();
+			}
+		});
+	}
+
+	private static void Disable()
+	{
+		if (PlayerJobs.Loaded)
+		{
+			DisposeJobs();
+		}
+	}
+
+	// Kept apart, so a player without the jobs never loads VisionJobs.
+	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+	private static void DropJobs()
+	{
+		VisionJobs.Drop();
+	}
+
+	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+	private static void DisposeJobs()
+	{
+		VisionJobs.Dispose();
+	}
+#endif
 
 	internal static bool CanRun()
 	{
@@ -127,6 +164,15 @@ internal static class VisionScan
 		}
 		try
 		{
+#if UNITY6_PLAYER && PLAYER_COMPUTE
+			// The Unity 6 port: the groups' statuses are worked out by a job of the player's own on worker threads and
+			// applied at the next step of the pass (VisionJobs).
+			if (PlayerJobs.Use)
+			{
+				ScheduleJob(shared, groups);
+				return;
+			}
+#endif
 			foreach (Bucket bucket in Used)
 			{
 				int r = bucket.Range;
@@ -174,6 +220,14 @@ internal static class VisionScan
 			ByKey.Clear();
 		}
 	}
+
+#if UNITY6_PLAYER && PLAYER_COMPUTE
+	[System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+	private static void ScheduleJob(SharedFactionVision shared, Dictionary<XYZ, TrackingGroup> groups)
+	{
+		VisionJobs.Schedule(shared, groups, Used);
+	}
+#endif
 
 	private static int CeilDiv(int a)
 	{

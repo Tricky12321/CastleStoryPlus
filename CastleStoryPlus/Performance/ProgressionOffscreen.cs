@@ -11,7 +11,8 @@ namespace CastleStoryPlus.Performance;
 // animator there and then on the main thread (about 0.4 ms a call in a big base; one or two storages are at it at
 // any moment). A storage off the screen is not stepped while nothing can see it: the time is kept and given to the
 // animator in one step when the storage comes on the screen, when its second is up, or when its content changes
-// again, so it ends in the same state as before. A storage on the screen is stepped every frame as before.
+// again, so it ends in the same state as before. A storage on the screen is stepped every frame as before. In the
+// Unity 6 port ProgressionOnWorkers takes the stepping off the main thread altogether, and this stands aside.
 [Feature(Features.FrameSavers, Features.FrameSaversInfo)]
 [HarmonyPatch(typeof(AnimatedProgression), "Update")]
 [HarmonyPriority(Priority.Last)]
@@ -40,6 +41,13 @@ internal static class ProgressionOffscreen
 		{
 			return false;
 		}
+#if UNITY6_PLAYER
+		// Unity's animation pass steps it on its worker threads, on the screen or not.
+		if (ProgressionOnWorkers.On)
+		{
+			return true;
+		}
+#endif
 		Animator animator = AnimatorOf(__instance);
 		if (animator == null)
 		{

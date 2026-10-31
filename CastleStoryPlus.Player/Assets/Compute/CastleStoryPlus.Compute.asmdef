@@ -1,0 +1,14 @@
+{
+    "name": "CastleStoryPlus.Compute",
+    "rootNamespace": "CastleStoryPlus.Compute",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
