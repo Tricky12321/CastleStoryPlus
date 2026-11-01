@@ -3,6 +3,14 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [CHANGE] **Docs:** [Performance](docs/Performance.md) has the second Vulkan benchmark of the Unity 6 port (01-11-2026): OpenGL Core is 10 % ahead at 1x because Unity's Vulkan backend costs the main thread 6 % more instructions and 7 % of its IPC; the driver (RADV or AMD's), the job worker count, SMT, the clock and the threading mode were ruled out one by one with `perf`. The 31-10 benchmark ran on AMD's proprietary Vulkan driver, not RADV, as the text said.
+- [CHANGE] **Stacking, fewer draw calls:** the extra layers the Stacking research shows on a pallet are drawn as one mesh per material instead of one object per brick, ingot or plank. On a large base they drew some 500 of the frame's 3400 draw calls and as many shadow casters; now about 100.
+- [ADD] **DevTools:** `GET /api/render?by=shader|material|mesh` groups the renderers drawn last frame by shader, material or mesh with their count, submeshes, vertices and shadow casters; `GET /api/frames/markers` also answers Unity's render statistics per frame (draw calls, SetPass calls, triangles, vertices, shadow casters, buffer uploads) under `counters`.
+- [ADD] **Unity 6 port, installer:** `CSP_SPIRV_OPT=<path to spirv-opt>` runs the game's own 5.6 SPIR-V programs through `spirv-opt -O` while they are repacked for Vulkan (an experiment: it made no measurable difference to the GPU time, see [Performance](docs/Performance.md)). The SMOL-V decoder reads the game's encoding version 0 streams, which smol-v wrote before 31-08-2016.
+- [FIX] **Saving:** a tunnel task that was never placed no longer makes every save and autosave fail. Its missing tunnel threw an error while the game was saved, so nothing was saved until the game was closed; such a tunnel is now saved empty.
+
 ## 0.7.0 — 2026-11-01
 
 - [ADD] **All settings in the game:** Castle Story Plus settings has an "All settings" button that opens every value of the mod's config file, by section, with a search over names and descriptions and the description of the value under the mouse. Switches toggle, enums and lists of accepted values step through their choices, keys take the next key pressed, numbers have -/+ (a step that fits the value's range or size) and a field, other values a text field; every change is saved at once. Values of a feature that is off are shown as the text in the file and apply when the feature runs.

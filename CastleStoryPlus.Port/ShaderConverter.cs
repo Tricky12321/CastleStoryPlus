@@ -88,6 +88,12 @@ public sealed class ShaderConverter
 	private Shaderc shaderc;
 	private string shaderName;
 	private readonly string glslOnly = Environment.GetEnvironmentVariable("CSP_VULKAN_GLSL");
+	// Experiment: CSP_SPIRV_OPT=<path to spirv-opt> runs the game's own 5.6 SPIR-V streams (made by the glslang of
+	// 2017, not optimised) through spirv-opt -O before they are repacked. A stream it cannot handle is kept as it is.
+	private readonly string spirvOpt = Environment.GetEnvironmentVariable("CSP_SPIRV_OPT");
+	private int optimized;
+	private int notOptimized;
+	private readonly List<string> optimizeFailures = new List<string>();
 
 	// A line per shader: with more than one platform what each got, otherwise only shaders whose programs were
 	// compiled from GLSL (how many, and why any failed).
@@ -261,6 +267,8 @@ public sealed class ShaderConverter
 			}
 			reused = 0;
 			compiled = 0;
+			optimized = 0;
+			notOptimized = 0;
 			failures = new List<string>();
 			entries = new List<byte[]> { format.EmptyParameters };
 			converted = new Dictionary<uint, (uint, uint)>();
@@ -306,6 +314,10 @@ public sealed class ShaderConverter
 			int count = results.Sum(r => r.SubPrograms.Count);
 			anyPrograms |= count > 0;
 			notes.Add(name + " " + (Vulkan && (reused > 0 || compiled > 0) ? reused + " SPIR-V programs reused, " + compiled + " compiled from GLSL" : count + " programs"));
+			if (Vulkan && spirvOpt != null && (optimized > 0 || notOptimized > 0))
+			{
+				notes.Add(optimized + " SPIR-V streams optimised" + (notOptimized > 0 ? ", " + notOptimized + " kept as they were (" + optimizeFailures[optimizeFailures.Count - 1] + ")" : ""));
+			}
 			done.Add((format, Pack(entries), results));
 		}
 		done = done.OrderBy(d => formats.IndexOf(d.Format)).ToList();
@@ -608,23 +620,72 @@ public sealed class ShaderConverter
 		var reader = new BinaryReader(new MemoryStream(old));
 		reader.BaseStream.Position = Align(codeStart + codeLength);
 
-		// Unity 6's header (flags and the values after the stages from the player's own program), the stages moved by
-		// the longer header, the streams as they are.
-		int shift = format.VulkanHeader.Length - OldVulkanHeader;
-		var code = new byte[codeLength + shift];
-		Buffer.BlockCopy(format.VulkanHeader, 0, code, 0, format.VulkanHeader.Length);
-		for (int stage = 0; stage < 5; stage++)
+		// Unity 6's header (flags and the values after the stages from the player's own program), then the stages one
+		// after the other: the streams as they are, or optimised (CSP_SPIRV_OPT).
+		var streams = new byte[5][];
+		bool optimise = spirvOpt != null;
+		for (int stage = 0; stage < 5 && optimise; stage++)
 		{
 			uint offset = BitConverter.ToUInt32(old, codeStart + 4 + stage * 8);
 			uint length = BitConverter.ToUInt32(old, codeStart + 8 + stage * 8);
-			WriteUInt(code, 4 + stage * 8, length == 0 ? 0 : offset + (uint)shift);
-			WriteUInt(code, 8 + stage * 8, length);
+			if (length == 0)
+			{
+				continue;
+			}
+			// A stage entry that is not a SMOL-V stream inside the code: this program is repacked as it is.
+			if (offset < OldVulkanHeader || offset + length > (uint)codeLength || BitConverter.ToUInt32(old, codeStart + (int)offset) != 0x534D4F4C)
+			{
+				optimise = false;
+				notOptimized++;
+				optimizeFailures.Add(shaderName + " stage " + stage + ": not a stream, header " + BitConverter.ToString(old, codeStart, OldVulkanHeader).Replace("-", ""));
+				break;
+			}
+			var stream = new byte[length];
+			Buffer.BlockCopy(old, codeStart + (int)offset, stream, 0, (int)length);
+			streams[stage] = Optimize(stream, "stage " + stage);
 		}
-		Buffer.BlockCopy(old, codeStart + OldVulkanHeader, code, format.VulkanHeader.Length, codeLength - OldVulkanHeader);
+		byte[] code;
+		if (optimise)
+		{
+			int total = 0;
+			foreach (byte[] stream in streams)
+			{
+				total += stream?.Length ?? 0;
+			}
+			code = new byte[format.VulkanHeader.Length + total];
+			Buffer.BlockCopy(format.VulkanHeader, 0, code, 0, format.VulkanHeader.Length);
+			int next = format.VulkanHeader.Length;
+			for (int stage = 0; stage < 5; stage++)
+			{
+				byte[] stream = streams[stage];
+				WriteUInt(code, 4 + stage * 8, stream == null ? 0 : (uint)next);
+				WriteUInt(code, 8 + stage * 8, stream == null ? 0 : (uint)stream.Length);
+				if (stream != null)
+				{
+					Buffer.BlockCopy(stream, 0, code, next, stream.Length);
+					next += stream.Length;
+				}
+			}
+		}
+		else
+		{
+			// The stages moved by the longer header, the streams as they are.
+			int shift = format.VulkanHeader.Length - OldVulkanHeader;
+			code = new byte[codeLength + shift];
+			Buffer.BlockCopy(format.VulkanHeader, 0, code, 0, format.VulkanHeader.Length);
+			for (int stage = 0; stage < 5; stage++)
+			{
+				uint offset = BitConverter.ToUInt32(old, codeStart + 4 + stage * 8);
+				uint length = BitConverter.ToUInt32(old, codeStart + 8 + stage * 8);
+				WriteUInt(code, 4 + stage * 8, length == 0 ? 0 : offset + (uint)shift);
+				WriteUInt(code, 8 + stage * 8, length);
+			}
+			Buffer.BlockCopy(old, codeStart + OldVulkanHeader, code, format.VulkanHeader.Length, codeLength - OldVulkanHeader);
+		}
 		WriteUInt(code, VulkanTargetsOffset, written);
 		using (var sha = System.Security.Cryptography.SHA256.Create())
 		{
-			byte[] hash = sha.ComputeHash(old, codeStart + OldVulkanHeader, codeLength - OldVulkanHeader);
+			byte[] hash = sha.ComputeHash(code, format.VulkanHeader.Length, code.Length - format.VulkanHeader.Length);
 			Buffer.BlockCopy(hash, 0, code, VulkanHashOffset, hash.Length);
 		}
 
@@ -649,6 +710,47 @@ public sealed class ShaderConverter
 		}
 		parameters = ConvertParameters(reader);
 		return result.ToArray();
+	}
+
+	// A 5.6 SMOL-V stream through spirv-opt -O (CSP_SPIRV_OPT), SMOL-V again; the stream itself when that fails.
+	private byte[] Optimize(byte[] smol, string stage)
+	{
+		string input = Path.GetTempFileName();
+		string output = input + ".opt";
+		try
+		{
+			File.WriteAllBytes(input, SmolV.Decode(smol));
+			var start = new System.Diagnostics.ProcessStartInfo(spirvOpt, "-O --target-env=vulkan1.0 \"" + input + "\" -o \"" + output + "\"")
+			{
+				UseShellExecute = false,
+				RedirectStandardError = true,
+				RedirectStandardOutput = true,
+			};
+			using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(start))
+			{
+				string error = process.StandardError.ReadToEnd();
+				process.StandardOutput.ReadToEnd();
+				process.WaitForExit();
+				if (process.ExitCode != 0 || !File.Exists(output))
+				{
+					throw new InvalidDataException("spirv-opt: " + error.Split('\n')[0].Trim());
+				}
+			}
+			byte[] result = SmolV.Encode(File.ReadAllBytes(output));
+			optimized++;
+			return result;
+		}
+		catch (Exception e) when (e is InvalidDataException || e is IOException || e is InvalidOperationException || e is IndexOutOfRangeException || e is ArgumentException)
+		{
+			notOptimized++;
+			optimizeFailures.Add(shaderName + " " + stage + ": " + e.Message);
+			return smol;
+		}
+		finally
+		{
+			File.Delete(input);
+			File.Delete(output);
+		}
 	}
 
 	private static bool IsEmptyVulkanProgram(byte[] program)
