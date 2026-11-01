@@ -181,8 +181,34 @@ public static class SmolV
 		return output.ToArray();
 	}
 
-	// The SPIR-V of a SMOL-V stream (development: checks the encoder against Unity's own programs).
+	// The SPIR-V of a SMOL-V stream (development: checks the encoder against Unity's own programs). Encoding
+	// version 0 (the game's own 5.6 programs) knows the opcodes up to OpModuleProcessed (330) only, and the streams
+	// from before smol-v's change of 31-08-2016 (the ones Unity 5.6 carries) encode three things differently: the
+	// decoration targets are plain deltas, member decorations are not batched, and only the branch and barrier
+	// operands are zigzag deltas. A version 0 stream is read the old way first, then the later way.
 	public static byte[] Decode(byte[] smol)
+	{
+		if (BitConverter.ToUInt32(smol, 4) >> 24 == 0)
+		{
+			try
+			{
+				return Decode(smol, true);
+			}
+			catch (Exception e) when (e is InvalidDataException || e is IOException || e is IndexOutOfRangeException || e is ArgumentException)
+			{
+				return Decode(smol, false);
+			}
+		}
+		return Decode(smol, false);
+	}
+
+	private static bool ZigzagBeforeZero(int op)
+	{
+		// ControlBarrier, MemoryBarrier, LoopMerge, SelectionMerge, Branch, BranchConditional, MemoryNamedBarrier.
+		return op == 224 || op == 225 || op == 246 || op == 247 || op == 249 || op == 250 || op == 329;
+	}
+
+	private static byte[] Decode(byte[] smol, bool beforeZero)
 	{
 		var reader = new BinaryReader(new MemoryStream(smol));
 		if (reader.ReadUInt32() != SmolMagic)
@@ -190,10 +216,11 @@ public static class SmolV
 			throw new InvalidDataException("not SMOL-V");
 		}
 		uint version = reader.ReadUInt32();
-		if (version >> 24 != EncodingVersion)
+		if (version >> 24 > EncodingVersion)
 		{
 			throw new InvalidDataException("SMOL-V encoding version " + (version >> 24));
 		}
+		int knownOps = version >> 24 == 0 ? 331 : OpData.Length;
 		var words = new List<uint> { SpirvMagic, version & 0x00FFFFFF, reader.ReadUInt32(), reader.ReadUInt32(), reader.ReadUInt32() };
 		int decodedSize = reader.ReadInt32();
 		Stream input = reader.BaseStream;
@@ -205,7 +232,7 @@ public static class SmolV
 			int length = (int)(((lengthOp >> 20) << 4) | ((lengthOp >> 4) & 0xF));
 			int op = Remap((int)(((lengthOp >> 4) & 0xFF0) | (lengthOp & 0xF)));
 			length = DecodeLength(op, length);
-			byte data = Data(op);
+			byte data = op < knownOps ? Data(op) : (byte)0;
 			var instruction = new uint[length];
 			int operand = 1;
 			if ((data & 2) != 0)
@@ -219,10 +246,11 @@ public static class SmolV
 			}
 			if (op == OpDecorate || op == OpMemberDecorate)
 			{
-				previousDecorate += Unzig(ReadVarint(input));
+				uint delta = ReadVarint(input);
+				previousDecorate += beforeZero ? delta : Unzig(delta);
 				instruction[operand++] = previousDecorate;
 			}
-			if (op == OpMemberDecorate)
+			if (op == OpMemberDecorate && !beforeZero)
 			{
 				int count = input.ReadByte();
 				uint previousIndex = 0;
@@ -255,7 +283,8 @@ public static class SmolV
 			int deltas = (data >> 2) & 0xF;
 			for (int i = 0; i < deltas && operand < length; i++)
 			{
-				instruction[operand++] = previousResult - Unzig(ReadVarint(input));
+				uint delta = ReadVarint(input);
+				instruction[operand++] = previousResult - (beforeZero && !ZigzagBeforeZero(op) ? delta : Unzig(delta));
 			}
 			if (op == OpVectorShuffleCompact)
 			{
