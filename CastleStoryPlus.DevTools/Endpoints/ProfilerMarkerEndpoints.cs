@@ -59,6 +59,14 @@ internal static class ProfilerMarkerEndpoints
 				"maxMsInFrame", Round((float)marker.MaxMs),
 				"framesSeen", marker.Count));
 		}
+		List<object> counters = new List<object>();
+		foreach (ProfilerMarkers.Counter counter in ProfilerMarkers.Counters)
+		{
+			if (frames > 0 && counter.Sum > 0)
+			{
+				counters.Add(Obj("counter", counter.Name, "perFrame", (float)Math.Round(counter.Sum / frames, 1), "maxInFrame", counter.Max));
+			}
+		}
 		if (request.Bool("reset", false))
 		{
 			ProfilerMarkers.Reset();
@@ -68,7 +76,8 @@ internal static class ProfilerMarkerEndpoints
 			"recorders", ProfilerMarkers.Markers.Count,
 			"frames", frames,
 			"fps", (seconds > 0) ? Round((float)(frames / seconds)) : 0f,
-			"markers", rows);
+			"markers", rows,
+			"counters", counters);
 	}
 }
 #endif

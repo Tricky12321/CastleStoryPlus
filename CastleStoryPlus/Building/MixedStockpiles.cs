@@ -72,6 +72,26 @@ internal static class MixedStockpiles
 		return result;
 	}
 
+	// The one resource a stockpile holds, or null when it holds none or more than one; without a list (called for
+	// every stockpile on every check).
+	public static Ressource SingleType(Recepteur recepteur)
+	{
+		Ressource single = null;
+		foreach (KeyValuePair<Type, Adjectif> pair in recepteur.ContentDescription.DicoAdjectif)
+		{
+			Ressource resource = pair.Value as Ressource;
+			if (resource != null && resource.quantifiable.valeur > 0)
+			{
+				if (single != null)
+				{
+					return null;
+				}
+				single = resource;
+			}
+		}
+		return single;
+	}
+
 	public static bool IsMixed(Recepteur recepteur)
 	{
 		return IsPallet(recepteur) && Types(recepteur).Count > 1;
