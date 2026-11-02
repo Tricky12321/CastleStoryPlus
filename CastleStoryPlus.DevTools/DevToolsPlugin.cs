@@ -56,6 +56,7 @@ public class DevToolsPlugin : BaseUnityPlugin
 		gameObject.AddComponent<TestWorldBuilder>();
 		gameObject.AddComponent<BenchmarkWorld>();
 		gameObject.AddComponent<Frames.BenchmarkRun>();
+		gameObject.AddComponent<Endpoints.CameraHold>();
 		PathStats.Reset();
 		new Harmony(Guid).PatchAll(typeof(DevToolsPlugin).Assembly);
 		if (ApiEnabled.Value)
