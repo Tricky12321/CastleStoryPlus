@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using Brix.Engine;
+using Brix.Transactions;
 using CastleStoryPlus.DevTools.Speed;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -35,6 +36,12 @@ internal class TestRunner : MonoBehaviour
 
 		public bool NeedsHostGame;
 
+		// May run next to other tests ([ParallelTests] on its class and not Exclusive).
+		public bool Parallel;
+
+		// Tests of one group never run at the same time.
+		public string Group;
+
 		public MethodInfo Method;
 	}
 
@@ -53,6 +60,11 @@ internal class TestRunner : MonoBehaviour
 		public List<string> Log;
 
 		public Dictionary<string, object> Data;
+
+		// Skipped for want of free ground (TestNoRoom): run again once the others are done.
+		public bool NoRoom;
+
+		public int Attempts;
 	}
 
 	internal static TestRunner Instance;
@@ -74,6 +86,13 @@ internal class TestRunner : MonoBehaviour
 	// Game speed of the run (1: as it is). Set when the run starts and back to 1x when it ends; the tests' waits
 	// (t.Seconds) count game time, their timeouts real time, so a faster game finishes them sooner.
 	private float _speed = 1f;
+
+	// How many tests may run at the same time (1: one after the other).
+	private int _parallel = 1;
+
+	// Take the world's own units away before the run (the player's bricktrons, roaming enemies), so the tests only
+	// meet their own.
+	private bool _clearUnits;
 
 	private void Awake()
 	{
@@ -99,8 +118,11 @@ internal class TestRunner : MonoBehaviour
 					DevToolsPlugin.Log.LogError("Test " + type.Name + "." + method.Name + " must be: static IEnumerator " + method.Name + "(TestContext t)");
 					continue;
 				}
+				ParallelTestsAttribute parallel = (ParallelTestsAttribute)Attribute.GetCustomAttribute(type, typeof(ParallelTestsAttribute));
 				Tests.Add(new TestInfo
 				{
+					Parallel = parallel != null && !attribute.Exclusive,
+					Group = (parallel != null) ? parallel.Group : null,
 					Name = type.Name + "." + method.Name,
 					Category = attribute.Category,
 					Description = attribute.Description,
@@ -136,7 +158,7 @@ internal class TestRunner : MonoBehaviour
 	}
 
 	// Main thread. False when a run is already going.
-	internal bool StartRun(List<TestInfo> tests, float speed)
+	internal bool StartRun(List<TestInfo> tests, float speed, int parallel = 1, bool clearUnits = false)
 	{
 		if (Running)
 		{
@@ -145,6 +167,8 @@ internal class TestRunner : MonoBehaviour
 		Running = true;
 		_stopAsked = false;
 		_speed = speed;
+		_parallel = Math.Max(1, parallel);
+		_clearUnits = clearUnits;
 		RunNumber++;
 		StartedAt = DateTime.Now;
 		Results.Clear();
@@ -169,16 +193,106 @@ internal class TestRunner : MonoBehaviour
 		{
 			GameSpeed.Instance.Set(_speed, 0f);
 		}
+		bool quieted = false;
+		GameObject runBuilder = null;
+		if (_clearUnits && InHostGame())
+		{
+			ClearUnits();
+			Scenario.QuietWorld();
+			quieted = true;
+			// One builder of the run's own for the older tests that use "the player's builder" (Units.Find); the
+			// newer ones bring their own. Given a few seconds to settle into the world.
+			XYZ home = Scenario.Home();
+			runBuilder = Transactor.SpawnUNet(Brix.External.Factories.Test.Bricktron, Scenario.Player, Scenario.Walkable(Scenario.Ground(home.x + 4, home.z + 2)).ToVector3(), Quaternion.identity);
+			if (runBuilder != null)
+			{
+				runBuilder.GetComponent<Brix.Game.AI.Occupation>().SetOccupation(Brix.Game.AI.Occupation.Type.Builder, true);
+				// Only what a test orders it to do: an idle builder takes a free workshop or a chore on its own.
+				runBuilder.GetComponent<Brix.Game.AI.Labor>().Autonomy = Brix.Game.AI.AutonomyStatus.WaitForOrders;
+			}
+			yield return new WaitForSeconds(3f);
+		}
+		// Tests start in their order as soon as they may: no more than _parallel at once, a test that must run alone
+		// only when nothing else runs (and nothing starts next to it), never two of one group at once.
+		List<int> queue = new List<int>();
 		for (int i = 0; i < tests.Count; i++)
 		{
-			Result result = Results[i];
+			queue.Add(i);
+		}
+		HashSet<int> running = new HashSet<int>();
+		List<int> deferred = new List<int>();
+		HashSet<string> busyGroups = new HashSet<string>();
+		bool aloneRunning = false;
+		while (queue.Count > 0 || running.Count > 0 || deferred.Count > 0)
+		{
+			if (running.Count == 0 && deferred.Count > 0)
+			{
+				queue.AddRange(deferred);
+				deferred.Clear();
+			}
 			if (_stopAsked)
 			{
-				result.Outcome = Outcome.Skipped;
-				result.Message = "The run was stopped";
-				continue;
+				queue.AddRange(deferred);
+				deferred.Clear();
+				foreach (int i in queue)
+				{
+					Results[i].Outcome = Outcome.Skipped;
+					Results[i].Message = "The run was stopped";
+				}
+				queue.Clear();
 			}
-			yield return StartCoroutine(RunOne(tests[i], result));
+			for (int q = 0; q < queue.Count && running.Count < _parallel && !aloneRunning; q++)
+			{
+				int index = queue[q];
+				TestInfo test = tests[index];
+				bool alone = !test.Parallel || _parallel == 1;
+				if (alone && running.Count > 0)
+				{
+					// Waits for the others; nothing after it starts first, so the order holds.
+					break;
+				}
+				if (test.Group != null && busyGroups.Contains(test.Group))
+				{
+					continue;
+				}
+				queue.RemoveAt(q--);
+				running.Add(index);
+				if (test.Group != null)
+				{
+					busyGroups.Add(test.Group);
+				}
+				aloneRunning = alone;
+				StartCoroutine(RunTracked(test, Results[index], () =>
+				{
+					running.Remove(index);
+					if (test.Group != null)
+					{
+						busyGroups.Remove(test.Group);
+					}
+					if (alone)
+					{
+						aloneRunning = false;
+					}
+					Result result = Results[index];
+					// Out of free ground while others held it: again once nothing else runs.
+					if (result.NoRoom && result.Attempts < 3 && (running.Count > 0 || queue.Count > 0))
+					{
+						result.Outcome = Outcome.Pending;
+						result.Message = null;
+						result.NoRoom = false;
+						deferred.Add(index);
+					}
+				}));
+			}
+			yield return null;
+		}
+		if (quieted)
+		{
+			Scenario.UnquietWorld();
+		}
+		if (runBuilder != null)
+		{
+			Scenario.Release(runBuilder);
 		}
 		if (fast && GameSpeed.Instance.Active)
 		{
@@ -188,6 +302,28 @@ internal class TestRunner : MonoBehaviour
 		FinishedAt = DateTime.Now;
 		int passed = Results.FindAll((Result r) => r.Outcome == Outcome.Passed).Count;
 		DevToolsPlugin.Log.LogInfo("Tests: run " + RunNumber + " done, " + passed + "/" + Results.Count + " passed");
+	}
+
+	private IEnumerator RunTracked(TestInfo test, Result result, Action done)
+	{
+		result.Attempts++;
+		yield return StartCoroutine(RunOne(test, result));
+		done();
+	}
+
+	// Takes every unit the world has now out of it: the player's bricktrons and the map's roaming enemies and beasts.
+	private static void ClearUnits()
+	{
+		int removed = 0;
+		foreach (Brix.Game.AI.Labor labor in UnityEngine.Object.FindObjectsOfType<Brix.Game.AI.Labor>())
+		{
+			if (labor != null && labor.gameObject.activeInHierarchy)
+			{
+				Scenario.Release(labor.gameObject);
+				removed++;
+			}
+		}
+		DevToolsPlugin.Log.LogInfo("Tests: took the world's " + removed + " units away");
 	}
 
 	private IEnumerator RunOne(TestInfo test, Result result)
@@ -269,6 +405,12 @@ internal class TestRunner : MonoBehaviour
 				}
 			}
 		}
+		// Blocks taken away by a clean-up (DeBlock) leave in the next FixedUpdate, falling blocks a frame or two later:
+		// a few frames, so the next test does not find (or lose) them on the same ground.
+		for (int i = 0; i < 10; i++)
+		{
+			yield return new WaitForFixedUpdate();
+		}
 		result.Seconds = Math.Round(Time.realtimeSinceStartup - start, 2);
 		DevToolsPlugin.Log.LogInfo("Test " + test.Name + ": " + result.Outcome + ((result.Message != null) ? (" - " + result.Message) : string.Empty));
 	}
@@ -282,6 +424,7 @@ internal class TestRunner : MonoBehaviour
 		}
 		else if (ex is TestSkipped)
 		{
+			result.NoRoom = ex is TestNoRoom;
 			result.Outcome = Outcome.Skipped;
 			result.Message = ex.Message;
 		}

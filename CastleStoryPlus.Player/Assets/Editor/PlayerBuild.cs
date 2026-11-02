@@ -46,7 +46,8 @@ namespace CastleStoryPlus.Player.Editor
 
 		// A Linux player built into the folder named by CSP_PLAYER_OUT (or -playerOut <folder> on the command line), which
 		// must be empty or not exist yet: a build to take single files from (CastleStoryPlus.Compute.dll and the Burst
-		// library) without touching Build/Linux or an installed player.
+		// library) without touching Build/Linux or an installed player. CSP_DEEP_PROFILING=1: a development player that
+		// supports -deepprofiling (every managed call timed by Unity's profiler), for a profile of the whole call tree.
 		public static void LinuxTo()
 		{
 			string dir = OutputFolder();
@@ -59,7 +60,10 @@ namespace CastleStoryPlus.Player.Editor
 				}
 				return;
 			}
-			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"));
+			BuildOptions options = System.Environment.GetEnvironmentVariable("CSP_DEEP_PROFILING") == "1"
+				? BuildOptions.Development | BuildOptions.EnableDeepProfilingSupport
+				: BuildOptions.None;
+			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"), options);
 		}
 
 		private static string OutputFolder()
@@ -92,8 +96,9 @@ namespace CastleStoryPlus.Player.Editor
 			Release(BuildTarget.StandaloneWindows64, "Windows", "CastleStoryPlus.exe");
 		}
 
-		// A development player (Unity's profiler can attach to it) in Build/Profiling/Linux, for measuring the port
-		// without the editor; an install and BepInEx go into it as into Build/Linux.
+		// A development player (Unity's profiler can attach to it; started with -deepprofiling it times every managed
+		// call) in Build/Profiling/Linux, for measuring the port without the editor; an install and BepInEx go into it as
+		// into Build/Linux.
 		public static void ProfilingLinux()
 		{
 			string dir = Path.Combine("Build", "Profiling", "Linux");
@@ -101,7 +106,7 @@ namespace CastleStoryPlus.Player.Editor
 			{
 				Directory.Delete(dir, true);
 			}
-			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"), BuildOptions.Development);
+			Build(BuildTarget.StandaloneLinux64, Path.Combine(dir, "CastleStoryPlus.x86_64"), BuildOptions.Development | BuildOptions.EnableDeepProfilingSupport);
 		}
 
 		// A Linux player with Vulkan first (the default when no API is forced), in Build/VulkanTest/Linux (an empty folder

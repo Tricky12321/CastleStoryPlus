@@ -52,6 +52,14 @@ internal class TestContext
 		}
 	}
 
+	public void False(bool condition, string message)
+	{
+		if (condition)
+		{
+			Fail(message);
+		}
+	}
+
 	public void NotNull(object value, string what)
 	{
 		if (value == null || (value is UnityEngine.Object unityObject && unityObject == null))
@@ -102,6 +110,42 @@ internal class TestContext
 		}
 	}
 
+	// yield return t.UntilGame(() => ..., 120f, "the tree to fall"): fails the test when it takes longer in game
+	// time, so a faster game speed finishes it sooner (the test's own timeout still counts real seconds).
+	public IEnumerator UntilGame(Func<bool> condition, float gameSeconds, string waitingFor)
+	{
+		float end = Time.time + gameSeconds;
+		while (!condition())
+		{
+			if (Time.time > end)
+			{
+				Fail("Waited " + gameSeconds.ToString("0.#", CultureInfo.InvariantCulture) + " game seconds for " + waitingFor);
+			}
+			yield return null;
+		}
+	}
+
+	// As UntilGame, and every noteSeconds of game time (and once more when it gives up) note() runs: a log line
+	// or recorded values that tell, in a failed run, what the game was doing meanwhile.
+	public IEnumerator UntilGame(Func<bool> condition, float gameSeconds, string waitingFor, float noteSeconds, Action note)
+	{
+		float end = Time.time + gameSeconds;
+		float nextNote = Time.time + noteSeconds;
+		while (!condition())
+		{
+			if (Time.time >= nextNote || Time.time > end)
+			{
+				nextNote = Time.time + noteSeconds;
+				note();
+			}
+			if (Time.time > end)
+			{
+				Fail("Waited " + gameSeconds.ToString("0.#", CultureInfo.InvariantCulture) + " game seconds for " + waitingFor);
+			}
+			yield return null;
+		}
+	}
+
 	// yield return t.Until(() => ..., 10f, "the bricktron to arrive"): fails the test when it takes longer (real
 	// seconds).
 	public IEnumerator Until(Func<bool> condition, float timeoutSeconds, string waitingFor)
@@ -128,6 +172,14 @@ internal class TestFailure : Exception
 internal class TestSkipped : Exception
 {
 	public TestSkipped(string message) : base(message)
+	{
+	}
+}
+
+// No ground free for the test now: in a parallel run it waits for the others to finish and runs again.
+internal class TestNoRoom : TestSkipped
+{
+	public TestNoRoom(string message) : base(message)
 	{
 	}
 }

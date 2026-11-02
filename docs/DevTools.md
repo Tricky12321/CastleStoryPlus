@@ -47,7 +47,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `POST /api/studio?index=` | Shows that one piece alone on the studio's spot west of the home crystal, built and filled; `GET /api/studio` follows it and gives its drawn bounds. `tools/make_gallery.py` photographs every piece this way for [the gallery](Gallery.md) |
 | `POST /api/camera?at=x,y,z&distance=&pitch=&yaw=` | Points the camera at a place |
 | `POST /api/select?id=&q=` | Selects a building as a click does (its menu opens), by id or type (`MarketStation`) |
-| `GET /api/path?to=x,y,z&from=&unit=&enemy=&nodes=` | Runs the game's route search for a bricktron and compares it with the shortest route |
+| `GET /api/path?to=x,y,z&from=&unit=&enemy=&nodes=&lods=` | Runs the game's route search for a bricktron (over the navigation mesh for the player's units in the Unity 6 port, as the game does) and compares it with the shortest route; `lods` limits the graph levels the search may use; `exhausted` says the search ran out of places |
 | `GET /api/path/node?at=x,y,z` | The navigation node at a voxel and its links (kind, weight) |
 | `GET /api/path/ground?x=&z=` | The highest voxel a bricktron can stand on in a column |
 | `GET /api/path/straight?from=x,y,z&to=x,y,z&unit=` | Whether a bricktron may walk straight from one voxel to another (the `StraightPaths` line test), and where and why not; with the kinds of the steps of the route search's own route between them |
@@ -67,7 +67,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `POST /api/projects/priority?id=&priority=` | Sets a project's priority (locked, low, medium, high) |
 | `POST /api/projects/crew?id=&size=` | Sets a project's crew size (0 to 8) |
 | `GET /api/tests?filter=` | The in-game tests |
-| `POST /api/tests/run?filter=&speed=` | Starts a run (answers at once), at `speed` if given (back to 1x when it ends) |
+| `POST /api/tests/run?filter=&speed=&parallel=&clearUnits=` | Starts a run (answers at once), at `speed` if given (back to 1x when it ends). `parallel`: tests at the same time (1-8). `clearUnits=true`: the world's own units are taken away first |
 | `GET /api/tests/results` | Progress, and each test's outcome, message, log and recorded values |
 | `POST /api/tests/stop` | Stops the run after the current test's clean-up |
 
@@ -158,7 +158,29 @@ private static IEnumerator MyTest(TestContext t)
   - `PlaceBlocks` places stone bricks and removes them again in the clean-up;
   - `WaitForGraph` waits until the navigation graph has taken the change in.
 - `t.Seconds` waits in game time; `t.Until` and the test's timeout count real seconds. A run with `speed` (e.g. 10 or 20) therefore finishes its waits sooner, while the timeouts stay as long.
-- The tests change the game they run in. They walk bricktrons around and place blocks for a while, so run them in a test save.
+- `t.UntilGame` waits like `t.Until`, but its limit counts game seconds, for gameplay that takes game time (a tree to fall, a fight).
+- `t.UntilGame(condition, seconds, what, noteSeconds, note)` also runs `note` every few game seconds, to log or record what the game was doing, so a failed run tells why.
+- `Scenario` sets up a test's own scene and takes it away again in the clean-up:
+  - `Site` finds flat open ground near the home crystal (from the terrain, without trees, boulders or ore), away from the bricktrons standing round it and from the ground earlier tests used;
+  - `Bricktron`, `Corruptron` and `Spawn` make units (any faction and job, with their gear) on the nearest voxel of the route graph (a unit off it cannot walk), `Items` loose items;
+  - `NewProject`, `BuildProject` and `Hire` make projects and put bricktrons on them;
+  - `Building` places a stockpile or workshop and finishes it at once;
+  - `Count` and `Stored` count items of a kind (everywhere, or in storages), `Hp` and `Alive` read a unit's health.
+  - each test gets ground of its own while it runs; it is given back afterwards unless the test left something there (a unit that died leaves a corpse; `LeavesMess` for dug ground). After every test the runner waits a few physics steps, so blocks its clean-up took away are gone before the next test looks at the ground.
+- Before a run with `clearUnits` (the script's default) every unit the world has is taken away: the player's starting bricktrons and the map's roaming enemies and beasts, so the tests meet only their own units. The base's standing repair and cleanup tasks get no crew during the run (they would take the tests' workers and material). The runner adds one builder of its own for the older tests that use "the player's builder", and takes it away afterwards.
+- Parallel runs: the tests of a class marked `[ParallelTests]` may run next to others, each on ground of its own at least 10 voxels from the others'. Tests of one group never overlap: `[ParallelTests("Economy")]` (tasks and crafting: workers fetch from and store into any stockpile, so their counts would mix) and `[ParallelTests("Combat")]` (a fight draws in every enemy within sight). `[GameTest(..., Exclusive = true)]` and classes without the attribute run alone. A test that finds no free ground while others hold it (`TestNoRoom`) runs again once nothing else runs.
+- A test that expects something not to happen first shows that it could (a route to the spot before the wall is built), so it cannot pass for the wrong reason.
+- The tests change the game they run in. They walk bricktrons around and place blocks for a while, so run them in a test save, or with `tools/run-game-tests.py`:
+
+```sh
+tools/run-game-tests.py                    # every test, 4x speed, a new sandbox on Tortuga
+tools/run-game-tests.py --filter Combat    # one category or test
+tools/run-game-tests.py --parallel 1       # one test after the other
+```
+
+Options: `--parallel` (tests at the same time, default 4), `--keep-units` (leave the world's own units in it), `--speed` (default 4), `--map` (default Tortuga, which has trees), `--settle` (game seconds the new world gets before the tests, default 60), `--hold` (keep the player running for a look into it), `--trace` (the worker trace on, `BepInEx/workertrace.log` in the player).
+
+It starts a player of its own (default: the Unity 6 port's `CastleStoryPlus.Player/Build/Linux`) on a copy of a game root without saves (`--root-src`, default `~/.cache/csp-bench/root-src`), starts the sandbox, runs the tests, prints each outcome, saves and closes the player. The results go to `~/.cache/csp-tests/game-tests-<time>.json`, and the exit code is 0 when no test failed. No other game may answer on the API port while it runs.
 
 | Test | Checks |
 |---|---|
@@ -167,6 +189,63 @@ private static IEnumerator MyTest(TestContext t)
 | `PathfindingTests.BuilderWalksToSpot` | A builder ordered to a spot 10 voxels away gets there |
 | `PathfindingTests.EnemyRoutesNearShortest` | The same check as the random routes, for an enemy unit, which uses its own heuristic weight and budget |
 | `ModTests.FeaturesStarted` | Every feature that is switched on started without errors |
+| `TaskTests.BuilderFellsTreeOnOrder` | A builder ordered to cut the nearest tree fells it: the tree leaves the tree registry and its logs lie there |
+| `TaskTests.HarvestProjectFellsTrees` | A tree harvest project with two builders fells a tree in its circle |
+| `TaskTests.LooseItemsAreHauled` | A builder told to clean up carries 4 loose stones into an empty stockpile |
+| `TaskTests.QuarryIsDug` | A 3 x 3 quarry with two builders and a stockpile: at least 3 voxels of ground are dug out |
+| `TaskTests.WorkersBuildBlueprints` | Two builders build 3 stone brick blueprints with stone blocks (`Blocks.Stone_DoubleBrick`, what a stone brick takes; raw stone does not do) from a stockpile |
+| `CraftingTests.ChoppingBlockMakesPlanks` | A chopping block with a worker and logs in a stockpile: one Planks order makes 3 planks from one log |
+| `CombatTests.KnightKillsCorruptron` | A knight attacks a corruptron 4 voxels away on its own and kills it, and survives |
+| `CombatTests.ArcherShootsCorruptron` | An archer 9 voxels away shoots a corruptron |
+| `CombatTests.OrderedAttack` | A knight ordered to attack a corruptron 14 voxels away walks to it and hits it |
+| `CombatTests.CorruptronAttacksBricktron` | A corruptron attacks a builder next to it |
+| `CombatTests.CorruptronDeath` | A killed corruptron is gone, the game's `UnitDied` signal names it and a firefly with its energy is made |
+| `CombatTests.RaidDamagesHomeCrystal` | Three corruptrons in a raid march on the home crystal and damage it; in a sandbox, where the crystal is invincible, they have to reach it (its hit points are put back afterwards) |
+| `CombatTests.RivalFactionsFight` | A Blue and a Red knight, the factions made enemies, fight until one dies. A faction without a player does not start a fight by instinct (recorded as `startedByInstinct`), so after 15 game seconds both are ordered to attack |
+| `StructureTests.SupportedStructureStands` | A column of 6 stone bricks and a 5 x 3 wall on the ground stand, no block falls |
+| `StructureTests.FloatingBlockFalls` | A stone brick 3 voxels above the ground falls (becomes a falling block) |
+| `StructureTests.ColumnCollapsesWhenBaseDestroyed` | A column of 5 whose bottom block is destroyed as by an attack comes down: the 4 above fall |
+| `StructureTests.OverhangFalls` | A block beside the top of a column, with nothing under it, falls; the column stands |
+| `StructureTests.RemovedMiddleDropsTheTop` | A column with its middle block destroyed: the blocks above fall, those below stay |
+| `StructureTests.BlueprintNeedsSupport` | A stone brick blueprint on the ground is buildable, one in the air is not |
+| `StructureTests.TallTowerStands` | A tower of 15 stone bricks stands |
+| `StructureTests.TenHighColumnCascades` | A column of 10 loses its base: all 9 above it come down |
+| `StructureTests.NeighbourColumnStands` | Of two columns side by side, the one that loses its base falls, the other stands |
+| `StructureTests.BlockFallsWhenGroundRemoved` | The ground under a stone brick is dug away (its damage receiver killed, as digging does): the brick falls |
+| `BlockTests.BlueprintIntoBlockIsObstructed` | A blueprint where a stone brick already is: obstructed |
+| `BlockTests.BlueprintOnBlueprintWaits` | A blueprint resting on another blueprint is valid but not buildable |
+| `BlockTests.FinishedBlueprintBecomesBlock` | A finished stone brick blueprint becomes a stone brick |
+| `BlockTests.DemolishedBlockIsGone` | A stone brick demolished at once with the remove tool's command is gone |
+| `BlockTests.DamagedBlockStays` | A stone brick that loses a third of its hit points stays, damaged |
+| `BlockTests.BlockDestroyedByDamage` | A stone brick out of hit points is destroyed |
+| `RouteLimitTests.NoRouteIntoWalledSpot` | A spot inside a ring of stone 12 high: no route into it (the goal could be reached before the ring) |
+| `RouteLimitTests.NoRouteOutOfWalledSpot` | From inside the ring no route leads out |
+| `RouteLimitTests.LowWallIsNotClimbed` | A ring only 3 high already shuts the spot off: stone walls are not climbed |
+| `RouteLimitTests.RouteThroughGapInTallWall` | The ring with a gap one column wide: the route goes in through the gap |
+| `RouteLimitTests.BuilderWalksInThroughGap` | A builder ordered into the ring walks in through the gap |
+| `RouteLimitTests.RouteOpensWhenWallRemoved` | No route into the closed ring; one column taken down, a route |
+| `RouteLimitTests.RouteUpOneStep` | A platform one block high: the route goes up onto it |
+| `RouteLimitTests.GoalInTheAirEndsOnGround` | A goal 3 voxels in the air: the search takes the nearest place to stand, the route ends on the ground |
+| `RouteLimitTests.GoalInsideGroundEndsOnSurface` | A goal inside solid ground: the route ends on open ground |
+| `RouteLimitTests.OrderIntoWalledSpotNeverArrives` | A builder ordered into the closed ring never gets in, nor up the wall |
+| `CombatTests.HigherLevelHasMoreHp` | A level 5 corruptron has more hit points than a level 1 one |
+| `CombatTests.KnightHasMoreHpThanBuilder` | A knight has more hit points than a builder |
+| `CombatTests.ArchersKillCorruptron` | Three archers 8 voxels away shoot a corruptron dead |
+| `CombatTests.KnightsBeatCorruptrons` | Two knights against two corruptrons: both corruptrons die |
+| `CombatTests.SameFactionDoesNotFight` | Two knights of the same faction side by side do not hurt each other |
+| `CombatTests.FactionsNotEnemiesDoNotFight` | A Blue and a Green knight (not enemies, as the game sets them) do not fight |
+| `CombatTests.KilledCorruptronLeavesCorpse` | A corruptron killed by a knight leaves a corpse |
+| `CombatTests.KnightKillsMinitron` | A knight kills a minitron and survives |
+| `CraftingTests.TwoOrdersMakeSixPlanks` | Two Planks orders with two logs make 6 planks and use both logs |
+| `CraftingTests.NoLogsNoPlanks` | A Planks order with no logs anywhere makes nothing and stays queued |
+| `CraftingTests.NoWorkerNoPlanks` | A chopping block without a worker, and no other bricktron about, makes nothing (`Scenario.SidelineOthers` switches the bricktrons that are not the test's off for the test) |
+| `CraftingTests.IdleBuilderTakesWorkshopOrder` | An idle builder takes a chopping block's order by itself, no worker assigned, and makes the planks (a builder with nothing to do, even one on a project without work, does so) |
+| `CraftingTests.LoopUsesAllLogs` | A looping Planks order goes on while there are logs: 2 logs make 6 planks |
+| `TaskTests.FelledTreeDropsThreeLogs` | A felled tree drops its 3 logs next to its stump |
+| `TaskTests.LooseIronIsHauled` | A builder told to clean up carries 3 lumps of iron ore into a stockpile |
+| `TaskTests.DeletedProjectReleasesCrew` | A deleted project's bricktrons are on no project afterwards |
+| `TaskTests.HiringGrowsFullCrew` | Hiring three onto a project with room for one grows its crew size to take them all |
+| `TaskTests.PriorityRaisedAndLowered` | A project's priority goes up and back down with the task bar's buttons |
 
 ## Claude Code (`CastleStoryPlus.Mcp`)
 

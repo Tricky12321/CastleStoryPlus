@@ -56,6 +56,18 @@ internal static class Units
 
 	internal static XYZ VoxelOf(Labor labor)
 	{
-		return (labor.presence != null) ? labor.presence.CurrentVoxel : XYZ.FromVector3(labor.transform.position);
+		if (labor.presence == null)
+		{
+			return XYZ.FromVector3(labor.transform.position);
+		}
+		try
+		{
+			return labor.presence.CurrentVoxel;
+		}
+		catch (System.NullReferenceException)
+		{
+			// Spawned this frame: its locomotion is not set up yet.
+			return XYZ.FromVector3(labor.transform.position);
+		}
 	}
 }

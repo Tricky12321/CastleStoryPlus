@@ -282,7 +282,7 @@ internal static class CheatEndpoints
 
 	// A raid project as the invasion script makes one (fy_RaidProject:New, SetBeaconPosition): its beacon on the
 	// home crystal, where its units walk aggressively to and fight what they meet.
-	private static RaidProject NewRaid(Faction enemy, Vector3 target)
+	internal static RaidProject NewRaid(Faction enemy, Vector3 target)
 	{
 		GameObject go = Transactor.SpawnUNet(Groupes.RaidProjectAI, enemy, Vector3.zero, Quaternion.identity);
 		RaidProject raid = (go != null) ? go.GetComponent<RaidProject>() : null;
@@ -304,7 +304,7 @@ internal static class CheatEndpoints
 	}
 
 	// As the game's change-project command does for the invasion script's Project.AssignLabor.
-	private static void Hire(RaidProject raid, Labor labor)
+	internal static void Hire(RaidProject raid, Labor labor)
 	{
 		if (raid.IsFull())
 		{

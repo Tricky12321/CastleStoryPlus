@@ -206,7 +206,13 @@ otherwise), `CSP_GPU_SKINNING=1` with GPU skinning (off otherwise, as the player
 
 For measuring the port without the editor, `PlayerBuild.ProfilingLinux` builds a development player into
 `Build/Profiling/Linux` (an empty folder each time); install into it and add BepInEx as above, then attach the
-editor's Profiler to it (Profiler window, target list).
+editor's Profiler to it (Profiler window, target list), or have DevTools write the profiler's log to a file
+(`POST /api/profiler/file?seconds=3`) and dump it with the editor in batch mode:
+`CSP_PROFILE_IN=<file>.raw CSP_PROFILE_OUT=<text> Unity -batchmode -quit -projectPath CastleStoryPlus.Player
+-executeMethod CastleStoryPlus.Player.Editor.ProfileDump.Run` (the main thread's markers by name, by path and as
+caller > callee pairs; `CSP_PROFILE_THREAD`, `CSP_PROFILE_DEPTH`, `CSP_PROFILE_TOP`, `CSP_PROFILE_FILTER`). A player
+built with `CSP_DEEP_PROFILING=1 ... PlayerBuild.LinuxTo` supports `-deepprofiling`, which times every managed call
+(the game then runs at a few frames a second).
 
 A release is made from a fresh player build, never from a folder an install has run in: after an install that
 folder holds the game's code, settings and content.

@@ -67,6 +67,9 @@ internal static class NavMeshRoutes
 	// Stretches where the line was blocked and the route went round over the graph.
 	internal static int Mended;
 
+	// Steep steps of a route traded for a cheaper way round them over the graph.
+	internal static int Eased;
+
 	// The mesh's links routes took: climbs, steps down, ladders.
 	internal static int Climbs;
 
@@ -125,6 +128,7 @@ internal static class NavMeshRoutes
 		WorstMilliseconds = 0;
 		RouteVoxels = 0;
 		Mended = 0;
+		Eased = 0;
 		Climbs = 0;
 		StepDowns = 0;
 		LadderRuns = 0;
@@ -285,6 +289,7 @@ internal static class NavMeshRoutes
 				why = _why ?? "route not walkable";
 				continue;
 			}
+			Ease(request.Evaluator);
 			// Up to the first voxel that reaches the target, as the game's search stops there.
 			int end = -1;
 			for (int i = 1; i < Route.Count; i++)
@@ -726,6 +731,122 @@ internal static class NavMeshRoutes
 		Mended++;
 		current = found;
 		return foundAt;
+	}
+
+	// The mesh is the voxels' top surfaces, so a step up or down most of a block costs it little more than flat ground,
+	// where the graph weighs it 130 to 250 against 10 (the game's A* goes round such a step when it can). A route over
+	// a hillside then took the steep steps the game's own search leaves out (seen at 1.4 times the cost of the shortest
+	// route). Each steep walking step of the route is looked at once: the cheapest way over the graph from the voxel
+	// before it to one of the route's next voxels, near by and by the unit's own rules, replaces the stretch when it
+	// costs less.
+	private const int SteepWeight = 100;
+
+	// Route voxels after the steep step a way round may come back to, how far it may go and how many places it looks at.
+	private const int EaseAhead = 8;
+
+	private const int EaseReach = 6;
+
+	private const int EasePlaces = 300;
+
+	private static readonly Dictionary<TerrainPathNode, int> EaseCost = new Dictionary<TerrainPathNode, int>();
+
+	private static readonly Dictionary<TerrainPathNode, KeyValuePair<TerrainPathNode, PathBranch>> EaseCame = new Dictionary<TerrainPathNode, KeyValuePair<TerrainPathNode, PathBranch>>();
+
+	private static readonly HashSet<TerrainPathNode> EaseDone = new HashSet<TerrainPathNode>();
+
+	private static readonly List<TerrainPathNode> EaseOpen = new List<TerrainPathNode>();
+
+	// Route voxels a way round may end at: their index and the route's cost to them from where the way round starts.
+	private static readonly Dictionary<TerrainPathNode, KeyValuePair<int, int>> EaseTargets = new Dictionary<TerrainPathNode, KeyValuePair<int, int>>();
+
+	private static readonly List<PathBranch> EaseRun = new List<PathBranch>();
+
+	private static void Ease(PathBranchEvaluator evaluator)
+	{
+		for (int i = 1; i < Route.Count; i++)
+		{
+			if (Route[i].Weight < SteepWeight || !IsWalk(Route[i].Type) || !(Route[i - 1].Node is TerrainPathNode start) || start.siblings == null)
+			{
+				continue;
+			}
+			EaseTargets.Clear();
+			int routeCost = 0;
+			for (int j = i; j < Route.Count && j <= i + EaseAhead && IsWalk(Route[j].Type); j++)
+			{
+				routeCost += Route[j].Weight;
+				if (Route[j].Node is TerrainPathNode target && !EaseTargets.ContainsKey(target))
+				{
+					EaseTargets[target] = new KeyValuePair<int, int>(j, routeCost);
+				}
+			}
+			TerrainPathNode best = null;
+			int bestIndex = -1;
+			int bestSaving = 0;
+			EaseCost.Clear();
+			EaseCame.Clear();
+			EaseDone.Clear();
+			EaseOpen.Clear();
+			EaseCost[start] = 0;
+			EaseOpen.Add(start);
+			while (EaseOpen.Count > 0 && EaseDone.Count < EasePlaces)
+			{
+				int pick = 0;
+				for (int o = 1; o < EaseOpen.Count; o++)
+				{
+					if (EaseCost[EaseOpen[o]] < EaseCost[EaseOpen[pick]])
+					{
+						pick = o;
+					}
+				}
+				TerrainPathNode here = EaseOpen[pick];
+				EaseOpen[pick] = EaseOpen[EaseOpen.Count - 1];
+				EaseOpen.RemoveAt(EaseOpen.Count - 1);
+				if (!EaseDone.Add(here))
+				{
+					continue;
+				}
+				int cost = EaseCost[here];
+				if (EaseTargets.TryGetValue(here, out KeyValuePair<int, int> target) && target.Value - cost > bestSaving)
+				{
+					best = here;
+					bestIndex = target.Key;
+					bestSaving = target.Value - cost;
+				}
+				if (here.siblings == null || Mathf.Abs(here.position.x - start.position.x) + Mathf.Abs(here.position.z - start.position.z) >= EaseReach)
+				{
+					continue;
+				}
+				foreach (PathBranch branch in here.siblings)
+				{
+					if (!(branch.Node is TerrainPathNode next) || next.IsEmpty || EaseDone.Contains(next) || !IsWalk(branch.Type) || !evaluator.CanCross(branch))
+					{
+						continue;
+					}
+					int nextCost = cost + branch.Weight;
+					if (!EaseCost.TryGetValue(next, out int known) || nextCost < known)
+					{
+						EaseCost[next] = nextCost;
+						EaseCame[next] = new KeyValuePair<TerrainPathNode, PathBranch>(here, branch);
+						EaseOpen.Add(next);
+					}
+				}
+			}
+			if (best == null)
+			{
+				continue;
+			}
+			EaseRun.Clear();
+			for (TerrainPathNode node = best; node != start;)
+			{
+				KeyValuePair<TerrainPathNode, PathBranch> came = EaseCame[node];
+				EaseRun.Add(came.Value);
+				node = came.Key;
+			}
+			EaseRun.Reverse();
+			Route.RemoveRange(i, bestIndex - i + 1);
+			Route.InsertRange(i, EaseRun);
+			Eased++;
+		}
 	}
 
 	// A branch a walk on the mesh's ground may take: not a climb, a ladder or breaking in.

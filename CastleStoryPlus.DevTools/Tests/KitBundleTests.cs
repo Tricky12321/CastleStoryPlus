@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Brix.Components;
+using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game.AI;
 using Brix.Game.AI.Nodes;
@@ -21,6 +22,8 @@ namespace CastleStoryPlus.DevTools.Tests;
 // equipping from the stand unpacks it and becomes a knight, and handing the kit in packs it again.
 internal static class KitBundleTests
 {
+	private static readonly Factory.AssetKey Toolrack = new Factory.AssetKey("Blueprints", "Toolrack");
+
 	[GameTest("KitBundles", "A loose knight kit on a weapon stand is packed; equipping unpacks it, storing packs it again", TimeoutSeconds = 60f)]
 	private static IEnumerator PackEquipStore(TestContext t)
 	{
@@ -31,13 +34,13 @@ internal static class KitBundleTests
 		ToolRack rack = PlayerRack();
 		if (rack == null)
 		{
-			t.Skip("The player has no weapon stand (place a Toolrack)");
+			// A cleared world has none: one of the test's own, built at once.
+			XYZ site = Scenario.Site(t, 4, 4);
+			yield return Scenario.Building(t, Toolrack, site, Scenario.BuildProject(t, site), go => rack = go.GetComponent<ToolRack>());
+			t.NotNull(rack, "The weapon stand built for the test");
 		}
-		Labor labor = Units.Find(0, false);
-		if (labor == null || labor.Occupation == null || labor.Occupation.CurrentJob != Occupation.Job.Builder)
-		{
-			t.Skip("The player has no builder");
-		}
+		Labor labor = Scenario.Bricktron(t, Occupation.Type.Builder, XYZ.FromVector3(rack.transform.position) + new XYZ(0, 0, -2));
+		yield return t.Frames(5);
 		KitBundles.Bundle knight = KitBundles.All[0];
 		Recepteur recepteur = rack.recepteur;
 		int before = recepteur.ContentDescription.Value(knight.Resource);

@@ -95,7 +95,7 @@ under a ceiling), doors (an area of their own; before that every route through a
 | `POST /api/navmesh/routes?enabled=&reset=` | switches `NavMeshRoutes` on or off for the session and/or zeroes its counters; answers with them |
 
 `GET /api/navmesh` also has `routes` (the routes made over the mesh: attempts, routed, fallbacks and why, time per
-route, voxels per route, stretches mended, climbs, steps down and ladders taken, the last 40 fallbacks) and, under
+route, voxels per route, stretches mended, steep steps eased, climbs, steps down and ladders taken, the last 40 fallbacks) and, under
 `updates`, `volumeMarks` (volumes registered or removed) and `relinkedChunks` (chunks whose links were made again for
 a change elsewhere). `/api/path/stats` counts a search the mesh routed as outcome `navmesh`. In-game tests
 `NavMeshRouteTests` (a walk routed by the mesh, a wall built across the way, a ledge climbed).
@@ -123,6 +123,11 @@ units are answered by the mesh, and the game's A\* stays for enemies and as the 
 - **Mending.** Where the line is blocked (a full pallet, a unit, a door the unit may not pass) the shortest way over
   the graph to a voxel of the line up to 16 further on is searched, within 10 blocks and 400 places, by the unit's
   rules. Only when that fails is the request left to the A\*.
+- **Steep steps.** The mesh is the voxels' top surfaces, so a walking step up or down most of a block costs it little
+  more than flat ground, where the graph weighs it 130 to 250 against 10. For each such step of the route (weight
+  100 or more) the cheapest way over the graph from the voxel before it to one of the route's next 8 voxels is
+  searched, within 6 blocks and 300 places, by the unit's rules, and replaces the stretch when it costs less (a
+  route over a hillside cost 1.4 times the shortest before, `RandomRoutesNearShortest`).
 - **Result.** The voxels up to the first one that reaches the target become the search's result, a chain of the
   graph's own links (`PathLink`, the result accepter's `Result`), and the search is done; the finer search
   (`LoopImprovePath`) is skipped. The rest is the game's: `PathLodUnroller` unrolls it (nothing to unroll at the
