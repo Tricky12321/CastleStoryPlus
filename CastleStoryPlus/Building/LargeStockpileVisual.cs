@@ -788,17 +788,50 @@ internal static class LargeStockpileAnimatorPatch
 [HarmonyPatch(typeof(AnimatedProgression), "Update")]
 internal static class BlueCrystalCratePatch
 {
+	// The pallet's parts, looked up once in a while: the game's Update runs every frame for a second after each
+	// change, and the lookups (a search of the pallet's whole hierarchy, two Finds) cost more than the pallet's step.
+	private sealed class Parts
+	{
+		public float Until;
+
+		public bool Skip;
+
+		public Transform Blue;
+
+		public Transform Crate;
+	}
+
+	private const float RecheckSeconds = 5f;
+
+	private static readonly Dictionary<AnimatedProgression, Parts> Known = new Dictionary<AnimatedProgression, Parts>();
+
+	private static void Enable()
+	{
+		GameSession.OnLeave(Known.Clear);
+	}
+
 	private static void Postfix(AnimatedProgression __instance)
 	{
-		if (__instance.GetComponentInChildren<LargeStockpileVisual>(true) != null || LargeStockpile.IsLarge(__instance))
+		float now = Time.time;
+		if (!Known.TryGetValue(__instance, out Parts parts) || now >= parts.Until)
+		{
+			if (parts == null)
+			{
+				parts = new Parts();
+				Known[__instance] = parts;
+			}
+			parts.Until = now + RecheckSeconds;
+			parts.Skip = __instance.GetComponentInChildren<LargeStockpileVisual>(true) != null || LargeStockpile.IsLarge(__instance);
+			parts.Blue = parts.Skip ? null : __instance.transform.Find("Visual/Content/CrystalBlue");
+			parts.Crate = parts.Skip ? null : __instance.transform.Find("Visual/Crate");
+		}
+		if (parts.Skip || parts.Blue == null || parts.Crate == null)
 		{
 			return;
 		}
-		Transform blue = __instance.transform.Find("Visual/Content/CrystalBlue");
-		Transform crate = __instance.transform.Find("Visual/Crate");
-		if (blue != null && crate != null && blue.gameObject.activeSelf && !crate.gameObject.activeSelf)
+		if (parts.Blue.gameObject.activeSelf && !parts.Crate.gameObject.activeSelf)
 		{
-			crate.gameObject.SetActive(true);
+			parts.Crate.gameObject.SetActive(true);
 		}
 	}
 }

@@ -480,12 +480,12 @@ stockpiles (`Stacking.Update`, 6.5–7.3 ms every 3 s) are spread over frames, a
   (its refresh goes over every loose item in the task's circle and, for each new one, every goal), `fixed:
   KnowledgeUpdater` 3–4 ms, `TerrainLoop.Update` 5–8 ms. Each needs its own look.
 - **`GetComponent`, 7 % of the main thread** from all over the game and the mod; `perf` cannot name the callers
-  (the engine's functions keep no frame pointers, so the chain breaks there). A count per caller would need a patch
-  on the generic `GetComponent<T>`, which Harmony cannot do in one place.
+  (the engine's functions keep no frame pointers, so the chain breaks there). See the deep profile in the next
+  round: some 1400 `GetComponent<T>` calls a frame, from everywhere, none dominant.
 - **`TransformChangeDispatch`, 5 %:** the engine's own pass over the transforms that moved; it grows with the number
-  of moving hierarchies (units' bones, icons). Not reachable from the mod.
-- **`InputModeController.Update`, 2 %**, mostly `UnityEngine.Input.GetKey` and the eyedropper's update; not looked
-  at further.
+  of moving hierarchies (units' bones, icons). The profiler tree of the next round shows under which steps it runs.
+- **`InputModeController.Update`, 2 %:** in the next round this turned out to be the mod's own reach flood
+  (`UnreachableTasks` runs from a prefix on that update).
 - **The incremental garbage collector:** its write barrier is 1.5 % of the main thread (`GC_dirty_inner`); see the
   A/B below.
 
@@ -509,7 +509,114 @@ half a second on a heap this size (the incremental one takes 3 ms a frame over m
 keeps the incremental collector; the switch stays for measuring (the pauses would be worth it only with a much smaller
 heap, see the Memory section).
 
+## The profiler's tree, a deep profile and the two cameras, 02-11-2026
 
+The second round on the main thread. `perf` names the engine's functions but not what runs them, so two more views
+were added:
+
+- **Unity's profiler written to a file** by the development player (`POST /api/profiler/file?seconds=3`,
+  `Profiler.logFile` with the binary log), read in the editor by `ProfileDump.Run`
+  (`CastleStoryPlus.Player/Assets/Editor/ProfileDump.cs`; `~/.cache/csp-bench/profdump.py` does the run and the
+  dump). It writes the main thread's markers summed over the frames: by marker, by path (the marker under its
+  parents) and as caller > callee pairs. This shows under which player loop step a native marker runs, and each
+  script type's update.
+- **A deep profile:** a development player built with `BuildOptions.EnableDeepProfilingSupport`
+  (`CSP_DEEP_PROFILING=1 ... PlayerBuild.LinuxTo`, `Build/Deep/Linux`) started with `-deepprofiling` times every
+  managed call. The game runs at 6 fps under it and a load takes minutes, so it only says who calls what and how often
+  a frame, not what it costs; 13 frames were enough.
+
+What the tree says (development player, Benchmark save, OpenGL, the profiler's own `FlushMemoryCounters` at 2 ms a
+frame left out):
+
+| Step (ms a frame) | Inclusive | Under it |
+|---|---:|---|
+| `BehaviourUpdate` (scripts' Update) | 3.8 | `GameClock.Update` 1.33, `AnimatedProgression.Update` 0.48, `AkGameObj.Update` 0.28 (428 calls), `EventSystem.Update` 0.27, `InputManager_Base.Update` 0.17, `ItemCounts.Update` 0.09 (292 calls, each only zeroing a counter) |
+| `FinishFrameRendering` > `Camera.Render` | 2.6 | two camera renders a frame: `Drawing` 0.88, `FinalizeUpdateRendererBoundingVolumes` 0.56 (the main thread runs the skinned meshes' bounds job itself while it waits), `Update Lights` 0.44 (all of it `TransformChangeSystem`), `CullResults` 0.27 |
+| `FixedBehaviourUpdate` | 2.0 | `GameClock.FixedUpdate` 1.9 (the behaviour trees) |
+| `TransformChangeSystem` | 1.17 (1550 calls) | 0.44 under `Update Lights` (twice a frame, once per camera), 0.14 under `UGUI.Rendering.UpdateBatches`, the rest under renderers' bounds and physics |
+| `DirectorUpdateAnimationBegin/End` | 1.1 | 277 animators: 41 units (`CullUpdateTransforms`), 152 decorations culled, 84 UI animators that always animate (59 name tags, 21 thought bubbles, in the shown overhead icons) |
+| `PlayerUpdateCanvases` | 0.5 | `UpdateBatches` 0.41, `Canvas.RenderOverlays` 374 calls |
+| `WaitForJobGroupID` | 2.3 in all | the main thread waiting for (and helping with) jobs: skinned bounds 0.53, the light system's transform scan 0.41, `Director.PrepareFrame` 0.24, render queue extraction 0.2 |
+
+**Two cameras.** The scene is drawn by two deferred cameras every frame: a background camera (depth -1, clears to the
+skybox, layers `Background` and one more, 1213 renderers of which 10 drawn) and the main camera (depth 2, clears the
+depth only, everything else). Each render culls, updates the lights (a transform scan), the renderers' bounds, prepares
+the shadow maps and runs the deferred lighting. `POST /api/experiment?name=cameras&on=true` switches the background
+camera off and gives its layers and clear flags to the main camera; in one session, alternating every 15 s after a
+150 s warm-up (the frame rate climbs for the first two minutes of a loaded save, so a short warm-up compares nothing):
+
+| 15 s windows at 1x | fps |
+|---|---:|
+| two cameras (4 windows) | 117.9, 121.4, 119.9, 120.7 |
+| one camera (2 windows) | 120.7, 123.4 |
+| one camera and fixed skinned bounds | 124.2 |
+| fixed skinned bounds alone (2 windows) | 116.4, 119.0 |
+
+One camera is worth 2–4 %, steadily above every two-camera window; the fixed bounds for the skinned meshes
+(`name=skinned`: `updateWhenOffscreen` was already off on all 54, so only a generous `localBounds`) nothing. But the
+merge cannot be kept: the background camera is the camera of a miniature sky scene at the world's origin
+(`Skybox3d`: a sky sphere of scale 8, the ocean, the clouds and the floating islands around a camera that only turns
+with the main one), so with the main camera drawing those layers from where it stands the sky and the sea are black
+(horizon screenshots with both). Giving the background camera the forward path instead of deferred
+(`name=bgforward`) was within the noise (99.3–100.6 against 99.9–103.0 fps on the development player). The two
+cameras stay; a sky drawn in one pass would need the sky scene moved along with the main camera or drawn to a
+texture, not done.
+
+**The deep profile** on `GetComponent`: 1017 `GameObject.GetComponent<T>` and 369 `Component.GetComponent<T>` calls a
+frame, 7 `GetComponentsInChildren`, 22 `GetComponentsInParent`, 257 `GetComponents` (UGUI's layout, interface typed).
+The biggest callers a frame: `Faction.GetFaction` 229 (114 from the mod's `CraftLoopLimit.Stock`), `Recepteur.
+FirstObjectOf` 217 (a `GetComponent` per stored item, from `CraftingInventory.ItemToPickup`), `Beacon.project` 72
+(`GetComponentInParent`, from the beacon icons' update), `Toolbag.HasToolFor` 86, `UIGameSelector.FindSelectable` 68,
+`BarilScript.FixedUpdate` 68. None of them is the 3.4 % `GetComponentsImplementation<true, 1>` of the `perf`
+profile, which must come from the engine's own enumerations (messages, animator callbacks, UI); it stays unnamed.
+
+### What was changed, second round
+
+- **The reach flood** (`ReachMap`, the mod's unreachable-task marks): 2 % of the main thread, as a flood ran in most
+  frames at 0.4 ms each (a change every few seconds restarted it after 5 s). On the port: 0.2 ms a frame, 10 s after a
+  change, 30 s refresh.
+- **`LitterGoalProvider.Refresh`** (1.1 %, frames of 8 ms): ran on every AI tick of every provider; now at most every
+  0.5 s per provider (`LitterRefreshRate`).
+- **`AnimatedProgression.Update`** (0.48 ms a frame): the mod's own postfixes looked the pallet's parts up every
+  frame while its animation played (`GetComponentInChildren<LargeStockpileVisual>(true)`, two `Find`s, two component
+  lookups); they are kept now (`BlueCrystalCratePatch`, `StackingVisual`).
+- **`ItemCounts.Update`** (292 calls a frame, zeroing a counter): switched off, the counter is zeroed where it is
+  read (`ItemCountsUpdate`).
+- **Hidden overhead icons:** their content object is switched off, not only see-through: its graphics stayed
+  registered for the screen's raycast (351 `GraphicRaycaster`s, 1439 canvases in the scene), its name tag and thought
+  bubble animators and its `ItemCounts` ran. `FrameSaversOverheadPatch.SwitchContent`.
+- **`Beacon.project`** (72 `GetComponentInParent` a frame): kept for 2 s per beacon (`BeaconProjectCache`).
+
+Measured with `bench.py` as in the first round (60 s warm-up, 30 s windows; runs 44 and 45 against 33, 34 and 41,
+which had the first round's changes; the cameras as the game has them):
+
+| | First round | Second round |
+|---|---:|---:|
+| 1x fps | 91.6 | 113.9 |
+| 1x p99 frame | 21.5 ms | 18.1 ms |
+| 1x 1 % low fps | 35.3 | 41.1 |
+| 1x frames over 20 ms in 30 s | 43.7 | 16 |
+| 3x fps | 56.8 | 68.5 |
+| Update scripts (player loop step) | 3.61 ms | 2.53 ms |
+| Fixed update scripts | 1.59 ms | 1.19 ms |
+| `FinishFrameRendering` (main thread) | 2.66 ms | 2.48 ms |
+| Animation begin | 0.73 ms | 0.53 ms |
+| `AnimatedProgression.Update` | 0.28 ms | 0.01 ms |
+| `fixed: Labor` | 1.03 ms | 0.81 ms |
+
+The longest single frame of a 30 s window (130–145 ms) is the same before and after: Unity's fixed-update catch-up
+after a stall outside the frame loop (in one run 164 AI ticks in one frame, 82 of them work searches), not a change of
+this round.
+
+### What is left, second round
+
+- The behaviour trees, as before (`GameClock.FixedUpdate` 1.9 ms a frame).
+- `Camera.Render` on the main thread, twice a frame (the sky camera, above): `Drawing` 0.9 ms (the render loop's
+  command generation), the skinned meshes' bounds 0.5 ms, `Update Lights` 0.4 ms.
+- 84 UI animators (name tags, thought bubbles) that always animate in the shown icons; the game drives them with
+  `SetBool`/`SetTrigger`, so switching them off while idle needs the triggers caught.
+- `GetComponentsImplementation<true, 1>`, 3.4 %, still unnamed (see above).
+- `AkGameObj.Update` 0.28 ms a frame after the throttle; `EventSystem.Update` 0.27 ms (fewer raycasters now).
 
 ## Invasion raids without a crystal
 

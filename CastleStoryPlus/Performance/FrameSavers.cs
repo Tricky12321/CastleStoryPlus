@@ -173,6 +173,28 @@ internal static class FrameSaversOverheadPatch
 		Switch(__instance.MainCanvas, __instance, value);
 		Switch(__instance.ArrowCanvas, __instance, value);
 		SwitchNested(__instance, value);
+		SwitchContent(__instance, value);
+	}
+
+	// The hidden content object itself is switched off (Unity 6 port): see-through, it still cost every frame. Its
+	// graphics stayed registered for the screen's raycast (300 overhead icons' worth gone over on every mouse move),
+	// its lines' animators (name tag, thought bubble) and Updates (ItemCounts) ran, and its rect transforms were gone
+	// over by the canvas. Switched on again when the icon shows; the game's own code tolerates inactive lines (a
+	// thought bubble checks activeInHierarchy before its animator).
+	private static void SwitchContent(OverheadDisplay display, bool value)
+	{
+#if UNITY6
+		Transform content = display.Content;
+		if (content == null || content == display.transform)
+		{
+			return;
+		}
+		GameObject go = content.gameObject;
+		if (go.activeSelf != value)
+		{
+			go.SetActive(value);
+		}
+#endif
 	}
 
 	// The canvases nested in a hidden icon (its content's, each line's arrow; three a stockpile icon, some 600 in a big

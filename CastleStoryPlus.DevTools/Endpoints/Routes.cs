@@ -33,6 +33,7 @@ internal static class Routes
 #if UNITY6
 		PlayerLoopEndpoints.Add(routes);
 		ProfilerMarkerEndpoints.Add(routes);
+		ProfilerFileEndpoints.Add(routes);
 #endif
 		HeapEndpoints.Add(routes);
 #if !UNITY6_PLAYER
@@ -55,6 +56,7 @@ internal static class Routes
 		AnimatorEndpoints.Add(routes);
 		UiEndpoints.Add(routes);
 		ComponentEndpoints.Add(routes);
+		ExperimentEndpoints.Add(routes);
 		JitEndpoints.Add(routes);
 		return routes;
 	}

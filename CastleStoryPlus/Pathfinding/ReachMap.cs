@@ -21,19 +21,33 @@ namespace CastleStoryPlus.Pathfinding;
 // second or two while workers dig) were half the garbage of a running game.
 internal static class ReachMap
 {
-	// Time a running flood may take per frame, in places visited between checks of the clock.
+	// Time a running flood may take per frame, in places visited between checks of the clock. On the Unity 6 port the
+	// flood took 2 % of the main thread on the Benchmark save (a change every few seconds kept one running in most
+	// frames, 0.4 ms each): a smaller slice and longer waits there, the flood then takes a few seconds and runs less.
+#if UNITY6
+	private const double MillisecondsPerFrame = 0.2;
+#else
 	private const double MillisecondsPerFrame = 0.4;
+#endif
 
 	private const int NodesPerCheck = 500;
 
 	private static readonly System.Diagnostics.Stopwatch Watch = new System.Diagnostics.Stopwatch();
 
 	// A new flood at the latest this long after the last one, even with no change (workers move to other places).
+#if UNITY6
+	private const float RefreshSeconds = 30f;
+#else
 	private const float RefreshSeconds = 20f;
+#endif
 
 	// A new flood at the earliest this long after the last one, after a change. A quarry being dug changes the world
 	// every second; flooding again each time kept a flood running in nearly every frame.
+#if UNITY6
+	private const float ChangeDelaySeconds = 10f;
+#else
 	private const float ChangeDelaySeconds = 5f;
+#endif
 
 	private sealed class Flood
 	{

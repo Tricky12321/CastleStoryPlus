@@ -61,8 +61,45 @@ internal static class StackingVisual
 
 		public Vector3 CrateScale;
 
+		public Transform Heap;
+
+		public bool HeapLooked;
+
+		public AnimatedProgression Progression;
+
+		public bool ProgressionLooked;
+
 		// The combined meshes under Holder, destroyed with it (a mesh made in code is not freed with its object).
 		public readonly List<Mesh> Meshes = new List<Mesh>();
+	}
+
+	// Whether a storage is one this draws (a 2 x 2 pallet that is not a large stockpile): two component lookups, so
+	// remembered for a while; the animator patch asks every frame while a pallet's animation plays.
+	private struct Candidate
+	{
+		public bool Yes;
+
+		public float Until;
+	}
+
+	private const float CandidateSeconds = 5f;
+
+	private static readonly Dictionary<Recepteur, Candidate> Candidates = new Dictionary<Recepteur, Candidate>();
+
+	private static bool IsCandidate(Recepteur recepteur)
+	{
+		if (recepteur == null)
+		{
+			return false;
+		}
+		float now = Time.time;
+		if (Candidates.TryGetValue(recepteur, out Candidate candidate) && now < candidate.Until)
+		{
+			return candidate.Yes;
+		}
+		bool yes = MixedStockpiles.IsPallet(recepteur) && !LargeStockpile.IsLarge(recepteur);
+		Candidates[recepteur] = new Candidate { Yes = yes, Until = now + CandidateSeconds };
+		return yes;
 	}
 
 	private const string HolderName = "CSP_StackingLayers";
@@ -120,6 +157,7 @@ internal static class StackingVisual
 			DestroyHolder(drawn);
 		}
 		All.Clear();
+		Candidates.Clear();
 	}
 
 	private static void DestroyHolder(Drawn drawn)
@@ -155,7 +193,7 @@ internal static class StackingVisual
 	// put back as the game draws it.
 	internal static void Refresh(Recepteur recepteur)
 	{
-		if (recepteur == null || !MixedStockpiles.IsPallet(recepteur) || LargeStockpile.IsLarge(recepteur))
+		if (!IsCandidate(recepteur))
 		{
 			return;
 		}
@@ -171,13 +209,18 @@ internal static class StackingVisual
 			drawn = new Drawn();
 			All[recepteur] = drawn;
 		}
-		AnimatedProgression progression = recepteur.GetComponent<AnimatedProgression>();
+		if (!drawn.ProgressionLooked)
+		{
+			drawn.ProgressionLooked = true;
+			drawn.Progression = recepteur.GetComponent<AnimatedProgression>();
+		}
+		AnimatedProgression progression = drawn.Progression;
 		bool crate = resource != null && ratio > 1f && recepteur.ContentString() == "Fill";
 		Stretch(recepteur, drawn, crate ? ratio : 1f);
 		if (crate)
 		{
 			int original = Mathf.Max(1, Stacking.OriginalRoom(recepteur, resource.GetType()));
-			RaiseHeap(recepteur, Mathf.Clamp((float)recepteur.ContentDescription.Value(resource) / original, 0f, ratio));
+			RaiseHeap(recepteur, drawn, Mathf.Clamp((float)recepteur.ContentDescription.Value(resource) / original, 0f, ratio));
 		}
 		bool layers = resource != null && ratio > 1f && !crate;
 		Type type = layers ? resource.GetType() : null;
@@ -224,9 +267,14 @@ internal static class StackingVisual
 
 	// The heap as the game's animator places it, measured against the room before Stacking, so a fuller crate
 	// heaps higher than the game's full.
-	private static void RaiseHeap(Recepteur recepteur, float fill)
+	private static void RaiseHeap(Recepteur recepteur, Drawn drawn, float fill)
 	{
-		Transform heap = recepteur.transform.Find(HeapPath);
+		if (!drawn.HeapLooked)
+		{
+			drawn.HeapLooked = true;
+			drawn.Heap = recepteur.transform.Find(HeapPath);
+		}
+		Transform heap = drawn.Heap;
 		if (heap == null)
 		{
 			return;
