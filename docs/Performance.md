@@ -384,6 +384,133 @@ The benchmark script with the variants (driver, worker count, affinity, threadin
   frame, so it matters little), and dynamic batching cannot be checked from outside the editor. Both are player
   build settings, for the next player build.
 
+## The main thread under `perf`, 02-11-2026
+
+Where the main thread's time goes on the Benchmark save, measured from outside the game: `perf record` on the main
+thread of the development player (`Build/Profiling/Linux`, OpenGL Core, 1x, fixed camera over the base, 20 s after a
+50 s warm-up), user space only, 2000 samples a second. The camera is held with `POST /api/camera?...&hold=true`: with
+the mouse at the screen's edge the game scrolls the view, and two runs of the evening measured the open sea at twice
+the frame rate before that was noticed. The engine's symbols come from `UnityPlayer_s.debug`; the
+game's compiled C# has none for `perf`, so DevTools names it: `POST /api/jit/resolve` takes the recording's code
+addresses while the game still runs and answers Mono's method for each (`mono_jit_info_table_find`), written as a perf
+map file (`/tmp/perf-<pid>.map`). The script is `~/.cache/csp-bench/perfrec.py`, the reports `perfsum.py` (top,
+children, callers). Call chains through compiled C# are partial (the engine's own functions keep no frame pointers), so
+the inclusive figures below are lower bounds.
+
+| Where | Share of the main thread |
+|---|---:|
+| Engine (`UnityPlayer.so`) | 58 % |
+| The game's and the mod's C# | 32 % |
+| Mono runtime (GC write barrier 1.5 %, handle tables 0.8 %) | 6 % |
+
+The game's side, inclusive (what each system and everything it called cost):
+
+| System | Share |
+|---|---:|
+| Behaviour trees of units and tasks, in the fixed update (`Behavior.BrixFixedUpdate`) | 8.2 % |
+| Everything else in the game's fixed update (`GameClock.FixedUpdate` in all) | 11.0 % |
+| The game's `Update` components (`GameClock.Update`) | 9.1 % |
+| `Locomotion4` (units' motion) | 2.9 % |
+| `AkGameObj.Update` (Wwise sound objects, some 300) | 2.9 % |
+| `InputModeController.Update` (1.7 %) and Rewired's own update (2.2 %) | 3.9 % |
+| `Picking.Update` (what is under the mouse) | 1.1 % |
+| `UnreachableTasks.Update`, almost all of it the reach map's flood | 1.7 % |
+| `LitterGoalProvider.Refresh` | 1.0 % |
+| `Jardinier` (plants' level of detail) | 0.7 % |
+| `VolumeRegistrator.Register`, `PathSimplifiedSearch`, `TrackableVoxelTransform.SendMoveSignal` | 0.5–0.7 % each |
+
+The engine's side, by function (self time, not who called it):
+
+| Engine work | Share | What it is |
+|---|---:|---|
+| `GetComponent` (`GetComponentsImplementation`, `QueryComponentByType`, `IsStateMachineBehaviour`, script cache) | 7 % | the game's and the mod's component lookups, from everywhere |
+| `TransformChangeDispatch` (scan and clear of changed transforms) | 5.2 % | the engine finding which transforms moved this frame, for renderers, colliders and canvases |
+| Job system idle loop on the main thread (`lane_guts`) | 2.4 % | the main thread helping or waiting for jobs |
+| Scripting handles and transform reads (`UniqueGCHandle::GetTarget`, `.transform`, `Transform::GetPosition`) | 5 % | every C# call into the engine pays these |
+| UI (`RectTransform::UpdateAnchorPositionIfTransformChanged`, canvas alpha, batches, overlays) | 2.4 % | the overhead icons following their objects |
+| Render node preparation (`PrepareMeshRenderNodes`, shared mesh and material data) | 2.5 % | per renderer drawn, main-thread part |
+| Animation (`PreOrderPlayableTraverser`, `Animator::BuildJobs`) | 1.7 % | main-thread part of the animators |
+| `UnityEngine.Object:CompareBaseObjects` | 1.2 % | `== null` and `!=` on Unity objects in C# |
+
+### What was changed on it, 02-11-2026
+
+All under `FrameSavers`:
+
+- **Input actions by id (`InputActionIds`):** the game asks Rewired for its actions by name every frame from some
+  60 places (`GetButton("cam_action1")` and the like); each call hashed the name case-insensitively first. The name is
+  turned into the action's id once and the id overload is called, which is what Rewired did after the lookup.
+- **Still sound objects (`SoundObjectPositions`):** a sound object that has not moved for 8 frames is looked at every
+  fourth frame (spread over the frames) instead of every frame; most of the 300 never move. One that moves again is
+  heard by Wwise at most three frames late.
+- **Behind-camera detectors (`BehindCamera`):** the camera's position and forward are read once per frame for the
+  330 detectors instead of four engine calls each.
+- **Frustum planes (`ScreenPlanes`):** the `ScreenSignaler`s worked the camera's six planes out once each per frame
+  (40 matrix reads); now once per frame and camera.
+- **Work searches per tick (`WorkSearchBudget`, `[Performance] WorkSearchesPerTick`, 4):** idle workers fall into step
+  and 20–30 of them listed and sorted every task in the same tick (frames of 15–20 ms). At most 4 search in one tick;
+  the others are put off to their next round and served first then, in order, so none starves.
+- **Plants' level of detail (`NatureLodRest`):** a megavoxel whose plants were last judged with the camera where it
+  still is (within half a block) is passed over for up to 2 s instead of every pass.
+
+**Measured** (`bench.py`, OpenGL Core, two runs before against two after, same build otherwise; the frame rate
+figures carry the usual run-to-run spread, the per-system rows and the `perf` shares are the firmer evidence):
+
+| | Before | After |
+|---|---:|---:|
+| Player loop fps (`/api/frames/loop`, 15 s) | 85.6 | 92.6 |
+| Update scripts (player loop step) | 4.01 ms | 3.65 ms |
+| Fixed update scripts | 1.69 ms | 1.61 ms |
+| 1x fps, monitor off, 30 s | 88.9 | 90.6 |
+| 3x fps, 30 s | 50.6 | 56.8 |
+| Frames over 20 ms in 30 s at 1x | 49 | 44.5 |
+| `update: BehindCameraDetector` | 0.10 ms/frame | 0.04 ms/frame |
+| `InputManager_Base.Update` (Rewired) | 0.31 ms/frame | 0.22 ms/frame |
+| `labor tree: 3 LookForWork`, worst frame | 17.6 ms | 13.6 ms |
+| `fixed: Labor`, worst frame | 18.3 ms | 15.3 ms |
+
+And under `perf` (share of the main thread, inclusive): `AkGameObj.Update` 2.86 to 1.52 %, Rewired's update 2.2 to
+1.2 %, `Jardinier` 0.68 to 0.11 %, the sound patch itself 0.85 to 0.22 %. The tree farm's planting pass
+(`TreeFarmTick.Update`, 23–41 ms in one frame every 6 s on this save) and the Stacking research's pass over the
+stockpiles (`Stacking.Update`, 6.5–7.3 ms every 3 s) are spread over frames, and a spot the sapling's rules refused is not tried again for 60 s: `Stacking.Update`'s worst frame is 0.5–0.9 ms, and `TreeFarmTick.Update` no longer shows among the 120 costliest systems (under 0.01 ms a frame).
+
+### What is left on the main thread
+
+- **The behaviour trees (8 % steady, and the single slow frames):** `labor tree: 1 CurrentWork` up to 9 ms, `labor
+  work: BuildGoal` up to 12 ms, `labor: BestRecepteurToStore` 5–6 ms a call, `fixed: LitterGoalProvider` 8 ms
+  (its refresh goes over every loose item in the task's circle and, for each new one, every goal), `fixed:
+  KnowledgeUpdater` 3–4 ms, `TerrainLoop.Update` 5–8 ms. Each needs its own look.
+- **`GetComponent`, 7 % of the main thread** from all over the game and the mod; `perf` cannot name the callers
+  (the engine's functions keep no frame pointers, so the chain breaks there). A count per caller would need a patch
+  on the generic `GetComponent<T>`, which Harmony cannot do in one place.
+- **`TransformChangeDispatch`, 5 %:** the engine's own pass over the transforms that moved; it grows with the number
+  of moving hierarchies (units' bones, icons). Not reachable from the mod.
+- **`InputModeController.Update`, 2 %**, mostly `UnityEngine.Input.GetKey` and the eyedropper's update; not looked
+  at further.
+- **The incremental garbage collector:** its write barrier is 1.5 % of the main thread (`GC_dirty_inner`); see the
+  A/B below.
+
+### Incremental garbage collector on or off, 02-11-2026
+
+The port's player is built with Unity's incremental garbage collector (`gcIncremental`), which spreads a collection
+over frames in slices of `gc-max-time-slice` (3 ms) and for that puts a write barrier on every reference store
+(`GC_dirty_inner`, 1.5 % of the main thread above). A player built without it (`CSP_GC_INCREMENTAL=0`, output
+`Build/GcOff/Linux`, same install and mod) against the usual one, OpenGL Core, alternating, two runs each:
+
+| | Incremental on | Off |
+|---|---:|---:|
+| 1x fps, monitor off, 30 s | 90.8 | 94.5 |
+| Update scripts (player loop step) | 3.73 ms | 3.59 ms |
+| Frames over 20 ms in 30 s at 1x | 47.5 | 30 |
+| Managed heap in use | 1.16–1.17 GB | 1.06–1.10 GB |
+| Longest frame in the 3x window (a collection fell in it) | 53–163 ms | 495–514 ms |
+
+Off, the game runs about 4 % faster and with fewer long frames between collections, and every collection stops it for
+half a second on a heap this size (the incremental one takes 3 ms a frame over many frames instead). The player
+keeps the incremental collector; the switch stays for measuring (the pauses would be worth it only with a much smaller
+heap, see the Memory section).
+
+
+
 ## Invasion raids without a crystal
 
 While measuring, the frame rate fell to a tenth over a few runs: the save had grown from 9 to some 1000 enemy raids,

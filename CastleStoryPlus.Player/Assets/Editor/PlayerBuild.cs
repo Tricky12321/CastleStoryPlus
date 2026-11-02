@@ -188,6 +188,11 @@ namespace CastleStoryPlus.Player.Editor
 			PlayerSettings.usePlayerLog = true;
 			// The game talks plain HTTP (analytics, update checks); Unity 6 refuses that by default.
 			PlayerSettings.insecureHttpOption = InsecureHttpOption.AlwaysAllowed;
+			// Engine settings measured against each other (docs/Performance.md): the incremental garbage collector (on
+			// unless CSP_GC_INCREMENTAL=0; off, the collector has no write barrier on reference stores but pauses the
+			// game for a whole collection) and GPU skinning (off unless CSP_GPU_SKINNING=1; the game had it on).
+			PlayerSettings.gcIncremental = System.Environment.GetEnvironmentVariable("CSP_GC_INCREMENTAL") != "0";
+			PlayerSettings.gpuSkinning = System.Environment.GetEnvironmentVariable("CSP_GPU_SKINNING") == "1";
 		}
 
 		// Unity's default settings and our shader written the way the player serializes them, with type trees.

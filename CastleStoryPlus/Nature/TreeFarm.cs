@@ -173,8 +173,18 @@ internal class TreeFarmTick : MonoBehaviour
 	// Blueprints put down per tick at most, so a new farm fills over a little while.
 	private const int PlantsPerTick = 4;
 
-	// Columns looked at per tick at most (a big box is gone through over several ticks).
+	// Columns looked at per tick at most (a big box is gone through over several ticks), and per frame: a tick's
+	// columns are looked at over the following frames (each column is a walk down its voxels and a look round the
+	// spot found), so a tick costs a few ms spread out instead of 20-40 ms in one frame.
 	private const int ColumnsPerTick = 400;
+
+	private const int ColumnsPerFrame = 8;
+
+	// A spot the sapling's own placing rules refused is not tried again for this long: a try is a pooled blueprint,
+	// its fitter and its validator, and the answer only changes when the ground round it does.
+	private const float RefusedSeconds = 60f;
+
+	private static readonly Dictionary<XYZ, float> Refused = new Dictionary<XYZ, float>();
 
 	private LandscapeData _data;
 
@@ -184,15 +194,51 @@ internal class TreeFarmTick : MonoBehaviour
 
 	private HarvestProject _harvest;
 
+	// The tick's planting under way: its columns, how many are still to look at, what it found so far.
+	private User _user;
+
+	private BuildProject _team;
+
+	private VoxelBounds _box;
+
+	private List<XYZ> _columns;
+
+	private int _left;
+
+	private int _planted;
+
+	private int _looked;
+
+	private int _noGround;
+
+	private int _taken;
+
+	private int _invalid;
+
+	private readonly Dictionary<string, int> _reasons = new Dictionary<string, int>();
+
 	private void Start()
 	{
 		_data = GetComponent<LandscapeData>();
 		_next = Time.time + 2f;
+		if (Refused.Count > 4096)
+		{
+			Refused.Clear();
+		}
 	}
 
 	private void Update()
 	{
-		if (_data == null || !NetworkServer.active || Time.time < _next)
+		if (_data == null || !NetworkServer.active)
+		{
+			return;
+		}
+		if (_columns != null)
+		{
+			PlantSome();
+			return;
+		}
+		if (Time.time < _next)
 		{
 			return;
 		}
@@ -223,6 +269,7 @@ internal class TreeFarmTick : MonoBehaviour
 
 	private void OnDisable()
 	{
+		EndPass();
 		// Released with its task (deleted): its harvest task goes with it.
 		if (NetworkServer.active)
 		{
@@ -343,7 +390,8 @@ internal class TreeFarmTick : MonoBehaviour
 		return null;
 	}
 
-	// Goes through the box's grid columns a part at a time, putting a sapling blueprint where one can grow.
+	// Starts going through the box's grid columns, a part at a time (PlantSome over the next frames), putting a
+	// sapling blueprint where one can grow.
 	private void Plant(User user, VoxelBounds box)
 	{
 		BuildProject team = GlobalBuildJob.TeamProject(user);
@@ -372,44 +420,91 @@ internal class TreeFarmTick : MonoBehaviour
 		{
 			return;
 		}
-		int planted = 0;
-		int looked = 0;
-		int noGround = 0;
-		int taken = 0;
-		int invalid = 0;
-		Dictionary<string, int> reasons = new Dictionary<string, int>();
-		while (looked < columns.Count && looked < ColumnsPerTick && planted < PlantsPerTick)
+		_user = user;
+		_team = team;
+		_box = box;
+		_columns = columns;
+		_left = Mathf.Min(columns.Count, ColumnsPerTick);
+		_planted = 0;
+		_looked = 0;
+		_noGround = 0;
+		_taken = 0;
+		_invalid = 0;
+		_reasons.Clear();
+		PlantSome();
+	}
+
+	// The next ColumnsPerFrame columns of the tick's pass; the pass ends with its columns or with the tick's plants.
+	private void PlantSome()
+	{
+		if (_user == null || _team == null)
 		{
-			_cursor = (_cursor + 1) % columns.Count;
-			XYZ column = columns[_cursor];
-			looked++;
-			if (!FindSpot(column.x, column.z, box, out XYZ spot, out bool ground))
+			EndPass();
+			return;
+		}
+		int inFrame = 0;
+		try
+		{
+			while (_left > 0 && _planted < PlantsPerTick && inFrame < ColumnsPerFrame)
 			{
-				if (ground)
+				_cursor = (_cursor + 1) % _columns.Count;
+				XYZ column = _columns[_cursor];
+				_left--;
+				_looked++;
+				inFrame++;
+				if (!FindSpot(column.x, column.z, _box, out XYZ spot, out bool ground))
 				{
-					taken++;
-					string reason = LastReason ?? "?";
-					reasons[reason] = (reasons.TryGetValue(reason, out int n) ? n : 0) + 1;
+					if (ground)
+					{
+						_taken++;
+						string reason = LastReason ?? "?";
+						_reasons[reason] = (_reasons.TryGetValue(reason, out int n) ? n : 0) + 1;
+					}
+					else
+					{
+						_noGround++;
+					}
+					continue;
+				}
+				if (Refused.TryGetValue(spot, out float until) && Time.time < until)
+				{
+					_invalid++;
+					continue;
+				}
+				if (PlaceSapling(_user, _team, spot))
+				{
+					_planted++;
+					Refused.Remove(spot);
 				}
 				else
 				{
-					noGround++;
+					_invalid++;
+					Refused[spot] = Time.time + RefusedSeconds;
 				}
-				continue;
-			}
-			if (PlaceSapling(user, team, spot))
-			{
-				planted++;
-			}
-			else
-			{
-				invalid++;
 			}
 		}
-		if (planted == 0)
+		catch (System.Exception ex)
 		{
-			Report(looked + " spots looked at in box " + box.min + " - " + box.max + ": " + noGround + " without ground, " + taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + invalid + " refused by the sapling's placing rules");
+			Plugin.Log.LogWarning("TreeFarm: " + ex.Message);
+			EndPass();
+			return;
 		}
+		if (_left > 0 && _planted < PlantsPerTick)
+		{
+			return;
+		}
+		if (_planted == 0)
+		{
+			Report(_looked + " spots looked at in box " + _box.min + " - " + _box.max + ": " + _noGround + " without ground, " + _taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(_reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + _invalid + " refused by the sapling's placing rules");
+		}
+		EndPass();
+	}
+
+	private void EndPass()
+	{
+		_columns = null;
+		_user = null;
+		_team = null;
 	}
 
 	private float _nextReport;

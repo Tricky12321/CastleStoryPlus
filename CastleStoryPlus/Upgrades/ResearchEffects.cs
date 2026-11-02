@@ -230,6 +230,14 @@ internal class Stacking : MonoBehaviour
 
 	private static readonly Dictionary<Recepteur, float> Applied = new Dictionary<Recepteur, float>();
 
+	// Stockpiles looked at per frame: a pass over a big base (hundreds of pallets, each with its stacking visual to
+	// check) took one frame of 6-7 ms every CheckSeconds; now it is spread over frames.
+	private const int PerFrame = 12;
+
+	private readonly List<Recepteur> _pass = new List<Recepteur>();
+
+	private int _at;
+
 	private float _next;
 
 	private static void Enable()
@@ -244,6 +252,11 @@ internal class Stacking : MonoBehaviour
 
 	private void Update()
 	{
+		if (_at < _pass.Count)
+		{
+			Step();
+			return;
+		}
 		if (Time.unscaledTime < _next)
 		{
 			return;
@@ -253,8 +266,18 @@ internal class Stacking : MonoBehaviour
 		{
 			return;
 		}
-		foreach (Recepteur recepteur in Live<Recepteur>.Active())
+		Live<Recepteur>.Active(_pass);
+		_at = 0;
+		Step();
+	}
+
+	// The next PerFrame stockpiles of the pass; the pruning once the pass is through.
+	private void Step()
+	{
+		int end = Mathf.Min(_pass.Count, _at + PerFrame);
+		for (; _at < end; _at++)
 		{
+			Recepteur recepteur = _pass[_at];
 			if (recepteur == null || recepteur.Fonction != FonctionDeContenant.entrepot)
 			{
 				continue;
@@ -267,9 +290,14 @@ internal class Stacking : MonoBehaviour
 			StackingVisual.Refresh(recepteur);
 			StockpileHeadroom.Track(recepteur);
 		}
-		Prune();
-		StockpileTiers.Prune();
-		StockpileHeadroom.Prune();
+		if (_at >= _pass.Count)
+		{
+			_pass.Clear();
+			_at = 0;
+			Prune();
+			StockpileTiers.Prune();
+			StockpileHeadroom.Prune();
+		}
 	}
 
 	private static void Apply(Recepteur recepteur, float factor)
