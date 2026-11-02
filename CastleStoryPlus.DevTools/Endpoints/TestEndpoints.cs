@@ -18,7 +18,7 @@ internal static class TestEndpoints
 		});
 		routes.Add(new Route("POST", "/api/tests/run", "Starts a run of the matching tests (answers at once; follow it with /api/tests/results)", Run)
 		{
-			Parameters = "filter (part of a test name or category; empty: all), speed (game speed for the run, 0.25-20, back to 1x when it ends; single player/host only)"
+			Parameters = "filter (part of a test name or category; empty: all), speed (game speed for the run, 0.25-20, back to 1x when it ends; single player/host only), parallel (tests at the same time, 1-8, default 1: those of [ParallelTests] classes, one per group; the others alone), clearUnits (true: take the world's own units, the player's bricktrons and roaming enemies, away first and keep the base's repair and cleanup tasks without crew during the run)"
 		});
 		routes.Add(new Route("GET", "/api/tests/results", "The current or last run: progress and each test's outcome, message, log and recorded values", Results)
 		{
@@ -32,7 +32,7 @@ internal static class TestEndpoints
 		List<object> tests = new List<object>();
 		foreach (TestRunner.TestInfo test in TestRunner.Matching(request.String("filter", null)))
 		{
-			tests.Add(Obj("name", test.Name, "category", test.Category, "description", test.Description, "timeoutSeconds", test.TimeoutSeconds, "needsHostGame", test.NeedsHostGame));
+			tests.Add(Obj("name", test.Name, "category", test.Category, "description", test.Description, "timeoutSeconds", test.TimeoutSeconds, "needsHostGame", test.NeedsHostGame, "parallel", test.Parallel, "group", test.Group));
 		}
 		return Obj("count", tests.Count, "tests", tests);
 	}
@@ -53,11 +53,17 @@ internal static class TestEndpoints
 		{
 			throw new ApiException(409, "The game speed can only change in single player");
 		}
-		if (!TestRunner.Instance.StartRun(tests, speed))
+		int parallel = request.Int("parallel", 1);
+		if (parallel < 1 || parallel > 8)
+		{
+			throw new ApiException(400, "'parallel' must be from 1 to 8");
+		}
+		bool clearUnits = request.Bool("clearUnits", false);
+		if (!TestRunner.Instance.StartRun(tests, speed, parallel, clearUnits))
 		{
 			throw new ApiException(409, "A test run is already going (POST /api/tests/stop stops it)");
 		}
-		return Obj("run", TestRunner.Instance.RunNumber, "started", tests.Count, "inHostGame", TestRunner.InHostGame(), "speed", speed);
+		return Obj("run", TestRunner.Instance.RunNumber, "started", tests.Count, "inHostGame", TestRunner.InHostGame(), "speed", speed, "parallel", parallel, "clearUnits", clearUnits);
 	}
 
 	private static object Results(ApiRequest request)

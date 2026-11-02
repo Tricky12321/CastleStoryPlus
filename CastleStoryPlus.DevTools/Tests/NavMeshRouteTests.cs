@@ -5,10 +5,12 @@ using Brix.Engine;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Network;
+using Brix.Pathfinding.Test;
 using CastleStoryPlus.DevTools.Pathing;
 using CastleStoryPlus.DevTools.Testing;
 using CastleStoryPlus.Pathfinding;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace CastleStoryPlus.DevTools.Tests;
 
@@ -33,28 +35,23 @@ internal static class NavMeshRouteTests
 		bool was = NavMeshRoutes.Enabled.Value;
 		NavMeshRoutes.Enabled.Value = true;
 		t.Cleanup(() => NavMeshRoutes.Enabled.Value = was);
-		Faction local = (User.LocalUser != null) ? User.LocalUser.faction : null;
-		foreach (Labor labor in Object.FindObjectsOfType<Labor>())
+		// Ground of the test's own (no other test's leftovers on it) and a builder of its own at the area's start
+		// (west side); it can take orders a few frames later. The mesh has only ground some walk leads to: not an
+		// island's plateau that cannot be reached.
+		XYZ center = Scenario.Site(t, width, depth, clear, accept: OnMesh);
+		Labor labor = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(center.x - width / 2 + 1, center.y, center.z));
+		t.Log("Flat area at " + center + ", " + labor.name + " starts on its west side");
+		return new Site { Labor = labor, Center = center };
+	}
+
+	private static bool OnMesh(XYZ voxel)
+	{
+		TestPathfinding graph = NavMeshExperiment.Graph;
+		if (graph == null || !graph.TerrainNodes.TryGetValue(voxel, out TerrainPathNode node) || node == null || node.IsEmpty)
 		{
-			if (labor == null || labor.navigation == null || !labor.gameObject.activeInHierarchy || local == null || !local.IsSame(labor.gameObject))
-			{
-				continue;
-			}
-			XYZ from = Units.VoxelOf(labor);
-			if (!TestWorld.FindFlatArea(from, width, depth, clear, 40, out XYZ center))
-			{
-				continue;
-			}
-			XYZ start = new XYZ(center.x - width / 2 + 1, center.y, center.z);
-			PathProbe.Report plan = PathProbe.Run(labor, from, start, false);
-			if (plan.Valid && plan.AStar.Found)
-			{
-				t.Log("Flat area at " + center + ", " + labor.name + " walks from " + from);
-				return new Site { Labor = labor, Center = center };
-			}
+			return false;
 		}
-		t.Skip("No flat open area of " + width + " x " + depth + " that one of the player's bricktrons can walk to");
-		return null;
+		return NavMesh.SamplePosition(NavMeshExperiment.TopCentre(node), out NavMeshHit _, 1f, NavMeshExperiment.Filter(true, true, Scenario.Player));
 	}
 
 	// The mesh has taken in every change (its tiles are rebuilt a few frames after the graph).
@@ -111,6 +108,7 @@ internal static class NavMeshRouteTests
 	private static IEnumerator WalkRoutedByMesh(TestContext t)
 	{
 		Site site = Prepare(t, 17, 11, 3);
+		yield return t.Frames(5);
 		XYZ a = new XYZ(site.Center.x - 7, site.Center.y, site.Center.z - 3);
 		XYZ b = new XYZ(site.Center.x + 7, site.Center.y, site.Center.z + 3);
 		int[] routed = new int[1];
@@ -124,6 +122,7 @@ internal static class NavMeshRouteTests
 	private static IEnumerator RoutesRoundNewWall(TestContext t)
 	{
 		Site site = Prepare(t, 17, 11, 4);
+		yield return t.Frames(5);
 		XYZ center = site.Center;
 		XYZ a = new XYZ(center.x - 7, center.y, center.z);
 		XYZ b = new XYZ(center.x + 7, center.y, center.z);
@@ -155,6 +154,7 @@ internal static class NavMeshRouteTests
 	private static IEnumerator ClimbsLedge(TestContext t)
 	{
 		Site site = Prepare(t, 17, 11, 4);
+		yield return t.Frames(5);
 		XYZ center = site.Center;
 		XYZ a = new XYZ(center.x - 7, center.y, center.z);
 		// A platform of 5 x 5 blocks, one high, east of the middle; the goal on its top.

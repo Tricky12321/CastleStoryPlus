@@ -58,7 +58,7 @@ internal static class TestWorld
 				}
 				for (int y = 0; y < clear; y++)
 				{
-					if (!Voxel.IsEmpty(new XYZ(x, ground.y + y, z)))
+					if (!Voxel.IsOpen(new XYZ(x, ground.y + y, z)))
 					{
 						return false;
 					}

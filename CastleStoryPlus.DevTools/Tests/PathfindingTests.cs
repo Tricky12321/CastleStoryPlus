@@ -27,12 +27,7 @@ internal static class PathfindingTests
 
 	private static Labor Builder(TestContext t)
 	{
-		Labor labor = Units.Find(0, false);
-		if (labor == null)
-		{
-			t.Skip("The player has no bricktron to search routes for");
-		}
-		return labor;
+		return Scenario.EnsureBuilder(t);
 	}
 
 	[GameTest("Pathfinding", "Random routes around a builder: found whenever one exists, and close to the shortest route")]
@@ -145,12 +140,10 @@ internal static class PathfindingTests
 	[GameTest("Pathfinding", "Random routes for an enemy unit (their own weight and budget): found and close to the shortest")]
 	private static IEnumerator EnemyRoutesNearShortest(TestContext t)
 	{
-		Labor enemy = Units.Find(0, true);
 		Labor builder = Builder(t);
-		if (enemy == null)
-		{
-			t.Skip("No enemy unit in the game");
-		}
+		Labor enemy = Scenario.EnsureEnemy(t);
+		// A unit spawned now has its route search set up a few frames later.
+		yield return t.Frames(10);
 		XYZ home = Units.VoxelOf(builder);
 		System.Random random = new System.Random(5102026);
 		int compared = 0;

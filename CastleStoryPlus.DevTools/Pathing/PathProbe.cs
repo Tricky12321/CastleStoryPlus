@@ -24,6 +24,9 @@ internal static class PathProbe
 
 		public int Searched;
 
+		// The search ran out of places to look (rather than reaching its step limit).
+		public bool Exhausted;
+
 		public double Milliseconds;
 
 		public List<XYZ> Nodes = new List<XYZ>();
@@ -74,8 +77,8 @@ internal static class PathProbe
 		return false;
 	}
 
-	// Main thread, on the host.
-	internal static Report Run(Labor labor, XYZ from, XYZ to, bool withShortest)
+	// Main thread, on the host. lods: how many levels of the graph the A* may use (-1: all, as the game does).
+	internal static Report Run(Labor labor, XYZ from, XYZ to, bool withShortest, int lods = -1)
 	{
 		Report report = new Report();
 		if (!Ready())
@@ -99,7 +102,7 @@ internal static class PathProbe
 			request.CanWalkInForest = navigation.Labor.Profession.CanWalkInForest();
 			request.CanBreakVoxels = navigation.Labor.Profession.CanMakeWay();
 			request.SearchAway = false;
-			request.LodCount = request.Pathfinding.lodCount;
+			request.LodCount = (lods > 0) ? lods : request.Pathfinding.lodCount;
 			request.SearchLimit = -1;
 			request.SearchPerUpdate = 100;
 			if (!request.InitOrginAndDestination())
@@ -139,18 +142,24 @@ internal static class PathProbe
 		Stopwatch watch = Stopwatch.StartNew();
 		request.InitSearch();
 		int steps = 0;
+		bool limited = false;
 		while (!request.Work(request.SearchPerUpdate))
 		{
 			steps += request.SearchPerUpdate;
 			if (steps > MaxAStarSteps)
 			{
+				limited = true;
 				break;
 			}
 		}
 		route.Searched = request.Searched;
+		route.Exhausted = !limited && request.Searched < request.MaxSearched;
+		// As the game's ComputePath: InitImprove takes the search's result (SuccessLink), the finer search follows.
+		// Without it SuccessLink was whatever the pooled request held from an earlier search (KeepImprovedPathPatch
+		// took the second InitImprove out of WrapUpSearch), so found routes were reported missing and the other way.
+		request.InitImprove();
 		if (request.SuccessLink != null)
 		{
-			request.InitImprove();
 			while (!request.LoopImprovePath(request.SearchPerUpdate))
 			{
 			}

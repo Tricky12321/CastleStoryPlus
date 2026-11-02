@@ -27,32 +27,14 @@ internal static class StraightPathTests
 		public XYZ Center;
 	}
 
-	// A flat open area and one of the player's bricktrons with a route to its start (west side): the area nearest
-	// each bricktron in turn.
 	private static Site FindSite(TestContext t, int width, int depth, int clear)
 	{
-		Faction local = (User.LocalUser != null) ? User.LocalUser.faction : null;
-		foreach (Labor labor in UnityEngine.Object.FindObjectsOfType<Labor>())
-		{
-			if (labor == null || labor.navigation == null || !labor.gameObject.activeInHierarchy || local == null || !local.IsSame(labor.gameObject))
-			{
-				continue;
-			}
-			XYZ from = Units.VoxelOf(labor);
-			if (!TestWorld.FindFlatArea(from, width, depth, clear, 40, out XYZ center))
-			{
-				continue;
-			}
-			XYZ start = new XYZ(center.x - width / 2 + 1, center.y, center.z - 3);
-			PathProbe.Report plan = PathProbe.Run(labor, from, start, false);
-			if (plan.Valid && plan.AStar.Found)
-			{
-				t.Log("Flat area at " + center + ", " + labor.name + " walks from " + from);
-				return new Site { Labor = labor, Center = center };
-			}
-		}
-		t.Skip("No flat open area of " + width + " x " + depth + " that one of the player's bricktrons can walk to");
-		return null;
+		// Ground of the test's own (no other test's leftovers on it) and a builder of its own at the area's start
+		// (west side); it can take orders a few frames later.
+		XYZ center = Scenario.Site(t, width, depth, clear);
+		Labor labor = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(center.x - width / 2 + 1, center.y, center.z - 3));
+		t.Log("Flat area at " + center + ", " + labor.name + " starts on its west side");
+		return new Site { Labor = labor, Center = center };
 	}
 
 	// Orders the builder to a voxel and records where it is every frame until it stands there (or the time is up).
@@ -104,6 +86,7 @@ internal static class StraightPathTests
 	private static IEnumerator WalksStraightAcrossOpenGround(TestContext t)
 	{
 		Site site = FindSite(t, 17, 11, 3);
+		yield return t.Frames(5);
 		Labor labor = site.Labor;
 		XYZ center = site.Center;
 		XYZ a = new XYZ(center.x - 7, center.y, center.z - 3);
@@ -147,6 +130,7 @@ internal static class StraightPathTests
 	private static IEnumerator KeepsOutOfPillarOnLine(TestContext t)
 	{
 		Site site = FindSite(t, 17, 11, 4);
+		yield return t.Frames(5);
 		Labor labor = site.Labor;
 		XYZ center = site.Center;
 		XYZ a = new XYZ(center.x - 7, center.y, center.z - 3);
@@ -183,6 +167,7 @@ internal static class StraightPathTests
 	private static IEnumerator WallAppearsOnLine(TestContext t)
 	{
 		Site site = FindSite(t, 17, 11, 4);
+		yield return t.Frames(5);
 		Labor labor = site.Labor;
 		XYZ center = site.Center;
 		XYZ a = new XYZ(center.x - 7, center.y, center.z - 3);
@@ -229,6 +214,7 @@ internal static class StraightPathTests
 	private static IEnumerator PitDugOnLine(TestContext t)
 	{
 		Site site = FindSite(t, 17, 11, 3);
+		yield return t.Frames(5);
 		Labor labor = site.Labor;
 		XYZ center = site.Center;
 		XYZ a = new XYZ(center.x - 7, center.y, center.z - 3);
@@ -244,37 +230,51 @@ internal static class StraightPathTests
 			if (!dug && p.x > a.x + 3)
 			{
 				dug = true;
-				Dig(pit, -2);
-				t.Cleanup(() => Dig(pit, 2));
+				Dig(t, pit, 2);
 				t.Log("Pit dug with the builder at " + p);
 			}
 			XYZ voxel = XYZ.FromVector3(p);
 			if (dug && voxel.y >= center.y && pit.Exists((XYZ c) => c.x == voxel.x && c.z == voxel.z))
 			{
 				over++;
+				if (over <= 3)
+				{
+					t.Log("Over the pit at " + p + ", " + labor.Activity);
+				}
 			}
 		});
+		if (over > 0)
+		{
+			foreach (string line in StraightPaths.WatchLog)
+			{
+				t.Log(line);
+			}
+		}
 		t.True(dug, "The pit was never dug");
 		t.Record("frames", track.Count);
 		t.Equal(0, over, "Frames the builder stood over the pit at the old ground's height");
 	}
 
-	// Moves the top of the given columns up or down, as the world editor's brushes do.
-	private static void Dig(List<XYZ> columns, int by)
+	// The ground under the given standing voxels dug away depth deep, as digging does: each voxel's own damage
+	// receiver out of hit points, which tells the route graph. (Moving the column tops, as the world editor's brushes
+	// do, changed the ground but left the graph as it was: the route over the pit stayed.) The dug ground is not
+	// filled in again, so the site is not used again in this game.
+	private static void Dig(TestContext t, List<XYZ> columns, int depth)
 	{
-		VoxelEngine.BeginChanges();
-		try
+		Scenario.LeavesMess(t);
+		foreach (XYZ c in columns)
 		{
-			foreach (XYZ c in columns)
+			for (int d = 1; d <= depth; d++)
 			{
-				VoxelEngine.SetColumnTopVoxel(c.x, c.z, VoxelEngine.GetColumnTop(c.x, c.z) + by);
+				using (IVoxel voxel = Voxel.GetVoxel(new XYZ(c.x, c.y - d, c.z)))
+				{
+					if (voxel != null && voxel.DamageReceiver != null)
+					{
+						voxel.DamageReceiver.Kill();
+					}
+				}
 			}
 		}
-		finally
-		{
-			VoxelEngine.ApplyChanges();
-		}
-		GameSignals.Invoke(GameSignals.OnTerrainEdited);
 	}
 }
 #endif

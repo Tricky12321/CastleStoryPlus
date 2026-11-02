@@ -53,6 +53,17 @@ internal static class BuildSearchEndpoints
 		{
 			throw new ApiException(409, "The build project has no blueprint list");
 		}
+		return Explain(labor, project);
+	}
+
+	// The build project's search for the worker, run at once, and why each of its blueprints is (not) found.
+	internal static object Explain(Labor labor, BuildProject project)
+	{
+		BuildGoalProvider provider = project.GetComponent<BuildGoalProvider>();
+		if (provider == null)
+		{
+			return Obj("error", "The build project has no blueprint list");
+		}
 
 		HashSet<Factory.AssetKey> fetchables = new HashSet<Factory.AssetKey>();
 		bool carrying = !labor.recepteur.IsEmpty();

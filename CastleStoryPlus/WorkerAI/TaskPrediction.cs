@@ -55,6 +55,12 @@ internal static class TaskPrediction
 	// The task each worker was last given by a prediction (RouteView colours its route).
 	private static readonly Dictionary<Labor, Task> Predicted = new Dictionary<Labor, Task>();
 
+	// A predicted task that has not started by then never will (see PredictionWatch).
+	private const float StartSeconds = 2f;
+
+	// When each predicted task was given.
+	private static readonly Dictionary<Task, float> Given = new Dictionary<Task, float>();
+
 	private static void Enable()
 	{
 		GameSession.OnLeave(() =>
@@ -62,7 +68,59 @@ internal static class TaskPrediction
 			Predicted.Clear();
 			SearchChose.Clear();
 			LastArea.Clear();
+			Given.Clear();
 		});
+		Plugin.Root.AddComponent<PredictionWatch>();
+	}
+
+	// A predicted task is given while the worker's last task is still ending (Task.OnFinally). Now and then (about 1 in
+	// 20 times after a worker's idle walk in a build area) the worker's behaviour takes it on as its current task and
+	// never starts it: it stands idle for good, and as the blueprint counts it as its worker, no other worker takes the
+	// blueprint either (the last blueprint of a build area was left unbuilt). A predicted task still not started after
+	// StartSeconds is let go as the game ends a task: the blueprint no longer counts the worker, and the worker is free
+	// for the game's search.
+	private sealed class PredictionWatch : MonoBehaviour
+	{
+		private float _next;
+
+		private readonly List<Task> _done = new List<Task>();
+
+		private void Update()
+		{
+			if (Given.Count == 0 || Time.time < _next)
+			{
+				return;
+			}
+			_next = Time.time + 0.5f;
+			_done.Clear();
+			foreach (KeyValuePair<Task, float> entry in Given)
+			{
+				Task task = entry.Key;
+				Labor labor = task.Worker as Labor;
+				if (labor == null || labor.IsNullOrReleased() || task.TaskStartedTimestamp > 0f || (labor.CurrentTask != task && labor.PendingTask != task))
+				{
+					_done.Add(task);
+					continue;
+				}
+				if (Time.time - entry.Value < StartSeconds || labor.CurrentTask != task)
+				{
+					continue;
+				}
+				_done.Add(task);
+				Goal goal = (task.Giver != null) ? task.Giver.GetComponent<Goal>() : null;
+				Plugin.Log.LogInfo("TaskPrediction: " + labor.name + " never started its predicted task " + task.Description + "; let go");
+				Trace(labor, "next task: the predicted task never started, let go");
+				if (goal != null)
+				{
+					goal.UnassignWorker(task);
+				}
+				labor.CurrentTask = null;
+			}
+			foreach (Task task in _done)
+			{
+				Given.Remove(task);
+			}
+		}
 	}
 
 	internal static bool IsPredicted(Labor labor)
@@ -284,6 +342,10 @@ internal static class TaskPrediction
 		}
 		best.Package(Labor.DecisionSource.Project).Send(labor);
 		Predicted[labor] = labor.PendingTask;
+		if (labor.PendingTask != null)
+		{
+			Given[labor.PendingTask] = Time.time;
+		}
 		Trace(labor, "next task predicted: " + best.name + " in " + project.GetType().Name + " (" + checkedGoals + " tasks checked, " + Clock.Elapsed.TotalMilliseconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " ms)");
 	}
 

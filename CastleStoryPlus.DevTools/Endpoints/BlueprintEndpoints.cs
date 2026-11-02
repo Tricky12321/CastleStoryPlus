@@ -125,7 +125,7 @@ internal static class BlueprintEndpoints
 		return result;
 	}
 
-	private static object Describe(Blueprint blueprint, string type, bool withCells)
+	internal static object Describe(Blueprint blueprint, string type, bool withCells)
 	{
 		BuildGoal goal = blueprint.GetComponent<BuildGoal>();
 		ValidatorComponent validator = blueprint.GetComponent<ValidatorComponent>();
@@ -169,6 +169,7 @@ internal static class BlueprintEndpoints
 			"committed", blueprint.commited,
 			"project", (project != null) ? project.GetType().Name + " " + project.gameObject.InstanceId() : null,
 			"workers", (goal != null) ? goal.workers.Count : 0,
+			"workerNames", (goal != null) ? WorkerNames(goal) : null,
 			"unreachable", CastleStoryPlus.WorkerAI.UnreachableTasks.IsMarked(goal),
 			"hanging", CastleStoryPlus.WorkerAI.UnreachableTasks.IsHanging(goal),
 			"markedWhy", CastleStoryPlus.WorkerAI.UnreachableTasks.WhyMarked(goal),
@@ -204,5 +205,25 @@ internal static class BlueprintEndpoints
 	private static int[] Cell(XYZ cell)
 	{
 		return new int[3] { cell.x, cell.y, cell.z };
+	}
+
+	// Who the goal counts as working on it, and what each is doing: a worker counted but busy elsewhere (or gone)
+	// keeps the others off the blueprint.
+	private static List<string> WorkerNames(Goal goal)
+	{
+		List<string> names = new List<string>();
+		foreach (Labor labor in goal.workers)
+		{
+			if (labor == null)
+			{
+				names.Add("null");
+				continue;
+			}
+			Goal working = labor.Goal;
+			Task task = labor.CurrentTask;
+			string state = (task != null) ? ", " + task.Status + ((task.TaskStartedTimestamp > 0f) ? " since " + (Time.time - task.TaskStartedTimestamp).ToString("0") + " s" : ", never started") + ((labor.PendingTask != null) ? ", pending " + labor.PendingTask.Description : string.Empty) : string.Empty;
+			names.Add(labor.name + " (" + (labor.gameObject.activeInHierarchy ? labor.Activity.ToString() : "inactive") + ", task " + ((working != null) ? working.name + ((working == goal) ? " (this)" : string.Empty) : "none") + state + ")");
+		}
+		return names;
 	}
 }

@@ -21,7 +21,7 @@ internal static class PathEndpoints
 	{
 		routes.Add(new Route("GET", "/api/path", "Runs the game's route search (A*, with the mod's patches) for a bricktron and compares it with the shortest route over the same graph", Find)
 		{
-			Parameters = "to (x,y,z, required), from (x,y,z; default: where the bricktron stands), unit (bricktron id; default: the player's first builder), enemy (true: an enemy unit searches), nodes (true: list the routes' voxels), shortest (false: skip the comparison)",
+			Parameters = "to (x,y,z, required), from (x,y,z; default: where the bricktron stands), unit (bricktron id; default: the player's first builder), enemy (true: an enemy unit searches), nodes (true: list the routes' voxels), shortest (false: skip the comparison), lods (levels of the graph the A* may use; default all)",
 			TimeoutMs = 60000
 		});
 #if UNITY6
@@ -66,7 +66,7 @@ internal static class PathEndpoints
 		}
 		XYZ to = XYZ.FromVector3(request.Vector("to"));
 		XYZ from = (request.Get("from") != null) ? XYZ.FromVector3(request.Vector("from")) : Units.VoxelOf(labor);
-		PathProbe.Report report = PathProbe.Run(labor, from, to, request.Bool("shortest", true));
+		PathProbe.Report report = PathProbe.Run(labor, from, to, request.Bool("shortest", true), request.Int("lods", -1));
 		bool withNodes = request.Bool("nodes", false);
 		return Obj(
 			"unit", labor.name,
@@ -124,7 +124,7 @@ internal static class PathEndpoints
 				nodes.Add(Voxel(node));
 			}
 		}
-		return Obj("found", route.Found, "cost", route.Cost, "steps", route.Steps, "searched", route.Searched, "ms", System.Math.Round(route.Milliseconds, 1), "nodes", nodes);
+		return Obj("found", route.Found, "cost", route.Cost, "steps", route.Steps, "searched", route.Searched, "exhausted", route.Exhausted, "ms", System.Math.Round(route.Milliseconds, 1), "nodes", nodes);
 	}
 
 	private static object Node(ApiRequest request)
