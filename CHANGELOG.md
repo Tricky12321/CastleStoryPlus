@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-02
+
 - [FIX] **Task prediction:** a worker given its next build task while its last task was still ending now and then (about 1 in 20 times, after an idle walk in a build area) took it on and never started it: it stood idle for good, and as the blueprint counted it as its worker, no other worker took the blueprint either, so the last blueprint of a build area could be left unbuilt. A predicted task not started within 2 seconds is now let go as the game ends a task, and the game's search finds the worker work again.
 - [FIX] **Pathfinding, navigation mesh routes (Unity 6 port):** the mesh weighs a walking step up or down most of a block about like flat ground, where the game's route graph weighs it 13 to 25 times as much, so a route over a hillside took the steep steps the game's own search goes round (one cost 1.4 times the shortest route). Each steep step of a mesh route is now traded for the cheapest way round it over the graph near by, when that costs less. `GET /api/navmesh` counts them (`eased`).
 - [FIX] **DevTools, route probe:** `GET /api/path` and the route tests read the search's result from what the request held from an earlier search: the step that takes the result (`InitImprove`) only ran when a result was already there. Found routes were reported missing and missing ones found, at random; the "route search finds no route where the reference search does" of `PathfindingTests.RandomRoutesNearShortest`, `EnemyRoutesNearShortest` and right after a change to the blocks was this, not the game. `lods=` limits the graph levels the search may use, and routes say whether the search ran out of places (`exhausted`).
