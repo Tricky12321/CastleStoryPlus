@@ -30,9 +30,25 @@ internal static class ProfilerMarkers
 		internal long Count;
 	}
 
+	// A render statistic (draw calls, batches, SetPass calls, triangles, vertices and so on): a count per frame.
+	internal sealed class Counter
+	{
+		internal string Name;
+
+		internal string Category;
+
+		internal ProfilerRecorder Recorder;
+
+		internal double Sum;
+
+		internal long Max;
+	}
+
 	internal static bool Running { get; private set; }
 
 	internal static readonly List<Marker> Markers = new List<Marker>();
+
+	internal static readonly List<Counter> Counters = new List<Counter>();
 
 	internal static long Frames;
 
@@ -51,14 +67,31 @@ internal static class ProfilerMarkers
 		List<ProfilerRecorderHandle> handles = new List<ProfilerRecorderHandle>();
 		ProfilerRecorderHandle.GetAvailable(handles);
 		Markers.Clear();
+		Counters.Clear();
 		foreach (ProfilerRecorderHandle handle in handles)
 		{
 			ProfilerRecorderDescription description = ProfilerRecorderHandle.GetDescription(handle);
+			string category = description.Category.Name;
+			// The render statistics (counts) come along whatever categories were asked for; they exist in a release
+			// player too.
+			if (description.UnitType == ProfilerMarkerDataUnit.Count && category == "Render")
+			{
+				ProfilerRecorder counting = new ProfilerRecorder(description.Category, description.Name, 1);
+				if (counting.Valid)
+				{
+					counting.Start();
+					Counters.Add(new Counter { Name = description.Name, Category = category, Recorder = counting });
+				}
+				else
+				{
+					counting.Dispose();
+				}
+				continue;
+			}
 			if (description.UnitType != ProfilerMarkerDataUnit.TimeNanoseconds)
 			{
 				continue;
 			}
-			string category = description.Category.Name;
 			if (categories != null && categories.Count > 0 && !categories.Contains(category))
 			{
 				continue;
@@ -102,7 +135,12 @@ internal static class ProfilerMarkers
 		{
 			marker.Recorder.Dispose();
 		}
+		foreach (Counter counter in Counters)
+		{
+			counter.Recorder.Dispose();
+		}
 		Markers.Clear();
+		Counters.Clear();
 		Running = false;
 	}
 
@@ -113,6 +151,11 @@ internal static class ProfilerMarkers
 			marker.Ms = 0;
 			marker.MaxMs = 0;
 			marker.Count = 0;
+		}
+		foreach (Counter counter in Counters)
+		{
+			counter.Sum = 0;
+			counter.Max = 0;
 		}
 		Frames = 0;
 		_first = true;
@@ -142,6 +185,15 @@ internal static class ProfilerMarkers
 			if (ms > marker.MaxMs)
 			{
 				marker.MaxMs = ms;
+			}
+		}
+		foreach (Counter counter in Counters)
+		{
+			long value = counter.Recorder.LastValue;
+			counter.Sum += value;
+			if (value > counter.Max)
+			{
+				counter.Max = value;
 			}
 		}
 	}

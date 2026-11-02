@@ -47,13 +47,22 @@ internal static class StackingVisual
 
 	private sealed class Drawn
 	{
-		public string Signature = string.Empty;
+		// What the layers show: the resource, how many and the room (none: no layers). Count -1: drawn again on the
+		// next check.
+		public Type Type;
+
+		public int Count;
+
+		public int Capacity;
 
 		public GameObject Holder;
 
 		public Transform Crate;
 
 		public Vector3 CrateScale;
+
+		// The combined meshes under Holder, destroyed with it (a mesh made in code is not freed with its object).
+		public readonly List<Mesh> Meshes = new List<Mesh>();
 	}
 
 	private const string HolderName = "CSP_StackingLayers";
@@ -97,9 +106,34 @@ internal static class StackingVisual
 
 	private static readonly Dictionary<Recepteur, Drawn> All = new Dictionary<Recepteur, Drawn>();
 
+	private static bool _warnedGone;
+
 	private static void Enable()
 	{
-		GameSession.OnLeave(All.Clear);
+		GameSession.OnLeave(Clear);
+	}
+
+	private static void Clear()
+	{
+		foreach (Drawn drawn in All.Values)
+		{
+			DestroyHolder(drawn);
+		}
+		All.Clear();
+	}
+
+	private static void DestroyHolder(Drawn drawn)
+	{
+		foreach (Mesh mesh in drawn.Meshes)
+		{
+			UnityEngine.Object.Destroy(mesh);
+		}
+		drawn.Meshes.Clear();
+		if (drawn.Holder != null)
+		{
+			UnityEngine.Object.Destroy(drawn.Holder);
+			drawn.Holder = null;
+		}
 	}
 
 	// Stacking's room for a resource: the plain share (a third more per tier, twice the room at the top tier, so goods
@@ -126,8 +160,7 @@ internal static class StackingVisual
 			return;
 		}
 		All.TryGetValue(recepteur, out Drawn drawn);
-		List<Ressource> types = MixedStockpiles.Types(recepteur);
-		Ressource resource = (types.Count == 1) ? types[0] : null;
+		Ressource resource = MixedStockpiles.SingleType(recepteur);
 		float ratio = (resource != null) ? Ratio(recepteur, resource) : 1f;
 		if (drawn == null && ratio <= 1f)
 		{
@@ -146,8 +179,11 @@ internal static class StackingVisual
 			int original = Mathf.Max(1, Stacking.OriginalRoom(recepteur, resource.GetType()));
 			RaiseHeap(recepteur, Mathf.Clamp((float)recepteur.ContentDescription.Value(resource) / original, 0f, ratio));
 		}
-		string signature = (resource != null && ratio > 1f && !crate) ? resource.GetType().Name + ":" + recepteur.ContentDescription.Value(resource) + "/" + recepteur.BaseCapacity.Value(resource) : string.Empty;
-		if (signature == drawn.Signature)
+		bool layers = resource != null && ratio > 1f && !crate;
+		Type type = layers ? resource.GetType() : null;
+		int count = layers ? recepteur.ContentDescription.Value(resource) : 0;
+		int capacity = layers ? recepteur.BaseCapacity.Value(resource) : 0;
+		if (type == drawn.Type && count == drawn.Count && capacity == drawn.Capacity)
 		{
 			return;
 		}
@@ -156,16 +192,14 @@ internal static class StackingVisual
 		{
 			return;
 		}
-		if (drawn.Holder != null)
-		{
-			UnityEngine.Object.Destroy(drawn.Holder);
-			drawn.Holder = null;
-		}
-		drawn.Signature = signature;
-		if (signature.Length > 0 && !BuildLayers(recepteur, resource, drawn))
+		DestroyHolder(drawn);
+		drawn.Type = type;
+		drawn.Count = count;
+		drawn.Capacity = capacity;
+		if (layers && !BuildLayers(recepteur, resource, drawn))
 		{
 			// Its own pieces not shown yet: try again on the next check.
-			drawn.Signature = string.Empty;
+			drawn.Count = -1;
 		}
 	}
 
@@ -203,7 +237,9 @@ internal static class StackingVisual
 	}
 
 	// The layers above the pallet's two: layer 3 is a copy of the first one two layers up, layer 4 of the second...
-	// Shown bottom first, one piece per good above the pallet's own two layers.
+	// Shown bottom first, one piece per good above the pallet's own two layers. The pieces of one pallet are
+	// combined into one mesh per material (a stockpile's pieces drew a draw call each, and a shadow each: some 500
+	// of a large base's 3400 draw calls); a piece whose mesh cannot be read is drawn on its own.
 	private static bool BuildLayers(Recepteur recepteur, Ressource resource, Drawn drawn)
 	{
 		if (!Specs.TryGetValue(resource.GetType().Name, out Spec spec))
@@ -228,6 +264,8 @@ internal static class StackingVisual
 		holder.transform.SetParent(root, false);
 		drawn.Holder = holder;
 		int left = extra;
+		var combined = new Dictionary<Material, List<CombineInstance>>();
+		var casting = new Dictionary<Material, MeshRenderer>();
 		for (int layer = 2; layer < 2 + layers && left > 0; layer++)
 		{
 			float up = (layer - layer % 2) * spec.Pitch;
@@ -237,12 +275,36 @@ internal static class StackingVisual
 				{
 					break;
 				}
-				if (!Copy(root, piece, holder.transform, up))
+				if (!Copy(root, piece, holder.transform, up, combined, casting))
 				{
 					return false;
 				}
 				left--;
 			}
+		}
+		foreach (KeyValuePair<Material, List<CombineInstance>> entry in combined)
+		{
+			// A piece's mesh gone since it was looked at (the game rebuilds a pallet's pieces): left out.
+			int gone = entry.Value.RemoveAll(instance => instance.mesh == null);
+			if (gone > 0 && !_warnedGone)
+			{
+				_warnedGone = true;
+				Plugin.Log.LogWarning("StackingVisual: " + gone + " piece mesh(es) of " + recepteur.name + " (" + entry.Key.name + ") gone before they were combined");
+			}
+			if (entry.Value.Count == 0)
+			{
+				continue;
+			}
+			var mesh = new Mesh { name = HolderName };
+			mesh.CombineMeshes(entry.Value.ToArray(), true, true);
+			drawn.Meshes.Add(mesh);
+			GameObject part = new GameObject(entry.Key.name);
+			part.transform.SetParent(holder.transform, false);
+			part.AddComponent<MeshFilter>().sharedMesh = mesh;
+			MeshRenderer renderer = part.AddComponent<MeshRenderer>();
+			renderer.sharedMaterial = entry.Key;
+			renderer.shadowCastingMode = casting[entry.Key].shadowCastingMode;
+			renderer.receiveShadows = casting[entry.Key].receiveShadows;
 		}
 		return true;
 	}
@@ -270,8 +332,9 @@ internal static class StackingVisual
 		return pieces;
 	}
 
-	// The meshes shown under a piece (a pallet block holds a brick and a log, one of them shown), up higher.
-	private static bool Copy(Transform root, Transform piece, Transform holder, float up)
+	// The meshes shown under a piece (a pallet block holds a brick and a log, one of them shown), up higher: each
+	// submesh into the combined list of its material, or, when the mesh cannot be read, as an object of its own.
+	private static bool Copy(Transform root, Transform piece, Transform holder, float up, Dictionary<Material, List<CombineInstance>> combined, Dictionary<Material, MeshRenderer> casting)
 	{
 		bool any = false;
 		foreach (MeshFilter filter in piece.GetComponentsInChildren<MeshFilter>(false))
@@ -279,6 +342,29 @@ internal static class StackingVisual
 			MeshRenderer renderer = filter.GetComponent<MeshRenderer>();
 			if (filter.sharedMesh == null || renderer == null || !renderer.enabled)
 			{
+				continue;
+			}
+			Mesh mesh = filter.sharedMesh;
+			if (mesh.isReadable)
+			{
+				// Into the holder's space (the pallet's), then up by the layer's height.
+				Matrix4x4 transform = Matrix4x4.TRS(Vector3.up * up, Quaternion.identity, Vector3.one) * holder.worldToLocalMatrix * filter.transform.localToWorldMatrix;
+				Material[] materials = renderer.sharedMaterials;
+				for (int sub = 0; sub < mesh.subMeshCount && sub < materials.Length; sub++)
+				{
+					if (materials[sub] == null)
+					{
+						continue;
+					}
+					if (!combined.TryGetValue(materials[sub], out List<CombineInstance> instances))
+					{
+						instances = new List<CombineInstance>();
+						combined[materials[sub]] = instances;
+						casting[materials[sub]] = renderer;
+					}
+					instances.Add(new CombineInstance { mesh = mesh, subMeshIndex = sub, transform = transform });
+				}
+				any = true;
 				continue;
 			}
 			GameObject copy = new GameObject(filter.sharedMesh.name);

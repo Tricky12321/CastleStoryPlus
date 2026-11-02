@@ -23,11 +23,49 @@ internal static class RenderEndpoints
 		internal long DrawnVertices;
 	}
 
+	// The renderers drawn last frame that share a shader, material or mesh (GET /api/render?by=).
+	private sealed class Group
+	{
+		internal int Renderers;
+
+		internal int Submeshes;
+
+		internal long Vertices;
+
+		internal int ShadowCasters;
+	}
+
+	private static string GroupKey(Renderer renderer, string by)
+	{
+		Material material = renderer.sharedMaterial;
+		string shader = (material != null && material.shader != null) ? material.shader.name : "-";
+		if (by == "shader")
+		{
+			return shader;
+		}
+		string key = shader + " | " + ((material != null) ? material.name : "-");
+		if (by == "material")
+		{
+			return key;
+		}
+		string mesh = "-";
+		MeshFilter filter = renderer.GetComponent<MeshFilter>();
+		if (filter != null && filter.sharedMesh != null)
+		{
+			mesh = filter.sharedMesh.name;
+		}
+		else if (renderer is SkinnedMeshRenderer skinned && skinned.sharedMesh != null)
+		{
+			mesh = skinned.sharedMesh.name;
+		}
+		return key + " | " + mesh + " | " + renderer.GetType().Name;
+	}
+
 	internal static void Add(List<Route> routes)
 	{
 		routes.Add(new Route("GET", "/api/render", "What is drawn: the active renderers, how many are in the main camera's view and how many were drawn last frame (by any camera, shadows included), per layer with their vertices; the lights; the cameras (culling mask, clip planes, per-layer cull distances, occlusion culling) and the render settings (shadow distance and quality, vsync, frame rate cap)", Get)
 		{
-			Parameters = "top (most layers to list, default 32)"
+			Parameters = "top (most layers or groups to list, default 32), by (shader, material or mesh: the renderers drawn last frame grouped by their shader, their shader and material, or those and their mesh and renderer type, most first, with their count, submeshes (about the draw calls per pass), vertices and how many cast shadows)"
 		});
 		routes.Add(new Route("GET", "/api/render/invalid", "Renderers whose bounds are not finite (NaN or infinite; Unity logs \"Invalid AABB\" for them every frame): how many per renderer type and object name, and the first ones with their path, bounds, transform and mesh", Invalid)
 		{
@@ -92,9 +130,11 @@ internal static class RenderEndpoints
 	private static object Get(ApiRequest request)
 	{
 		int top = (int)request.Float("top", 32f);
+		string by = request.String("by", "");
 		Camera main = Camera.main;
 		Plane[] planes = (main != null) ? GeometryUtility.CalculateFrustumPlanes(main) : null;
 		Dictionary<int, Count> layers = new Dictionary<int, Count>();
+		Dictionary<string, Group> groups = new Dictionary<string, Group>();
 		Count all = new Count();
 		foreach (Renderer renderer in Object.FindObjectsOfType<Renderer>())
 		{
@@ -111,6 +151,22 @@ internal static class RenderEndpoints
 			bool inView = planes != null && GeometryUtility.TestPlanesAABB(planes, renderer.bounds);
 			bool drawn = renderer.isVisible;
 			long vertices = Vertices(renderer);
+			if (by.Length > 0 && drawn)
+			{
+				string key = GroupKey(renderer, by);
+				if (!groups.TryGetValue(key, out Group group))
+				{
+					group = new Group();
+					groups[key] = group;
+				}
+				group.Renderers++;
+				group.Submeshes += renderer.sharedMaterials.Length;
+				group.Vertices += vertices;
+				if (renderer.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.Off)
+				{
+					group.ShadowCasters++;
+				}
+			}
 			foreach (Count c in new Count[2] { count, all })
 			{
 				c.Total++;
@@ -141,6 +197,21 @@ internal static class RenderEndpoints
 				"vertices", sorted[i].Value.Vertices,
 				"drawnVertices", sorted[i].Value.DrawnVertices));
 		}
+		List<object> grouped = new List<object>();
+		if (by.Length > 0)
+		{
+			List<KeyValuePair<string, Group>> order = new List<KeyValuePair<string, Group>>(groups);
+			order.Sort((a, b) => b.Value.Submeshes.CompareTo(a.Value.Submeshes));
+			for (int i = 0; i < order.Count && i < top; i++)
+			{
+				grouped.Add(Obj(
+					"group", order[i].Key,
+					"renderers", order[i].Value.Renderers,
+					"submeshes", order[i].Value.Submeshes,
+					"vertices", order[i].Value.Vertices,
+					"shadowCasters", order[i].Value.ShadowCasters));
+			}
+		}
 		List<object> cameras = new List<object>();
 		foreach (Camera camera in Camera.allCameras)
 		{
@@ -164,6 +235,7 @@ internal static class RenderEndpoints
 			"vertices", all.Vertices,
 			"drawnVertices", all.DrawnVertices,
 			"layers", perLayer,
+			"groups", (by.Length > 0) ? grouped : null,
 			"renderTuning", Obj(
 				"shadowCasters", CastleStoryPlus.Rendering.RenderTuning.Managed,
 				"castersOff", CastleStoryPlus.Rendering.RenderTuning.CastersOff,

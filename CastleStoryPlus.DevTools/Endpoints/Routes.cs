@@ -55,6 +55,7 @@ internal static class Routes
 		AnimatorEndpoints.Add(routes);
 		UiEndpoints.Add(routes);
 		ComponentEndpoints.Add(routes);
+		JitEndpoints.Add(routes);
 		return routes;
 	}
 }

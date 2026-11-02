@@ -199,6 +199,11 @@ project had any Burst code leaves `no_plugins_were_generated.txt` there, and wit
 (no library, no error). `PlayerBuild` deletes that note before every build. `UNITY_BURST_DEBUG=1` makes the editor log
 what Burst does.
 
+Two engine settings can be switched for a build, to measure them against each other (see
+[Performance](Performance.md)): `CSP_GC_INCREMENTAL=0` builds without the incremental garbage collector (on
+otherwise), `CSP_GPU_SKINNING=1` with GPU skinning (off otherwise, as the player is shipped). Both are read by
+`PlayerBuild.Configure`, so a build without them puts the settings back.
+
 For measuring the port without the editor, `PlayerBuild.ProfilingLinux` builds a development player into
 `Build/Profiling/Linux` (an empty folder each time); install into it and add BepInEx as above, then attach the
 editor's Profiler to it (Profiler window, target list).

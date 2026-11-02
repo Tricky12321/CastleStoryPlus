@@ -260,7 +260,8 @@ frame rate rows say little; the per-system rows are what changed.
 ## Vulkan: initial benchmark, 31-10-2026
 
 The Unity 6 port on Linux with OpenGL Core against Vulkan (`CSP_VULKAN=1`, `-force-vulkan`), modded, on the
-"Benchmark" save (a large base, some 65 units). Radeon RX 9070 (RADV), 16 threads, frame cap 240.
+"Benchmark" save (a large base, some 65 units). Radeon RX 9070 XT, 16 threads, frame cap 240. The Vulkan runs used
+AMD's proprietary Vulkan driver, not RADV (see the second benchmark below).
 
 **Method.** Every run starts the player on a fresh copy of the save (so each starts from the same point; it is saved
 on quit, into the copy), puts the camera over the base, waits 60 s, then records every frame time for 30 s at 1x
@@ -298,6 +299,217 @@ At 3x all of them run 34-61 fps, in the same order.
 - Vulkan is the API to build on: it is the one with native graphics jobs and room to grow (GPU compute, async work);
   OpenGL Core stays the default until Vulkan is ahead and its open issues are fixed (see
   [Unity 6 port](Unity6Port.md)).
+
+## Vulkan: second benchmark, 01-11-2026
+
+The same method on the same save (fresh copy per run, fixed camera, 60 s warm-up, 30 s of frame times at 1x, 15 s of
+the player loop, 30 s at 3x), 26 runs in all, OpenGL Core and Vulkan alternating. Ryzen 7 5800X (8 cores, 16 threads),
+Radeon RX 9070 XT, Mesa 26.2.4, kernel 7.2.9. Release build of the port, mod on, nothing else running.
+
+**Results at 1x**, two or more runs each (fps, median frame time, 1% low fps, GPU busy):
+
+| Setup | fps | p50 ms | 1% low | GPU |
+|---|---:|---:|---:|---:|
+| OpenGL Core (Mesa radeonsi) | 84.6–86.7 | 11.5 | 35 | 37 % |
+| Vulkan, AMD proprietary driver (the loader's first device) | 75.6–77.8 | 13.0 | 34 | 48 % |
+| Vulkan, RADV (`VK_DRIVER_FILES=radeon_icd.json`) | 74.2–76.0 | 13.0 | 34 | 46 % |
+| Vulkan, 6 job workers (`-job-worker-count 6`) | 75.0–75.8 | 13.1 | 32 | 47 % |
+| Vulkan, one thread per core (`taskset -c 0-7`) | 71.7 | 13.7 | 30 | 45 % |
+| Vulkan, `gfx-threading-mode=3` (OpenGL's model: render thread, no native jobs) | 74.5–75.6 | 12.8 | 31 | 48 % |
+| Vulkan, `gfx-threading-mode=1` (split jobs) | 73.6 | 13.4 | 32 | 47 % |
+
+At 3x the two APIs are even (48–54 fps), and Vulkan's 0.1% low is better (16 against 8 fps: the OpenGL runs had the
+garbage collections). The hitches of 31-10 (200–550 ms) did not come back: every window had 0 GCs.
+
+**Where the 10 % go.** The frame is bound by the main thread (100 % busy on both APIs; GPU 37–48 %). Every step of the
+main thread is slower on Vulkan, by about the same share: scripts 4.7 against 4.2 ms, FixedUpdate 1.9 against 1.6,
+animation 0.9 against 0.8, canvases 0.44 against 0.37, physics 0.43 against 0.33. The per-system measuring
+(`GET /api/frames`) shows the same for all 43 systems of the game and the mod, 3–10 % each: AI, locomotion and input
+as much as anything that draws. So it is not a graphics call in a script; the main thread's core runs slower.
+
+`perf stat` on the main thread (user space) over the 1x window:
+
+| | Vulkan | OpenGL |
+|---|---:|---:|
+| GHz | 4.52 | 4.52 |
+| instructions per frame | 47.6 M | 44.8 M |
+| IPC | 0.767 | 0.820 |
+| L2 fills per 1000 instructions | 4.10 | 3.53 |
+| DRAM fills per 1000 instructions | 2.04 | 1.87 |
+| DRAM fills per frame | 97 k | 84 k |
+
+Two parts, each about half of the gap: Unity's Vulkan backend runs 6 % more instructions on the main thread per frame,
+and the main thread's instructions run 7 % slower (more L1 and L3 misses per instruction, 15 % more DRAM fills per frame).
+
+**Ruled out**, one run pair each: the driver (RADV and the proprietary one are even); the number of job workers;
+SMT (the main thread alone on its own physical core, every other thread kept off its sibling: still 13 % behind,
+IPC 0.81 against 0.85); the clock (the main thread's core ran 4.65–4.70 GHz on both); GPU interrupts (fewer on
+Vulkan); the threading model (Vulkan with OpenGL's render thread is as slow); DRAM bandwidth taken by the GPU
+(GTT use and memory-bus load are the same on both).
+
+**What it means.**
+- The main-thread cost is Unity's Vulkan backend plus its cache footprint, not something in the mod, the shaders or
+  the driver. Nothing in `boot.config`, the driver choice or the thread placement changes it.
+- The render thread is cheaper on Vulkan (1.6 against 3.1 ms of CPU), and Vulkan has no separate render thread with
+  native jobs; what is lost on the main thread is more than what the render thread wins, as long as the main thread
+  is the bottleneck.
+- The GPU works 25 % more per frame on Vulkan (48 against 37 % busy; GPU frame 5.5 ms). It does not matter on this
+  card, but it would on a slower one. Candidates: the 144 shaders repacked from the game's own 5.6 SPIR-V (old,
+  unoptimised code; `spirv-opt` at install would be the test) and render-target formats.
+- What helps Vulkan is what helps both: fewer draw calls and less main-thread work per frame (the frame savers,
+  batching). OpenGL Core stays the default. Vulkan stays the choice for a machine whose OpenGL driver is poor.
+
+The benchmark script with the variants (driver, worker count, affinity, threading mode, perf counters) is in
+`~/.cache/csp-bench/` next to the raw results (`results.jsonl`, one line per run with every frame time).
+
+### What was tried on it, 01-11-2026
+
+- **`spirv-opt` on the game's shaders** (`CSP_SPIRV_OPT` at install): 11,124 of the 5.6 SPIR-V streams optimised,
+  2 kept (a shader `spirv-opt` refuses). GPU frame time 5.58 ms against 5.46 before, GPU busy the same: the driver's
+  own compiler already does this work. Kept as an opt-in experiment, off by default.
+- **Where the draw calls come from.** `GET /api/frames/markers` now answers Unity's render counts, and
+  `GET /api/render?by=mesh` groups what was drawn. On the Benchmark save at the fixed camera: 3,400 draw calls,
+  1,300 SetPass calls, 1,900 shadow casters, 1.0 M triangles a frame, from 1,725 renderers (each drawn once more
+  for the shadow map). The largest groups: 537 single bricks (32 vertices each), 432 plants, 120 pallets, 80 terrain
+  chunks (288 k vertices). 393 of the bricks were the mod's own: the Stacking research's extra layers, one object per
+  brick, ingot or plank under `CSP_StackingLayers`. Switched off they took 500 draw calls and 320 shadow casters
+  with them (3,366 to 2,863).
+- **Stacking layers combined.** The layers of one pallet are now one mesh per material (`StackingVisual`): 393
+  renderers became 104, 2,450–3,050 draw calls instead of 3,400, 1,360–1,660 shadow casters instead of 1,900. The
+  frame rate on this machine did not move beyond the run-to-run noise (Vulkan 69–71 and 75 fps in four runs, OpenGL
+  88 against 85–90): the main thread's render step (`FinishFrameRendering`, 2.8–3.1 ms) does not follow the draw
+  call count here, so the gain is on the render thread and the GPU, which were not the bottleneck. Less work for a
+  weaker machine, and less managed garbage: `Refresh` no longer builds a list and a string per pallet per call.
+- **Not changed:** GPU skinning is off in the port's player settings (the game has it on; 12–18 skinned meshes a
+  frame, so it matters little), and dynamic batching cannot be checked from outside the editor. Both are player
+  build settings, for the next player build.
+
+## The main thread under `perf`, 02-11-2026
+
+Where the main thread's time goes on the Benchmark save, measured from outside the game: `perf record` on the main
+thread of the development player (`Build/Profiling/Linux`, OpenGL Core, 1x, fixed camera over the base, 20 s after a
+50 s warm-up), user space only, 2000 samples a second. The camera is held with `POST /api/camera?...&hold=true`: with
+the mouse at the screen's edge the game scrolls the view, and two runs of the evening measured the open sea at twice
+the frame rate before that was noticed. The engine's symbols come from `UnityPlayer_s.debug`; the
+game's compiled C# has none for `perf`, so DevTools names it: `POST /api/jit/resolve` takes the recording's code
+addresses while the game still runs and answers Mono's method for each (`mono_jit_info_table_find`), written as a perf
+map file (`/tmp/perf-<pid>.map`). The script is `~/.cache/csp-bench/perfrec.py`, the reports `perfsum.py` (top,
+children, callers). Call chains through compiled C# are partial (the engine's own functions keep no frame pointers), so
+the inclusive figures below are lower bounds.
+
+| Where | Share of the main thread |
+|---|---:|
+| Engine (`UnityPlayer.so`) | 58 % |
+| The game's and the mod's C# | 32 % |
+| Mono runtime (GC write barrier 1.5 %, handle tables 0.8 %) | 6 % |
+
+The game's side, inclusive (what each system and everything it called cost):
+
+| System | Share |
+|---|---:|
+| Behaviour trees of units and tasks, in the fixed update (`Behavior.BrixFixedUpdate`) | 8.2 % |
+| Everything else in the game's fixed update (`GameClock.FixedUpdate` in all) | 11.0 % |
+| The game's `Update` components (`GameClock.Update`) | 9.1 % |
+| `Locomotion4` (units' motion) | 2.9 % |
+| `AkGameObj.Update` (Wwise sound objects, some 300) | 2.9 % |
+| `InputModeController.Update` (1.7 %) and Rewired's own update (2.2 %) | 3.9 % |
+| `Picking.Update` (what is under the mouse) | 1.1 % |
+| `UnreachableTasks.Update`, almost all of it the reach map's flood | 1.7 % |
+| `LitterGoalProvider.Refresh` | 1.0 % |
+| `Jardinier` (plants' level of detail) | 0.7 % |
+| `VolumeRegistrator.Register`, `PathSimplifiedSearch`, `TrackableVoxelTransform.SendMoveSignal` | 0.5–0.7 % each |
+
+The engine's side, by function (self time, not who called it):
+
+| Engine work | Share | What it is |
+|---|---:|---|
+| `GetComponent` (`GetComponentsImplementation`, `QueryComponentByType`, `IsStateMachineBehaviour`, script cache) | 7 % | the game's and the mod's component lookups, from everywhere |
+| `TransformChangeDispatch` (scan and clear of changed transforms) | 5.2 % | the engine finding which transforms moved this frame, for renderers, colliders and canvases |
+| Job system idle loop on the main thread (`lane_guts`) | 2.4 % | the main thread helping or waiting for jobs |
+| Scripting handles and transform reads (`UniqueGCHandle::GetTarget`, `.transform`, `Transform::GetPosition`) | 5 % | every C# call into the engine pays these |
+| UI (`RectTransform::UpdateAnchorPositionIfTransformChanged`, canvas alpha, batches, overlays) | 2.4 % | the overhead icons following their objects |
+| Render node preparation (`PrepareMeshRenderNodes`, shared mesh and material data) | 2.5 % | per renderer drawn, main-thread part |
+| Animation (`PreOrderPlayableTraverser`, `Animator::BuildJobs`) | 1.7 % | main-thread part of the animators |
+| `UnityEngine.Object:CompareBaseObjects` | 1.2 % | `== null` and `!=` on Unity objects in C# |
+
+### What was changed on it, 02-11-2026
+
+All under `FrameSavers`:
+
+- **Input actions by id (`InputActionIds`):** the game asks Rewired for its actions by name every frame from some
+  60 places (`GetButton("cam_action1")` and the like); each call hashed the name case-insensitively first. The name is
+  turned into the action's id once and the id overload is called, which is what Rewired did after the lookup.
+- **Still sound objects (`SoundObjectPositions`):** a sound object that has not moved for 8 frames is looked at every
+  fourth frame (spread over the frames) instead of every frame; most of the 300 never move. One that moves again is
+  heard by Wwise at most three frames late.
+- **Behind-camera detectors (`BehindCamera`):** the camera's position and forward are read once per frame for the
+  330 detectors instead of four engine calls each.
+- **Frustum planes (`ScreenPlanes`):** the `ScreenSignaler`s worked the camera's six planes out once each per frame
+  (40 matrix reads); now once per frame and camera.
+- **Work searches per tick (`WorkSearchBudget`, `[Performance] WorkSearchesPerTick`, 4):** idle workers fall into step
+  and 20–30 of them listed and sorted every task in the same tick (frames of 15–20 ms). At most 4 search in one tick;
+  the others are put off to their next round and served first then, in order, so none starves.
+- **Plants' level of detail (`NatureLodRest`):** a megavoxel whose plants were last judged with the camera where it
+  still is (within half a block) is passed over for up to 2 s instead of every pass.
+
+**Measured** (`bench.py`, OpenGL Core, two runs before against two after, same build otherwise; the frame rate
+figures carry the usual run-to-run spread, the per-system rows and the `perf` shares are the firmer evidence):
+
+| | Before | After |
+|---|---:|---:|
+| Player loop fps (`/api/frames/loop`, 15 s) | 85.6 | 92.6 |
+| Update scripts (player loop step) | 4.01 ms | 3.65 ms |
+| Fixed update scripts | 1.69 ms | 1.61 ms |
+| 1x fps, monitor off, 30 s | 88.9 | 90.6 |
+| 3x fps, 30 s | 50.6 | 56.8 |
+| Frames over 20 ms in 30 s at 1x | 49 | 44.5 |
+| `update: BehindCameraDetector` | 0.10 ms/frame | 0.04 ms/frame |
+| `InputManager_Base.Update` (Rewired) | 0.31 ms/frame | 0.22 ms/frame |
+| `labor tree: 3 LookForWork`, worst frame | 17.6 ms | 13.6 ms |
+| `fixed: Labor`, worst frame | 18.3 ms | 15.3 ms |
+
+And under `perf` (share of the main thread, inclusive): `AkGameObj.Update` 2.86 to 1.52 %, Rewired's update 2.2 to
+1.2 %, `Jardinier` 0.68 to 0.11 %, the sound patch itself 0.85 to 0.22 %. The tree farm's planting pass
+(`TreeFarmTick.Update`, 23–41 ms in one frame every 6 s on this save) and the Stacking research's pass over the
+stockpiles (`Stacking.Update`, 6.5–7.3 ms every 3 s) are spread over frames, and a spot the sapling's rules refused is not tried again for 60 s: `Stacking.Update`'s worst frame is 0.5–0.9 ms, and `TreeFarmTick.Update` no longer shows among the 120 costliest systems (under 0.01 ms a frame).
+
+### What is left on the main thread
+
+- **The behaviour trees (8 % steady, and the single slow frames):** `labor tree: 1 CurrentWork` up to 9 ms, `labor
+  work: BuildGoal` up to 12 ms, `labor: BestRecepteurToStore` 5–6 ms a call, `fixed: LitterGoalProvider` 8 ms
+  (its refresh goes over every loose item in the task's circle and, for each new one, every goal), `fixed:
+  KnowledgeUpdater` 3–4 ms, `TerrainLoop.Update` 5–8 ms. Each needs its own look.
+- **`GetComponent`, 7 % of the main thread** from all over the game and the mod; `perf` cannot name the callers
+  (the engine's functions keep no frame pointers, so the chain breaks there). A count per caller would need a patch
+  on the generic `GetComponent<T>`, which Harmony cannot do in one place.
+- **`TransformChangeDispatch`, 5 %:** the engine's own pass over the transforms that moved; it grows with the number
+  of moving hierarchies (units' bones, icons). Not reachable from the mod.
+- **`InputModeController.Update`, 2 %**, mostly `UnityEngine.Input.GetKey` and the eyedropper's update; not looked
+  at further.
+- **The incremental garbage collector:** its write barrier is 1.5 % of the main thread (`GC_dirty_inner`); see the
+  A/B below.
+
+### Incremental garbage collector on or off, 02-11-2026
+
+The port's player is built with Unity's incremental garbage collector (`gcIncremental`), which spreads a collection
+over frames in slices of `gc-max-time-slice` (3 ms) and for that puts a write barrier on every reference store
+(`GC_dirty_inner`, 1.5 % of the main thread above). A player built without it (`CSP_GC_INCREMENTAL=0`, output
+`Build/GcOff/Linux`, same install and mod) against the usual one, OpenGL Core, alternating, two runs each:
+
+| | Incremental on | Off |
+|---|---:|---:|
+| 1x fps, monitor off, 30 s | 90.8 | 94.5 |
+| Update scripts (player loop step) | 3.73 ms | 3.59 ms |
+| Frames over 20 ms in 30 s at 1x | 47.5 | 30 |
+| Managed heap in use | 1.16–1.17 GB | 1.06–1.10 GB |
+| Longest frame in the 3x window (a collection fell in it) | 53–163 ms | 495–514 ms |
+
+Off, the game runs about 4 % faster and with fewer long frames between collections, and every collection stops it for
+half a second on a heap this size (the incremental one takes 3 ms a frame over many frames instead). The player
+keeps the incremental collector; the switch stays for measuring (the pauses would be worth it only with a much smaller
+heap, see the Memory section).
+
+
 
 ## Invasion raids without a crystal
 
