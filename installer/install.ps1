@@ -1,11 +1,13 @@
 # Castle Story Plus installer / updater for Windows.
 #
-# Installs BepInEx 5 (if missing) and the latest Castle Story Plus release from GitHub into the
-# Castle Story folder. Run it again to update. The game uses it too ("Update" in the main menu).
+# Castle Story Plus runs on the Unity 6 port: a player of its own, made from your Castle Story install the first time
+# it starts. This puts the latest release from GitHub in the Castle Story folder (CastleStoryPlus-Unity6), and points
+# the game's BepInEx doorstop at a small launcher, so Steam's Play starts the port. Run it again to update. The game
+# uses it too ("Update" in the main menu).
 #
 #   install.bat                   install or update to the latest release
-#   install.bat -Tag v0.4.0       install a specific release
-#   install.bat -Local DIR        install from an unpacked release folder (contains files\)
+#   install.bat -Tag v0.8.1       install a specific release
+#   install.bat -Local DIR        install from an unpacked release folder (contains CastleStoryPlus-Unity6\)
 #   install.bat -Uninstall        remove Castle Story Plus (BepInEx and its config stay)
 #
 # Options: -GameDir DIR, -Force (reinstall even if up to date), -WaitPid PID (wait for the game to
@@ -25,8 +27,12 @@ $ErrorActionPreference = "Stop"
 $Repo = "Tricky12321/CastleStoryPlus"
 $BepInExVersion = "5.4.23.5"
 $SteamAppId = "227860"
-$Bootstrap = "BepInEx\core\CastleStoryPlus.Bootstrap.dll"
-$PluginDir = "BepInEx\plugins\CastleStoryPlus"
+$PortDir = "CastleStoryPlus-Unity6"
+$Launcher = "BepInEx\core\CastleStoryPlus.PortLauncher.dll"
+$PortVersion = "$PortDir\BepInEx\plugins\CastleStoryPlus\version.txt"
+# The mod for the original game (0.8.0 and before), replaced by the port.
+$OldBootstrap = "BepInEx\core\CastleStoryPlus.Bootstrap.dll"
+$OldPluginDir = "BepInEx\plugins\CastleStoryPlus"
 
 function Log($message) { Write-Host "[Castle Story Plus] $message" }
 function Fail($message) { Write-Host "[Castle Story Plus] ERROR: $message" -ForegroundColor Red; exit 1 }
@@ -70,13 +76,15 @@ function Download($url, $file) {
 
 # Empty when run straight from the web (irm ... | iex).
 $ScriptDir = if ($PSCommandPath) { Split-Path -Parent $PSCommandPath } else { "" }
-if (-not $Local -and $ScriptDir -and (Test-Path (Join-Path $ScriptDir "files\BepInEx"))) {
+if (-not $Local -and $ScriptDir -and (Test-Path (Join-Path $ScriptDir $PortDir))) {
     $Local = $ScriptDir
 }
 
 if ($WaitPid -gt 0) {
     Log "waiting for the game to close..."
     Wait-Process -Id $WaitPid -ErrorAction SilentlyContinue
+    # The original game, which started the port, ends right after it and has the launcher loaded until then.
+    Get-Process -Name "Castle Story" -ErrorAction SilentlyContinue | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
 }
 
 if (-not $GameDir) {
@@ -97,7 +105,7 @@ function Set-TargetAssembly($path) {
 }
 
 if ($Uninstall) {
-    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $GameDir $PluginDir), (Join-Path $GameDir $Bootstrap)
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $GameDir $PortDir), (Join-Path $GameDir $Launcher), (Join-Path $GameDir $OldPluginDir), (Join-Path $GameDir $OldBootstrap)
     Set-TargetAssembly "BepInEx\core\BepInEx.Preloader.dll"
     Log "Castle Story Plus removed. BepInEx is still installed; delete winhttp.dll from the game folder to start the game without it."
     exit 0
@@ -107,13 +115,13 @@ $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("CastleStoryPlus-" + [Guid]::NewGui
 New-Item -ItemType Directory -Path $Tmp | Out-Null
 try {
     # 1. Castle Story Plus release (the Windows package bundles BepInEx x64 in bepinex\)
-    $versionFile = Join-Path $GameDir "$PluginDir\version.txt"
+    $versionFile = Join-Path $GameDir $PortVersion
     $installed = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { "" }
     $hasBepInEx = Test-Path (Join-Path $GameDir "BepInEx\core\BepInEx.Preloader.dll")
     $source = $null
     if ($Local) {
         $source = $Local
-        $localVersion = Join-Path $Local "files\$PluginDir\version.txt"
+        $localVersion = Join-Path $Local $PortVersion
         $version = if (Test-Path $localVersion) { (Get-Content $localVersion -Raw).Trim() } else { "local" }
     }
     else {
@@ -122,7 +130,7 @@ try {
         $version = $release.tag_name
         $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*-windows.zip" } | Select-Object -First 1
         if (-not $version -or -not $asset) { Fail "release $api has no Castle Story Plus package for Windows" }
-        if (-not $Force -and $installed -eq $version -and $hasBepInEx) {
+        if (-not $Force -and $installed -eq $version -and (Test-Path (Join-Path $GameDir $Launcher))) {
             Log "Castle Story Plus $version is already installed."
         }
         else {
@@ -130,13 +138,14 @@ try {
             $zip = Join-Path $Tmp "mod.zip"
             Download $asset.browser_download_url $zip
             Expand-Archive -Path $zip -DestinationPath (Join-Path $Tmp "mod") -Force
-            $files = Get-ChildItem -Path (Join-Path $Tmp "mod") -Directory -Recurse -Filter "files" | Select-Object -First 1
-            if (-not $files) { Fail "unexpected release layout" }
-            $source = $files.Parent.FullName
+            $port = Get-ChildItem -Path (Join-Path $Tmp "mod") -Directory -Recurse -Depth 1 -Filter $PortDir | Select-Object -First 1
+            if (-not $port -or -not (Test-Path (Join-Path $port.Parent.FullName "launcher"))) { Fail "unexpected release layout" }
+            $source = $port.Parent.FullName
         }
     }
 
-    # 2. BepInEx, from the package when it fits the game (x64), else from the BepInEx releases.
+    # 2. BepInEx in the game, from the package when it fits the game (x64), else from the BepInEx releases: only its
+    # doorstop is used, to start the launcher.
     if (-not $hasBepInEx) {
         $arch = Get-GameArch $Exe
         Log "installing BepInEx $BepInExVersion ($arch)..."
@@ -152,16 +161,30 @@ try {
     }
 
     if ($source) {
-        # Replace the plugin folder (settings live in BepInEx\config and are kept).
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $GameDir $PluginDir)
-        Copy-Item -Recurse -Force (Join-Path $source "files\BepInEx") $GameDir
+        # Replace the port's folder. Its mod settings (BepInEx\config) are kept; what its first start made from the
+        # game (Content) is made again by the new player.
+        $target = Join-Path $GameDir $PortDir
+        $config = Join-Path $target "BepInEx\config"
+        $keptConfig = Join-Path $Tmp "config"
+        if (Test-Path $config) {
+            Copy-Item -Recurse -Force $config $keptConfig
+        }
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $target
+        Copy-Item -Recurse -Force (Join-Path $source $PortDir) $GameDir
+        if (Test-Path $keptConfig) {
+            Copy-Item -Recurse -Force $keptConfig (Join-Path $target "BepInEx")
+        }
         Set-Content -Path $versionFile -Value $version
+        Copy-Item -Force (Join-Path $source "launcher\CastleStoryPlus.PortLauncher.dll") (Join-Path $GameDir "BepInEx\core")
+        # The mod for the original game gives way to the port.
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $GameDir $OldPluginDir), (Join-Path $GameDir $OldBootstrap)
         $was = if ($installed) { " (was $installed)" } else { "" }
         Log "installed Castle Story Plus $version$was"
     }
+    if (-not (Test-Path (Join-Path $GameDir $Launcher))) { Fail "the launcher is missing; run the installer again with -Force" }
 
-    # 3. Start BepInEx through the bootstrap (needed on the game's old Mono runtime).
-    Set-TargetAssembly $Bootstrap
+    # 3. The game's doorstop starts the launcher, which starts the port.
+    Set-TargetAssembly $Launcher
 }
 finally {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $Tmp

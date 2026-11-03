@@ -58,6 +58,11 @@ internal static class Routes
 		ComponentEndpoints.Add(routes);
 		ExperimentEndpoints.Add(routes);
 		JitEndpoints.Add(routes);
+		NetEndpoints.Add(routes);
+		VisionEndpoints.Add(routes);
+#if UNITY6
+		DesyncEndpoints.Add(routes);
+#endif
 		return routes;
 	}
 }

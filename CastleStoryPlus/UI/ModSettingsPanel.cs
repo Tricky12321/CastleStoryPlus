@@ -2,6 +2,7 @@ using Brix.UI.Icons;
 using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
+using CastleStoryPlus.Building;
 using CastleStoryPlus.Combat;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
@@ -380,6 +381,12 @@ end
 			AddRendererRows();
 		}
 
+		if (BuildShortage.Icons != null)
+		{
+			AddSection("MISSING MATERIAL ICONS");
+			AddChoiceRow("Icons over blueprints (Alt)", BuildShortage.Icons);
+		}
+
 		AddSection("DEBUG");
 		AddToggleRow("Debug mode (F7, F8 and F9 windows)", DebugMode.Entry);
 
@@ -512,6 +519,27 @@ end
 			Refresh();
 		});
 		_refreshers.Add(() => value.text = entry.Value.ToString());
+	}
+
+	// A button that steps through the choices of an enum setting.
+	private void AddChoiceRow<T>(string name, ConfigEntry<T> entry) where T : struct
+	{
+		Transform row = CreateRow(_body, 26f);
+		Text label = CreateText(row, name, 14, TextColor, TextAnchor.MiddleLeft);
+		Flexible(label.gameObject);
+		T[] choices = (T[])Enum.GetValues(typeof(T));
+		Button button = CreateButton(row, string.Empty, 90f, () =>
+		{
+			int index = Array.IndexOf(choices, entry.Value);
+			entry.Value = choices[(index + 1) % choices.Length];
+			Refresh();
+		});
+		Text value = button.GetComponentInChildren<Text>();
+		_refreshers.Add(() =>
+		{
+			value.text = entry.Value.ToString().ToUpperInvariant();
+			value.color = On;
+		});
 	}
 
 	// Only shown when the feature that owns the key is on (its entry is bound at startup).

@@ -32,6 +32,13 @@ internal class CsPanelView : MonoBehaviour
 		public RectTransform Body;
 	}
 
+	// How many sidebars are open on each side, for the task popup to stand beside them instead of over them.
+	internal static int LeftOpen;
+
+	internal static int RightOpen;
+
+	private bool _rightSide;
+
 	private UiPanel _panel;
 
 	private RectTransform _rect;
@@ -62,6 +69,7 @@ internal class CsPanelView : MonoBehaviour
 		CsPanelView view = rect.gameObject.AddComponent<CsPanelView>();
 		view._panel = panel;
 		view._rect = rect;
+		view._rightSide = rightSide;
 		view.BuildHeader();
 		view.BuildSections();
 		if (panel.Group != null)
@@ -124,6 +132,30 @@ internal class CsPanelView : MonoBehaviour
 				CsItemFactory.Create(view.Body, item, size, LuiIconButton.Side.Below, catalogue: true);
 			}
 			_sections.Add(view);
+		}
+	}
+
+	private void OnEnable()
+	{
+		if (_rightSide)
+		{
+			RightOpen++;
+		}
+		else
+		{
+			LeftOpen++;
+		}
+	}
+
+	private void OnDisable()
+	{
+		if (_rightSide)
+		{
+			RightOpen = Mathf.Max(0, RightOpen - 1);
+		}
+		else
+		{
+			LeftOpen = Mathf.Max(0, LeftOpen - 1);
 		}
 	}
 

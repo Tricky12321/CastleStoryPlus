@@ -4,8 +4,9 @@ using System.Net;
 
 // Unity 5.6's low-level networking API (LLAPI), which the game's UnityEngine.Networking.dll (the UNet high-level API)
 // and the game itself call into. Unity 6 no longer has it. These are the members the game uses, with the same names,
-// so CodePatcher only has to point the game's references here. There are no sockets: a game hosted on this machine
-// works (UNet's local client never goes through the transport), joining another machine does not.
+// so CodePatcher only has to point the game's references here. The transport itself is LiteNetLib (LlapiHost): UDP
+// with the channels' delivery, connection ids and LAN discovery broadcasts as UNet had them. It does not speak Unity
+// 5.6's wire protocol, so the port plays with the port only.
 namespace UnityEngine.Networking
 {
 	public enum QosType
@@ -124,7 +125,12 @@ namespace UnityEngine.Networking
 
 	public sealed class NetworkTransport
 	{
+		private static readonly Dictionary<int, LlapiHost> hosts = new Dictionary<int, LlapiHost>();
+
 		private static int nextHost;
+
+		// The host that broadcasts this game on the LAN (one at a time, as in UNet).
+		private static LlapiHost broadcaster;
 
 		private NetworkTransport()
 		{
@@ -144,37 +150,77 @@ namespace UnityEngine.Networking
 
 		public static void Shutdown()
 		{
+			foreach (LlapiHost host in hosts.Values)
+			{
+				host.Close();
+			}
+			hosts.Clear();
+			broadcaster = null;
 			IsStarted = false;
-			nextHost = 0;
 		}
 
-		public static int AddHost(HostTopology topology, int port) => nextHost++;
-		public static int AddHost(HostTopology topology, int port, string ip) => nextHost++;
-		public static int AddHostWithSimulator(HostTopology topology, int minTimeout, int maxTimeout) => nextHost++;
-		public static int AddHostWithSimulator(HostTopology topology, int minTimeout, int maxTimeout, int port) => nextHost++;
-		public static int AddWebsocketHost(HostTopology topology, int port) => nextHost++;
-		public static int AddWebsocketHost(HostTopology topology, int port, string ip) => nextHost++;
+		public static int AddHost(HostTopology topology, int port) => AddHost(topology, port, null);
 
-		public static bool RemoveHost(int hostId) => true;
+		public static int AddHost(HostTopology topology, int port, string ip)
+		{
+			LlapiHost host = LlapiHost.Open(topology, port, ip);
+			if (host == null)
+			{
+				return -1;
+			}
+			int id = nextHost++;
+			hosts[id] = host;
+			return id;
+		}
+
+		public static int AddHostWithSimulator(HostTopology topology, int minTimeout, int maxTimeout) => AddHost(topology, 0, null);
+		public static int AddHostWithSimulator(HostTopology topology, int minTimeout, int maxTimeout, int port) => AddHost(topology, port, null);
+		public static int AddWebsocketHost(HostTopology topology, int port) => -1;
+		public static int AddWebsocketHost(HostTopology topology, int port, string ip) => -1;
+
+		public static bool RemoveHost(int hostId)
+		{
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				return false;
+			}
+			if (broadcaster == host)
+			{
+				broadcaster = null;
+			}
+			host.Close();
+			hosts.Remove(hostId);
+			return true;
+		}
 
 		public static int Connect(int hostId, string address, int port, int exceptionConnectionId, out byte error)
 		{
-			error = (byte)NetworkError.WrongOperation;
-			return 0;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				error = (byte)NetworkError.WrongHost;
+				return 0;
+			}
+			int connection = host.Connect(address, port, out NetworkError result);
+			error = (byte)result;
+			return connection;
 		}
 
 		public static int ConnectEndPoint(int hostId, EndPoint endPoint, int exceptionConnectionId, out byte error)
 		{
+			if (endPoint is IPEndPoint ip)
+			{
+				return Connect(hostId, ip.Address.ToString(), ip.Port, exceptionConnectionId, out error);
+			}
 			error = (byte)NetworkError.WrongOperation;
 			return 0;
 		}
 
 		public static int ConnectWithSimulator(int hostId, string address, int port, int exceptionConnectionId, out byte error, ConnectionSimulatorConfig conf)
 		{
-			error = (byte)NetworkError.WrongOperation;
-			return 0;
+			return Connect(hostId, address, port, exceptionConnectionId, out error);
 		}
 
+		// Unity's relay service, shut down years ago.
 		public static int ConnectToNetworkPeer(int hostId, string address, int port, int exceptionConnectionId, int relaySlotId, Types.NetworkID network, Types.SourceID source, Types.NodeID node, out byte error)
 		{
 			error = (byte)NetworkError.WrongOperation;
@@ -188,23 +234,41 @@ namespace UnityEngine.Networking
 
 		public static bool Disconnect(int hostId, int connectionId, out byte error)
 		{
-			error = (byte)NetworkError.Ok;
-			return true;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				error = (byte)NetworkError.WrongHost;
+				return false;
+			}
+			bool done = host.Disconnect(connectionId, out NetworkError result);
+			error = (byte)result;
+			return done;
 		}
 
 		public static bool Send(int hostId, int connectionId, int channelId, byte[] buffer, int size, out byte error)
 		{
-			error = (byte)NetworkError.WrongConnection;
-			return false;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				error = (byte)NetworkError.WrongHost;
+				return false;
+			}
+			bool sent = host.Send(connectionId, channelId, buffer, size, out NetworkError result);
+			error = (byte)result;
+			return sent;
 		}
 
 		public static NetworkEventType ReceiveFromHost(int hostId, out int connectionId, out int channelId, byte[] buffer, int bufferSize, out int receivedSize, out byte error)
 		{
-			connectionId = 0;
-			channelId = 0;
-			receivedSize = 0;
-			error = (byte)NetworkError.Ok;
-			return NetworkEventType.Nothing;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				connectionId = 0;
+				channelId = 0;
+				receivedSize = 0;
+				error = (byte)NetworkError.WrongHost;
+				return NetworkEventType.Nothing;
+			}
+			NetworkEventType type = host.Receive(out connectionId, out channelId, buffer, bufferSize, out receivedSize, out NetworkError result);
+			error = (byte)result;
+			return type;
 		}
 
 		public static NetworkEventType ReceiveRelayEventFromHost(int hostId, out byte error)
@@ -215,46 +279,92 @@ namespace UnityEngine.Networking
 
 		public static int GetCurrentRTT(int hostId, int connectionId, out byte error)
 		{
-			error = (byte)NetworkError.Ok;
-			return 0;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				error = (byte)NetworkError.WrongHost;
+				return 0;
+			}
+			int rtt = host.RoundTripTime(connectionId, out NetworkError result);
+			error = (byte)result;
+			return rtt;
 		}
 
 		public static void GetConnectionInfo(int hostId, int connectionId, out string address, out int port, out Types.NetworkID network, out Types.NodeID dstNode, out byte error)
 		{
-			address = "localhost";
-			port = 0;
 			network = Types.NetworkID.Invalid;
 			dstNode = Types.NodeID.Invalid;
-			error = (byte)NetworkError.Ok;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				address = string.Empty;
+				port = 0;
+				error = (byte)NetworkError.WrongHost;
+				return;
+			}
+			host.Address(connectionId, out address, out port, out NetworkError result);
+			error = (byte)result;
 		}
 
 		public static bool DoesEndPointUsePlatformProtocols(EndPoint endPoint) => false;
 
 		public static bool StartBroadcastDiscovery(int hostId, int broadcastPort, int key, int version, int subversion, byte[] buffer, int size, int timeout, out byte error)
 		{
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				error = (byte)NetworkError.WrongHost;
+				return false;
+			}
+			if (broadcaster != null)
+			{
+				broadcaster.StopBroadcasting();
+			}
+			broadcaster = host;
+			host.StartBroadcasting(broadcastPort, key, version, subversion, buffer, size, timeout);
 			error = (byte)NetworkError.Ok;
 			return true;
 		}
 
 		public static void StopBroadcastDiscovery()
 		{
+			if (broadcaster != null)
+			{
+				broadcaster.StopBroadcasting();
+				broadcaster = null;
+			}
 		}
 
 		public static void SetBroadcastCredentials(int hostId, int key, int version, int subversion, out byte error)
 		{
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				error = (byte)NetworkError.WrongHost;
+				return;
+			}
+			host.ListenForBroadcasts(key, version, subversion);
 			error = (byte)NetworkError.Ok;
 		}
 
 		public static void GetBroadcastConnectionInfo(int hostId, out string address, out int port, out byte error)
 		{
-			address = null;
-			port = 0;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				address = null;
+				port = 0;
+				error = (byte)NetworkError.WrongHost;
+				return;
+			}
+			host.LastBroadcastSender(out address, out port);
 			error = (byte)NetworkError.Ok;
 		}
 
 		public static void GetBroadcastConnectionMessage(int hostId, byte[] buffer, int bufferSize, out int receivedSize, out byte error)
 		{
-			receivedSize = 0;
+			if (!hosts.TryGetValue(hostId, out LlapiHost host))
+			{
+				receivedSize = 0;
+				error = (byte)NetworkError.WrongHost;
+				return;
+			}
+			receivedSize = host.LastBroadcastMessage(buffer, bufferSize);
 			error = (byte)NetworkError.Ok;
 		}
 	}

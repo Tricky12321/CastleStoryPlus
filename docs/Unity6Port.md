@@ -132,7 +132,7 @@ a release: no assets, no code, no shaders, and not the game's project settings e
        - Shadow bias of the compiled shaders is not checked yet.
        - Not yet faster than OpenGL Core: about even with native graphics jobs in the initial benchmark (see
          [Performance](Performance.md#vulkan-initial-benchmark-31-10-2026)).
-       - The shaderc licence text is not in the port release yet.
+       - The shaderc licence text ships in the port release (`licenses/`).
    - The Windows game keeps its 64-bit plugins directly in `Plugins`; they are copied to `Plugins/x86_64`, where Unity
      6's Windows player loads them.
    - `catalog.txt` lists the bundles, the scenes in the game's build order and the Resources paths. `game.txt` holds
@@ -219,19 +219,24 @@ folder holds the game's code, settings and content.
 
 ## Release
 
-`tools/package-port.sh [linux|windows]` makes `dist/CastleStoryPlus-Port-<version>-<os>.zip`, one per system. The
-Unity editor must be closed, and the development player of that system (`Build/<Linux|Windows>`) must have been
-installed into, because the mod is built against the game code patched there. Each zip holds:
+Since 0.8.1 the port is Castle Story Plus's release. `tools/release.sh` runs `tools/package-port.sh [linux|windows]`,
+which makes `dist/CastleStoryPlus-<version>-<os>.zip`, one per system (the names the mod for the original game had, so
+its in-game updater finds them). The Unity editor must be closed, and the development player of that system
+(`Build/<Linux|Windows>`) must have been installed into, because the mod is built against the game code patched there.
+Each zip holds the installers (`installer/install.sh`, `install.bat`/`install.ps1`), `README.md`
+(`installer/README-Port.md`), the licences, BepInEx for the original game (`bepinex/`), the launcher
+(`launcher/CastleStoryPlus.PortLauncher.dll`, see [Installation](Installation.md)) and the port in
+`CastleStoryPlus-Unity6/`:
 - a player built into an empty folder (`PlayerBuild.ReleaseLinux` / `ReleaseWindows`, output `Build/Release/<os>`);
 - the first-start installer (`Installer/`: `CastleStoryPlus.Port`, its libraries, `classdata.tpk`, the system's
   manifest);
 - BepInEx 5.4.23.5 from its release (cached in `dist/cache`), set up by `tools/player-bepinex.sh`;
-- the mod (`BepInEx/plugins/CastleStoryPlus`: plugin, UI assembly, Lua, Assets), without DevTools;
-- `README.md` (`installer/README-Port.md`): start with `run_bepinex.sh` on Linux and `CastleStoryPlus.exe` on Windows.
+- the mod (`BepInEx/plugins/CastleStoryPlus`: plugin, UI assembly, Lua, Assets, the installer for the in-game
+  updater), without DevTools.
 
 The script stops if the folder holds anything of the game (`Content`, `Info`, the game's assemblies, an install's
-leftovers) or anything for development only. The mod's update check is off in the port: its releases install the mod
-for the original game.
+leftovers) or anything for development only. The mod's update check works in the port: it hands the installer the
+original game's folder (the one that holds `CastleStoryPlus-Unity6`).
 
 Other `Port.Cli` commands:
 - `tree`, `blob`, `scripts`: look at one object's fields, a shader's decompressed program blob (`*` for every
@@ -300,6 +305,91 @@ Mono 2.6 workarounds of `CastleStoryPlus.Bootstrap`.
   `DuplicateEventSystemFix` (`Core/NestedCanvasFix.cs`) now runs in the player too: the game scene has two
   EventSystems, and the second is switched off.
 
+## Multiplayer
+
+The game's multiplayer is Unity 5.6's UNet: its high-level API (the game's `UnityEngine.Networking.dll`, lobby,
+commands and synced values) on Unity's low-level transport (LLAPI), which Unity 6 no longer has. Compat's
+`NetworkTransport` (`Assets/Compat/Llapi.cs`) keeps the LLAPI's members, and `LlapiHost` carries them over LiteNetLib
+(MIT, `tools/player-litenetlib.sh` puts its DLL in `Assets/Compat/Plugins`; it is not in git):
+- one LiteNetLib manager per host (`AddHost`), a UDP socket; the events reach the game when it polls the host
+  (`ReceiveFromHost`), on the main thread, as before;
+- connection ids as UNet gave them: the lowest free one from 1 up, at most the topology's connections (more are
+  turned away);
+- the channels' QoS become LiteNetLib's delivery: unreliable, sequenced (`UnreliableSequenced`, `StateUpdate`),
+  reliable sequenced (`ReliableStateUpdate`), and reliable in order for every other reliable kind, since the
+  high-level API splits a big message of a reliable channel into fragments it joins in order. LiteNetLib's unreliable
+  packets have no channel, so the first byte carries it; an unreliable message too big for one packet goes reliable;
+- a disconnect, a lost connection (10 s) and a failed connect come back as UNet's disconnect events (`Timeout` when
+  not closed on purpose); `GetCurrentRTT` is LiteNetLib's round trip time, addresses read `::ffff:a.b.c.d` as 5.6's;
+- LAN discovery: the host broadcasts on port 3100 (a timer at the broadcast interval) with the key, version and
+  subversion; a listening host passes on only broadcasts with its own credentials.
+
+Over the internet the port goes through Steam (`LlapiRelay`, filled in by the mod's `Multiplayer/SteamRelay.cs`):
+the game's own way, NAT punch-through through Castle Story's facilitator (`facilitator.castlestory.net`), is gone,
+and so the game never filled in its Steam lobby (it waited for the facilitator) and the online list stayed empty.
+- The host's lobby gets its name, version, local address, the host's Steam id and port (`cspRelay`, `cspPort`) and
+  `cspNet` as soon as Steam made it; the online list asks only for lobbies with `cspNet` (so not the original game's),
+  from every region.
+- Joining such a lobby (from the list or a friend's invitation) connects to `fd53:7465:616d:0:<Steam id>`, a
+  made-up IPv6 address holding the host's Steam id. UNet's high-level API passes an IPv6 address on without a DNS
+  lookup; the transport sees the prefix and connects over the relay.
+- The relay is Steam's peer-to-peer networking (`SendP2PPacket`, Valve's relays when the computers cannot reach each
+  other; sessions from anyone are accepted, the transport lets in only connects to a hosted game). Packets to the
+  hosting side go on channel 3, packets to the connecting side on channel 4, and a player reads channel 3 only while
+  it hosts (a host with a port that is not the LAN finder) and channel 4 only while it has a connection it made: two
+  players on one Steam account then each get their own packets.
+  On top of its packets `LlapiRelay` keeps UNet's connections: connect, accept or turn away, data on the channel
+  (Steam's reliable in-order packets, or unreliable ones up to 1100 bytes for the unreliable channels), a ping a
+  second for the round trip time, 15 s without a packet is a lost connection.
+- LAN games and typed-in addresses still connect directly over UDP.
+
+The relay's protocol has its own test (a loopback relay that drops a fifth of the unreliable packets, and checks
+each packet goes to the right side). Steam itself was tested on one machine and one Steam account (03-11-2026): a
+Linux player hosts, the Windows player under Proton finds the game in the online list, joins over Steam (ping 7 ms),
+both start the game, and the client's bricktrons are in the same place on both (within 0.61 m).
+
+### Desync protection
+
+`Multiplayer/DesyncProtection.cs` with `Multiplayer/WorldChunks.cs`. The host runs the bricktrons, their work and what
+they carry and sends it out; but every peer changes its own copy of the world: what falls when a structure loses its
+support (`Architecte`, `DeBlockClient`) is worked out on each peer from its own world, terrain damage and some removals
+are only made where they happen, a batch of removed blocks that cannot be read is dropped, and a player who joins later
+never hears of blocks removed before. The game itself has no check of the world after the lobby's map checksum.
+
+- A chunk is 16 x 16 columns over the whole height. Its hash covers the columns (bottom, top, crust type and volume),
+  the negative layer's dug voxels, the terrain surface layer's added voxels with their resources, and the placed root
+  blocks (position, rotation, type). The map files are the same everywhere, so that is all that can differ.
+- Every peer hashes its chunks a few each frame, the whole world in half the check interval (about 0.1 ms a frame
+  for a 1024 x 1024 map, at most 1 ms), and leaves out chunks that changed in the last 4 s (`VoxelChanged`,
+  `BlockTypeChanged`).
+- Every `[Multiplayer] DesyncCheckSeconds` (10) the host asks for the hashes. A chunk that differs in two rounds in
+  a row, with no peer's hash changed in between, is out of sync. The most votes win; when they are even, the host's
+  hash. The losers get a snapshot of the chunk from the host; when the host lost, it takes one from a winner first and
+  passes it on.
+- Applying a snapshot uses the game's own calls (`SetColumnData`, `SetVoxelCheck`, `SetCustomTerrainResources`,
+  `CreateBlock`, `DeBlock`/`DeBlockClient`), then `VoxelChanged` and `Architecte.Changement` for each changed voxel,
+  so the drawing, stability and route graph follow. On the host a block is made or removed the game's way, for every
+  player. A client that lost a block makes it again for itself only: its own copy of the block's network object may
+  already be back in the pool, so the host does not spawn it to that client again.
+- Messages 202 (to clients) and 203 (to the host), deflated and cut into 1000-byte parts.
+- DevTools: `GET /api/desync`, `POST /api/desync/check`, `POST /api/desync/break` (terrain or blocks taken away on one
+  peer only).
+
+Tested 03-11-2026 with a Linux host, the Windows player under Proton (over Steam) and a second Linux player (by
+address):
+- A hole dug on the client only was filled in within about 6 s, and so were blocks taken away on the client only.
+- With three players, a hole dug on the host only was filled in from the clients' world (2 against 1).
+- A client that differed alone was corrected (2 against 1).
+- Once, at the start of a game, one voxel differed between host and client without any help; it was corrected.
+- With no difference, the rounds found none.
+
+The wire format is not Unity 5.6's, so the port plays with the port, not with the original game. Hosting, joining by
+address (the custom server window), the LAN list, the lobby (players, map, ready) and a game from start to a player
+leaving were tested with two port players on one machine (DevTools `/api/net`, `CSP_API_PORT`); the transport itself
+has a test of every channel kind, fragments of 200 KB, order, the connection limit, disconnects, timeouts and
+broadcasts. Unity's matchmaking and relay services are long gone (they fail as before), and so is the game's NAT
+facilitator (`facilitator.castlestory.net`); UPnP forwarding is the game's own.
+
 ## Navigation mesh experiment
 
 `[Pathfinding] NavMeshExperiment` (off by default) builds Unity's navigation mesh from the game's route graph on
@@ -313,4 +403,5 @@ Unity's worker threads and keeps it up to date, to measure it against the game's
   quits, its `GA_Settings`. (The missing scripts on the factory templates, `StorageLocator` and others, are left out
   by the converter since 31-10-2026; content converted before that still warns.)
 - **Audio** (Wwise 2015; it starts under Windows/Proton), and a test on a real Windows machine.
-- **Publishing:** `tools/release.sh` does not upload the port's zips yet.
+- **Multiplayer between two machines** and over Steam with two accounts (only one machine and one account tested so
+  far). The desync protection does not cover what the host sends itself (units, items, block health).

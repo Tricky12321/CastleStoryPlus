@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Castle Story Plus installer / updater for Linux.
 #
-# Installs BepInEx 5 (if missing) and the latest Castle Story Plus release from GitHub into the
-# Castle Story folder. Run it again to update. The game uses it too ("Update" in the main menu).
+# Castle Story Plus runs on the Unity 6 port: a player of its own, made from your Castle Story install the first time
+# it starts. This puts the latest release from GitHub in the Castle Story folder (CastleStoryPlus-Unity6), and points
+# the game's BepInEx doorstop at a small launcher, so Steam's Play starts the port. Run it again to update. The game
+# uses it too ("Update" in the main menu).
 #
 #   ./install.sh                  install or update to the latest release
 #   curl -fsSL https://raw.githubusercontent.com/Tricky12321/CastleStoryPlus/main/installer/install.sh | bash
-#   ./install.sh --tag v0.4.0     install a specific release
-#   ./install.sh --local DIR      install from an unpacked release folder (contains files/)
+#   ./install.sh --tag v0.8.1     install a specific release
+#   ./install.sh --local DIR      install from an unpacked release folder (contains CastleStoryPlus-Unity6/)
 #   ./install.sh --uninstall      remove Castle Story Plus (BepInEx and its config stay)
 #
 # Options: --game-dir DIR, --force (reinstall even if up to date), --wait-pid PID (wait for the game
@@ -18,8 +20,12 @@ REPO="Tricky12321/CastleStoryPlus"
 BEPINEX_VERSION="5.4.23.5"
 BEPINEX_URL="https://github.com/BepInEx/BepInEx/releases/download/v${BEPINEX_VERSION}/BepInEx_linux_x64_${BEPINEX_VERSION}.zip"
 STEAM_APP_ID="227860"
-BOOTSTRAP="BepInEx/core/CastleStoryPlus.Bootstrap.dll"
-PLUGIN_DIR="BepInEx/plugins/CastleStoryPlus"
+PORT_DIR="CastleStoryPlus-Unity6"
+LAUNCHER="BepInEx/core/CastleStoryPlus.PortLauncher.dll"
+PORT_VERSION="$PORT_DIR/BepInEx/plugins/CastleStoryPlus/version.txt"
+# The mod for the original game (0.8.0 and before), replaced by the port.
+OLD_BOOTSTRAP="BepInEx/core/CastleStoryPlus.Bootstrap.dll"
+OLD_PLUGIN_DIR="BepInEx/plugins/CastleStoryPlus"
 
 # Empty-safe: BASH_SOURCE is unset when the script is piped into bash (curl ... | bash).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" && pwd)"
@@ -43,13 +49,13 @@ while [ $# -gt 0 ]; do
         --force) FORCE=1; shift ;;
         --wait-pid) WAIT_PID="$2"; shift 2 ;;
         --restart) RESTART=1; shift ;;
-        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
         *) fail "unknown option: $1" ;;
     esac
 done
 
-# An unpacked release has files/ next to the script.
-if [ -z "$LOCAL_DIR" ] && [ -d "$SCRIPT_DIR/files/BepInEx" ]; then
+# An unpacked release has CastleStoryPlus-Unity6/ next to the script.
+if [ -z "$LOCAL_DIR" ] && [ -d "$SCRIPT_DIR/$PORT_DIR" ]; then
     LOCAL_DIR="$SCRIPT_DIR"
 fi
 
@@ -120,7 +126,7 @@ fi
 log "game folder: $GAME_DIR"
 
 if [ "$UNINSTALL" = 1 ]; then
-    rm -rf "$GAME_DIR/$PLUGIN_DIR" "$GAME_DIR/$BOOTSTRAP"
+    rm -rf "$GAME_DIR/$PORT_DIR" "$GAME_DIR/$LAUNCHER" "$GAME_DIR/$OLD_PLUGIN_DIR" "$GAME_DIR/$OLD_BOOTSTRAP"
     if [ -f "$GAME_DIR/run_bepinex.sh" ]; then
         sed -i 's|^target_assembly=.*|target_assembly="BepInEx/core/BepInEx.Preloader.dll"|' "$GAME_DIR/run_bepinex.sh"
     fi
@@ -132,10 +138,10 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 # 1. Castle Story Plus release (the Linux package bundles BepInEx in bepinex/)
-INSTALLED="$(cat "$GAME_DIR/$PLUGIN_DIR/version.txt" 2>/dev/null || true)"
+INSTALLED="$(cat "$GAME_DIR/$PORT_VERSION" 2>/dev/null || true)"
 if [ -n "$LOCAL_DIR" ]; then
     SOURCE="$LOCAL_DIR"
-    VERSION="$(cat "$LOCAL_DIR/files/$PLUGIN_DIR/version.txt" 2>/dev/null || echo local)"
+    VERSION="$(cat "$LOCAL_DIR/$PORT_VERSION" 2>/dev/null || echo local)"
 else
     if [ -n "$TAG" ]; then
         API="https://api.github.com/repos/$REPO/releases/tags/$TAG"
@@ -147,19 +153,20 @@ else
     ASSETS="$(echo "$RELEASE" | grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*CastleStoryPlus-[^"]*\.zip"' | sed 's/.*"\(https[^"]*\)"/\1/')"
     URL="$(echo "$ASSETS" | grep -- '-linux\.zip$' | head -1 || true)"
     [ -n "$VERSION" ] && [ -n "$URL" ] || fail "release $API has no Castle Story Plus package for Linux"
-    if [ "$FORCE" = 0 ] && [ "$INSTALLED" = "$VERSION" ] && [ -f "$GAME_DIR/BepInEx/core/BepInEx.Preloader.dll" ]; then
+    if [ "$FORCE" = 0 ] && [ "$INSTALLED" = "$VERSION" ] && [ -f "$GAME_DIR/$LAUNCHER" ]; then
         log "Castle Story Plus $VERSION is already installed."
         SOURCE=""
     else
         log "downloading Castle Story Plus $VERSION..."
         download "$URL" "$TMP/mod.zip"
         extract "$TMP/mod.zip" "$TMP/mod"
-        SOURCE="$(dirname "$(find "$TMP/mod" -maxdepth 2 -type d -name files | head -1)")"
-        [ -d "$SOURCE/files/BepInEx" ] || fail "unexpected release layout"
+        SOURCE="$(dirname "$(find "$TMP/mod" -maxdepth 2 -type d -name "$PORT_DIR" | head -1)")"
+        [ -d "$SOURCE/$PORT_DIR" ] && [ -d "$SOURCE/launcher" ] || fail "unexpected release layout"
     fi
 fi
 
-# 2. BepInEx, from the package when it has it, else from the BepInEx releases.
+# 2. BepInEx in the game, from the package when it has it, else from the BepInEx releases: only its doorstop is used,
+# to start the launcher.
 if [ ! -f "$GAME_DIR/BepInEx/core/BepInEx.Preloader.dll" ]; then
     log "installing BepInEx $BEPINEX_VERSION..."
     if [ -n "$SOURCE" ] && [ -d "$SOURCE/bepinex/BepInEx" ]; then
@@ -172,15 +179,29 @@ fi
 chmod +x "$GAME_DIR/run_bepinex.sh"
 
 if [ -n "$SOURCE" ]; then
-    # Replace the plugin folder (settings live in BepInEx/config and are kept).
-    rm -rf "$GAME_DIR/$PLUGIN_DIR"
-    cp -r "$SOURCE/files/BepInEx" "$GAME_DIR/"
-    echo "$VERSION" > "$GAME_DIR/$PLUGIN_DIR/version.txt"
+    # Replace the port's folder. Its mod settings (BepInEx/config) are kept; what its first start made from the game
+    # (Content) is made again by the new player.
+    if [ -d "$GAME_DIR/$PORT_DIR/BepInEx/config" ]; then
+        cp -r "$GAME_DIR/$PORT_DIR/BepInEx/config" "$TMP/config"
+    fi
+    rm -rf "$GAME_DIR/$PORT_DIR"
+    cp -r "$SOURCE/$PORT_DIR" "$GAME_DIR/"
+    if [ -d "$TMP/config" ]; then
+        cp -r "$TMP/config" "$GAME_DIR/$PORT_DIR/BepInEx/"
+    fi
+    chmod +x "$GAME_DIR/$PORT_DIR/run_bepinex.sh" "$GAME_DIR/$PORT_DIR/CastleStoryPlus.x86_64"
+    echo "$VERSION" > "$GAME_DIR/$PORT_VERSION"
+    # Replaced by a rename: the original game may still have the old one loaded (cp over a loaded file corrupts it).
+    cp "$SOURCE/launcher/CastleStoryPlus.PortLauncher.dll" "$GAME_DIR/$LAUNCHER.new"
+    mv -f "$GAME_DIR/$LAUNCHER.new" "$GAME_DIR/$LAUNCHER"
+    # The mod for the original game gives way to the port.
+    rm -rf "$GAME_DIR/$OLD_PLUGIN_DIR" "$GAME_DIR/$OLD_BOOTSTRAP"
     log "installed Castle Story Plus $VERSION${INSTALLED:+ (was $INSTALLED)}"
 fi
+[ -f "$GAME_DIR/$LAUNCHER" ] || fail "the launcher is missing; run the installer again with --force"
 
-# 3. Start BepInEx through the bootstrap (needed on the game's old Mono runtime).
-sed -i "s|^target_assembly=.*|target_assembly=\"$BOOTSTRAP\"|" "$GAME_DIR/run_bepinex.sh"
+# 3. The game's doorstop starts the launcher, which starts the port.
+sed -i "s|^target_assembly=.*|target_assembly=\"$LAUNCHER\"|" "$GAME_DIR/run_bepinex.sh"
 
 # 4. Steam launch option "./run_bepinex.sh %command%" (stored in each Steam user's localconfig.vdf).
 # Steam rewrites that file on exit, so it can only be edited while Steam is closed.

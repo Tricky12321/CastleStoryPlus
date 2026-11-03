@@ -22,6 +22,9 @@ Enabled = true
 Port = 27860
 ```
 
+The environment variable `CSP_API_PORT` overrides the port, so two players of one install (a multiplayer host and a
+client on one machine) each answer on a port of their own.
+
 Answers are JSON. `GET /api` lists every endpoint with its parameters.
 
 | Endpoint | What |
@@ -41,6 +44,15 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `POST /api/screenshot?ui=&name=&maxWidth=&at=&yaw=&pitch=&distance=` | Saves a screenshot under `BepInEx/devtools/screenshots/` and answers its path. `ui=false`: the world only, without the menus, the build jobs' markers and the icons over things; with `at` the world's cameras are put there for the picture (and back after). `maxWidth`: also a copy at most that wide, `<name>_small.png` (`smallPath`), scaled on the graphics card |
 | `GET /api/ui/rect?q=` | Where a shown menu part is on the screen, by its object's name (a station's window: `CS market`, `CS Research`, ...) |
 | `POST /api/ui/click?text=&index=` | Clicks a shown button of the mod's windows by (part of) its label; `index` picks a match in reading order on the screen |
+| `GET /api/net` | Multiplayer: server and client running, connections, the lobby's players (name, host, ready, faction, ping), the map, LAN games heard (`lanGames`) |
+| `POST /api/net/host?port=&name=` | Hosts a multiplayer game from the title screen, as the host button does (the lobby opens and picks an official map) |
+| `POST /api/net/relations?value=allied\|neutral\|enemy` | Host: how the players' factions stand to each other in a game in progress (the game mode's rule); rebuilds who is sent what |
+| `POST /api/net/join?address=&port=&name=` | Joins by address, as the custom server window's join does |
+| `POST /api/net/ready?value=`, `POST /api/net/start`, `POST /api/net/leave` | The lobby's ready, the host's start, leaving |
+| `POST /api/net/lan` | Looks for games hosted on the LAN, as the LAN list does |
+| `POST /api/net/online`, `POST /api/net/joinlobby?lobby=&name=` | Asks Steam for the online list's games (`onlineGames` in `GET /api/net`, which also shows `steam`: running, user, lobby); joins one by its lobby id as a click and join do |
+| `GET /api/vision?path=&max=` | Fog of war per object: visible for the local faction and why (always visible, owned, allied, `factionsSeeing`, `carrierVisible` for what something carries), `hostVisibility`, renderers on, `trackedBy` |
+| `GET /api/desync`, `POST /api/desync/check`, `POST /api/desync/break?at=&radius=&blocks=` | Desync protection: chunks hashed, rounds, chunks out of sync and corrected, the last vote, hashing time a frame; compare at once (host); take terrain or blocks away on this peer only (a desync on purpose) |
 | `POST /api/quit` | Closes the game (its own Quit), half a second after answering; `tools/start-game.sh --restart` uses it |
 | `POST /api/testworld?width=` | Builds the test world round the home crystal: every research done, one of every building and block, an armour stand per soldier class, and a full 2 x 2 and 3 x 3 stockpile of every resource at every Stacking tier. `GET /api/testworld` follows it, `GET /api/testworld/pieces` lists the pieces with their place |
 | `GET /api/studio/plan` | The photo studio's pieces (the test world's plan) by index |
@@ -63,7 +75,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/blueprints/keys?all=` | The build menu's blueprints with their footprint |
 | `POST /api/blueprints/place?key=&at=x,y,z&to=&turn=&project=&force=&commit=` | Places blueprints like the player, one or a box of them; answers per piece placed or refused (obstructed, unsupported, invalid) |
 | `GET /api/projects?q=` | The player's projects: type, priority, crew and crew size, goals |
-| `POST /api/projects/create?type=build\|quarry&at=&from=&to=` | Makes a build project, or a quarry digging out a box |
+| `POST /api/projects/create?type=build\|quarry\|harvest\|treefarm&at=&from=&to=` | Makes a build project, a quarry digging out a box, a harvest project, or a tree farm around `at` |
 | `POST /api/projects/priority?id=&priority=` | Sets a project's priority (locked, low, medium, high) |
 | `POST /api/projects/crew?id=&size=` | Sets a project's crew size (0 to 8) |
 | `GET /api/tests?filter=` | The in-game tests |

@@ -207,6 +207,8 @@ namespace CastleStoryPlus.Player
 			}
 		}
 
+		internal const string RestartedPidFile = "restarted.pid";
+
 		// The game's assemblies and settings are read when the player starts, so the installed game needs a new start.
 		private static bool Restart()
 		{
@@ -227,7 +229,16 @@ namespace CastleStoryPlus.Player
 				{
 					start.EnvironmentVariables.Remove(state);
 				}
-				Process.Start(start);
+				Process child = Process.Start(start);
+				try
+				{
+					// The original game's launcher (CastleStoryPlus.PortLauncher) waits for the new player too.
+					File.WriteAllText(Path.Combine(PlayerRoot, RestartedPidFile), child.Id.ToString());
+				}
+				catch (Exception e)
+				{
+					Debug.LogWarning("[CSP] Could not write " + RestartedPidFile + ": " + e.Message);
+				}
 				Application.Quit();
 				return true;
 			}

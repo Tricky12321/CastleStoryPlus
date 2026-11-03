@@ -254,7 +254,10 @@ internal static class BuildPickUpAmountPatch
 		return false;
 	}
 
-	// Blueprints of the same project near the first one that still need this resource, nearest first.
+	// Blueprints of the same project near the first one that still need this resource, lowest and then nearest first.
+	// Only the ones the game would build now: none higher than the first one, and none with an unbuilt blueprint by
+	// its feet (BuildGoal.AdjacentLower). Filling a higher blueprint built the next floor before the gaps of the one
+	// under it; once covered, those gaps could not be reached any more and the building stayed unfinished.
 	private static List<BuildGoal> NearbyGoals(BuildGoal goal, Labor labor, Ressource ressource)
 	{
 		List<BuildGoal> result = new List<BuildGoal>();
@@ -274,13 +277,17 @@ internal static class BuildPickUpAmountPatch
 			{
 				continue;
 			}
+			if (other._referenceY > goal._referenceY || other.AdjacentLower())
+			{
+				continue;
+			}
 			if (!Knowledge.Instance.CanReach(labor, other))
 			{
 				continue;
 			}
 			result.Add(other);
 		}
-		result.Sort((BuildGoal a, BuildGoal b) => (a.transform.position - at).sqrMagnitude.CompareTo((b.transform.position - at).sqrMagnitude));
+		result.Sort((BuildGoal a, BuildGoal b) => (a._referenceY != b._referenceY) ? a._referenceY.CompareTo(b._referenceY) : (a.transform.position - at).sqrMagnitude.CompareTo((b.transform.position - at).sqrMagnitude));
 		return result;
 	}
 

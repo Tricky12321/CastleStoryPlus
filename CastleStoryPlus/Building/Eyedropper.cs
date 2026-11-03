@@ -19,9 +19,13 @@ internal static class Eyedropper
 {
 	private const string Button = "cam_mouse_rotate";
 
-	private const float MaxClickSeconds = 0.3f;
+	// A press of the mouse wheel is stiff: it takes longer than a left click and moves the mouse a little, more pixels
+	// on a big screen. Longer or further is a drag that turns the camera.
+	private const float MaxClickSeconds = 0.5f;
 
 	private const float MaxClickPixels = 6f;
+
+	private const float MaxClickScreenShare = 0.01f;
 
 	private const float WaitForProjectSeconds = 3f;
 
@@ -50,27 +54,38 @@ internal static class Eyedropper
 			return;
 		}
 		_pressed = false;
-		if (Time.unscaledTime - _downTime > MaxClickSeconds || (mouse - _downPosition).magnitude > MaxClickPixels)
+		float held = Time.unscaledTime - _downTime;
+		float moved = (mouse - _downPosition).magnitude;
+		if (held > MaxClickSeconds || moved > Mathf.Max(MaxClickPixels, Screen.height * MaxClickScreenShare))
 		{
+			// Only near misses: every turn of the camera would fill the log.
+			if (held < 1.5f && moved < 60f)
+			{
+				Plugin.Log.LogInfo("Eyedropper: middle button held " + held.ToString("0.00") + " s and moved " + moved.ToString("0") + " px: turning the camera, nothing picked");
+			}
 			return;
 		}
 		if (Picking.Instance == null || Picking.Instance.UILocked || InputModeController.IsPaused() || InputModeController.PickerLocked || InputModeController.BuildModeLocked)
 		{
+			Plugin.Log.LogInfo("Eyedropper: nothing picked, picking is locked (UI " + (Picking.Instance != null && Picking.Instance.UILocked) + ", paused " + InputModeController.IsPaused() + ", picker " + InputModeController.PickerLocked + ", build mode " + InputModeController.BuildModeLocked + ")");
 			return;
 		}
-		Factory.AssetKey key = KeyUnderCursor(mouse);
+		Factory.AssetKey key = KeyUnderCursor(mouse, out string what);
 		if (key.IsNullOrInvalid())
 		{
+			Plugin.Log.LogInfo("Eyedropper: nothing to pick: " + what);
 			return;
 		}
+		Plugin.Log.LogInfo("Eyedropper: picked " + key.Name + " (" + what + ")");
 		Picking.Instance.StartCoroutine(SelectForBuilding(key));
 	}
 
 	// The nearest thing under the cursor. Not VoxelRaycastHit.PlaceAtRaycast: it hits trigger colliders too, and
 	// the invisible trigger zones around buildings and units in front of the block made the menu open with that
 	// building instead. Triggers count only when they belong to a blueprint (a ghost has no solid collider).
-	private static Factory.AssetKey KeyUnderCursor(Vector2 mouse)
+	private static Factory.AssetKey KeyUnderCursor(Vector2 mouse, out string what)
 	{
+		what = "nothing under the mouse";
 		LayerBundle layers = new LayerBundle((int)UnityLayer.Terrain, (int)UnityLayer.Blueprints, (int)UnityLayer.FreeBlocks, (int)UnityLayer.DynamicObjects);
 		Ray ray = Camera.main.ScreenPointToRay(mouse);
 		RaycastHit[] hits = Physics.RaycastAll(ray, Picking.Instance.MaxDistance, layers, QueryTriggerInteraction.Collide);
@@ -95,6 +110,7 @@ internal static class Eyedropper
 		}
 		GameObject go = nearest.collider.gameObject;
 		XYZ voxel = XYZ.FromVector3(Calcule.RoundVecteur(nearest.point - nearest.normal * 0.0001f));
+		what = go.name + " on layer " + LayerMask.LayerToName(go.layer) + " at " + voxel;
 		if (go != null)
 		{
 			Blueprint blueprint = go.GetComponentInParent<Blueprint>();

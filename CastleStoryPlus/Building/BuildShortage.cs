@@ -5,6 +5,7 @@ using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
+using Brix.Input;
 using Brix.Utils;
 using Brix.Lua;
 using CastleStoryPlus.Core;
@@ -21,6 +22,9 @@ namespace CastleStoryPlus.Building;
 // shared out over the blueprints), on blue when a worker is fetching or bringing it. A shortage shows after it has lasted ShowAfterSeconds (material on its way in a
 // worker's hands is not in stock for a moment). The box's button folds it to a small column of icons with the missing
 // counts ([BuildShortage] Minified remembers it). Counted every RefreshSeconds on this machine, for its own player.
+// The icons over the blueprints are many while a lot is built and stay through fights, so they show only when asked
+// for ([BuildShortage] Icons): Toggle (the default) shows and hides them with a press of Alt on its own, Hold shows
+// them while Alt is held, Always keeps them. Alt with another key or a click is the game's own and changes nothing.
 [Feature(Features.BuildShortage, Features.BuildShortageInfo)]
 internal sealed class BuildShortage : MonoBehaviour
 {
@@ -55,6 +59,22 @@ internal sealed class BuildShortage : MonoBehaviour
 	private RectTransform _list;
 
 	private static ConfigEntry<bool> _minified;
+
+	internal enum IconsMode
+	{
+		Toggle,
+		Hold,
+		Always
+	}
+
+	internal static ConfigEntry<IconsMode> Icons;
+
+	// Toggle: whether Alt has shown the icons. Alt counts only when nothing else was pressed while it was held.
+	private static bool _iconsOn;
+
+	private static bool _altAlone;
+
+	private bool _drawnIconsShown;
 
 	private static readonly Color MissingColor = new Color(1f, 0.35f, 0.3f, 1f);
 
@@ -220,11 +240,13 @@ internal sealed class BuildShortage : MonoBehaviour
 	private static void Enable()
 	{
 		_minified = Plugin.Cfg.Bind("BuildShortage", "Minified", false, "Whether the box of missing building materials is folded to a small strip of icons with the missing counts.");
+		Icons = Plugin.Cfg.Bind("BuildShortage", "Icons", IconsMode.Toggle, "When the icons over blueprints waiting for material show: Toggle (a press of Alt on its own shows and hides them), Hold (while Alt is held) or Always.");
 		Plugin.Root.AddComponent<BuildShortage>();
 	}
 
 	private void Update()
 	{
+		WatchAlt();
 		if (Time.time < _nextRefresh)
 		{
 			return;
@@ -242,6 +264,50 @@ internal sealed class BuildShortage : MonoBehaviour
 		}
 		_waitingVersion++;
 		DrawBox();
+	}
+
+	private static bool AltHeld()
+	{
+		return Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+	}
+
+	private static void WatchAlt()
+	{
+		if (Input.GetKeyDown(KeyCode.LeftAlt) || Input.GetKeyDown(KeyCode.RightAlt))
+		{
+			_altAlone = true;
+			return;
+		}
+		if (!_altAlone)
+		{
+			return;
+		}
+		if (Input.anyKeyDown)
+		{
+			_altAlone = false;
+			return;
+		}
+		if (!AltHeld())
+		{
+			_altAlone = false;
+			if (Icons.Value == IconsMode.Toggle && !InputModeController.IsInMenu())
+			{
+				_iconsOn = !_iconsOn;
+			}
+		}
+	}
+
+	private static bool IconsShown()
+	{
+		switch (Icons.Value)
+		{
+			case IconsMode.Always:
+				return true;
+			case IconsMode.Hold:
+				return AltHeld();
+			default:
+				return _iconsOn;
+		}
 	}
 
 	private void LateUpdate()
@@ -716,9 +782,11 @@ internal sealed class BuildShortage : MonoBehaviour
 		{
 			return;
 		}
-		Camera camera = (_waiting.Count > 0) ? MainCamera() : null;
+		bool shown = IconsShown();
+		Camera camera = (_waiting.Count > 0 && shown) ? MainCamera() : null;
 		bool fresh = _drawnVersion != _waitingVersion;
-		bool dirty = fresh || camera != _drawnCamera;
+		bool dirty = fresh || camera != _drawnCamera || shown != _drawnIconsShown;
+		_drawnIconsShown = shown;
 		if (camera != null)
 		{
 			Matrix4x4 view = camera.worldToCameraMatrix;

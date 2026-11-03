@@ -123,6 +123,28 @@ internal static class TaskPrediction
 		}
 	}
 
+	// A task the worker took on as its current task but never started (the race above) does not listen for being
+	// cancelled, so an order or a move to another task could not end it and the worker stood still for good. It is let
+	// go as PredictionWatch does. True when there was one.
+	internal static bool LetGoUnstarted(Labor labor, string why)
+	{
+		Task task = (labor != null) ? labor.CurrentTask : null;
+		if (task == null || task.TaskStartedTimestamp > 0f)
+		{
+			return false;
+		}
+		Goal goal = (task.Giver != null) ? task.Giver.GetComponent<Goal>() : null;
+		if (goal != null)
+		{
+			goal.UnassignWorker(task);
+		}
+		labor.CurrentTask = null;
+		Given.Remove(task);
+		Plugin.Log.LogInfo("TaskPrediction: " + labor.name + " had a task it never started (" + task.Description + "), let go: " + why);
+		Trace(labor, "the task never started, let go: " + why);
+		return true;
+	}
+
 	internal static bool IsPredicted(Labor labor)
 	{
 		return labor != null && Predicted.TryGetValue(labor, out Task task) && task != null && (labor.CurrentTask == task || labor.PendingTask == task);
@@ -174,6 +196,13 @@ internal static class TaskPrediction
 			Trace(labor, "next task: not predicted for " + ((project != null) ? project.GetType().Name : "no task area"));
 			return;
 		}
+		// Moved to another task while this one ended: the next task comes from the new task, not the old area.
+		if (labor.Project != null && project != labor.Project && !(labor.Project is IdleProject))
+		{
+			LastArea.Remove(labor);
+			Trace(labor, "next task: not predicted, the worker moved to " + labor.Project.GetType().Name);
+			return;
+		}
 		if (labor.PendingTask != null)
 		{
 			Trace(labor, "next task: already has one (" + labor.PendingTask.Description + ")");
@@ -204,6 +233,12 @@ internal static class TaskPrediction
 			return;
 		}
 		Project project = last.Key;
+		if (labor.Project != null && project != labor.Project && !(labor.Project is IdleProject))
+		{
+			LastArea.Remove(labor);
+			Trace(labor, "next task: not predicted after a follow-up, the worker moved to " + labor.Project.GetType().Name);
+			return;
+		}
 		if (!Predictable(project) || project is BuildProject)
 		{
 			Trace(labor, "next task: not predicted after a follow-up for " + ((project != null) ? project.GetType().Name : "no task area"));
@@ -257,6 +292,10 @@ internal static class TaskPrediction
 		}
 		package.Send(labor);
 		Predicted[labor] = labor.PendingTask;
+		if (labor.PendingTask != null)
+		{
+			Given[labor.PendingTask] = Time.time;
+		}
 		Trace(labor, "next task predicted: " + action + " at " + name);
 	}
 

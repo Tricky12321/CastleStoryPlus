@@ -30,9 +30,9 @@ internal static class ProjectEndpoints
 		{
 			Parameters = "q (part of the type name)"
 		});
-		routes.Add(new Route("POST", "/api/projects/create", "Makes a project like the task bar does. build: an empty build project (blueprints are added by /api/blueprints/place). quarry: digs out the box from-to with its stairs. harvest: gathers trees, plants, boulders, iron or pyrite around 'at'", Create)
+		routes.Add(new Route("POST", "/api/projects/create", "Makes a project like the task bar does. build: an empty build project (blueprints are added by /api/blueprints/place). quarry: digs out the box from-to with its stairs. harvest: gathers trees, plants, boulders, iron or pyrite around 'at'. treefarm: a tree farm (saplings planted and felled in its box) around 'at'", Create)
 		{
-			Parameters = "type (build, quarry or harvest, required), at (x,y,z: where its marker stands; default the home crystal), from, to (x,y,z, quarry: opposite corners of the box to dig), clear (quarry: true cuts the trees on it first with a harvest project; without it a quarry under trees is refused), what (harvest: comma separated tree, plant, boulder, iron, pyrite or everything; default tree)"
+			Parameters = "type (build, quarry, harvest or treefarm, required), at (x,y,z: where its marker stands; default the home crystal), from, to (x,y,z, quarry: opposite corners of the box to dig), clear (quarry: true cuts the trees on it first with a harvest project; without it a quarry under trees is refused), what (harvest: comma separated tree, plant, boulder, iron, pyrite or everything; default tree)"
 		});
 		routes.Add(new Route("POST", "/api/projects/hire", "Puts bricktrons on a project, as dragging them onto its task does (the crew size grows when full). Without units, takes idle bricktrons", Hire)
 		{
@@ -431,8 +431,13 @@ internal static class ProjectEndpoints
 					Commit(project);
 					break;
 				}
+			case "treefarm":
+				// As the "Tree farm" button places it: a landscape task with the farm's rotation (TreeFarm.FarmRotation).
+				project = Spawn(() => groupe.CmdSpawnLandscapeProject(at, new Quaternion(0f, 0f, 1f, 0f), false));
+				Commit(project);
+				break;
 			default:
-				throw new ApiException(400, "'type' must be build, quarry or harvest, was " + type);
+				throw new ApiException(400, "'type' must be build, quarry, harvest or treefarm, was " + type);
 		}
 		return Obj("created", true, "project", Describe(project), "clearingTrees", (clearing != null) ? Describe(clearing) : null);
 	}
