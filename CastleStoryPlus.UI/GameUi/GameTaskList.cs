@@ -821,6 +821,7 @@ internal class CsPopupView : MonoBehaviour
 		CsPopupView view = rect.gameObject.AddComponent<CsPopupView>();
 		view._panel = panel;
 		view._rect = rect;
+		view._drag = CsWindowDrag.Add(rect, "task popup");
 		foreach (UiSection section in panel.Sections)
 		{
 			GameObject line = LuiWidgets.Divider(rect, vertical: false).gameObject;
@@ -891,6 +892,8 @@ internal class CsPopupView : MonoBehaviour
 
 	private bool _covered;
 
+	private CsWindowDrag _drag;
+
 	private void Update()
 	{
 		// At once when a building's window opens or closes in its place, not up to a quarter second later.
@@ -930,9 +933,14 @@ internal class CsPopupView : MonoBehaviour
 		}
 	}
 
-	// Above the selected row of the task list, kept on screen.
+	// Above the selected row of the task list, kept on screen; where the player moved it, if moved (CsWindowDrag).
 	private void Place()
 	{
+		if (_drag.TryPlace(out Vector2 moved))
+		{
+			_rect.anchoredPosition = moved;
+			return;
+		}
 		GameTaskList list = GameTaskList.Current;
 		RectTransform row = (list != null) ? list.SelectedRow() : null;
 		// Not laid out yet (the frame the menu is built, e.g. after a UI reload): no place to stand over.

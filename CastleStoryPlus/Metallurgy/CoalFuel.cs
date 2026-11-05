@@ -7,6 +7,7 @@ using Brix.Lua;
 using CastleStoryPlus.Core;
 using HarmonyLib;
 using MoonSharp.Interpreter;
+using UnityEngine;
 
 namespace CastleStoryPlus.Metallurgy;
 
@@ -199,5 +200,52 @@ internal static class CoalFuelKeepPatch
 		__instance.uniqueResources.Clear();
 		__instance.toStore.UniqueRepresentatives(ref __instance.uniqueStorable);
 		__instance.resources.UniqueRepresentatives(ref __instance.uniqueResources);
+	}
+}
+
+// A worker carrying charcoal out of the furnace leaves CoalFuel.Reserve pieces behind. The game's pickup takes every
+// piece of the type (upTo -1), so it emptied the furnace of its fuel too: the furnace then sent for coal from the
+// stockpiles, which was carried straight back out as product, over and over.
+[Feature(Features.Metallurgy, Features.MetallurgyInfo)]
+[HarmonyPatch(typeof(Transaction), "TransferSpecificObjects")]
+internal static class CoalFuelReservePatch
+{
+	private static void Prefix(Recepteur source, GameObject specificItem, ref int upTo)
+	{
+		if (source == null || specificItem == null || CoalFuel.MakesCoal.Count == 0)
+		{
+			return;
+		}
+		GameComponent item = specificItem.GetComponent<GameComponent>();
+		if (item == null || item.AssetKey != Metallurgy.CoalKey || !Burns(source))
+		{
+			return;
+		}
+		int coal = 0;
+		foreach (IDescriptor stored in source.StoredItems)
+		{
+			if (stored != null && stored.AssetKey == Metallurgy.CoalKey)
+			{
+				coal++;
+			}
+		}
+		int free = System.Math.Max(0, coal - CoalFuel.Reserve);
+		if (upTo == -1 || upTo > free)
+		{
+			upTo = free;
+		}
+	}
+
+	// Whether the recepteur is a furnace making charcoal.
+	private static bool Burns(Recepteur source)
+	{
+		foreach (CraftingInventory inventory in CoalFuel.MakesCoal)
+		{
+			if (inventory != null && inventory.recepteur == source)
+			{
+				return inventory.needsHeat;
+			}
+		}
+		return false;
 	}
 }
