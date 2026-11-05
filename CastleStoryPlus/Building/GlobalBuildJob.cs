@@ -6,6 +6,7 @@ using Brix.Game.AI;
 using Brix.Game.Beacons;
 using Brix.Game.Components;
 using Brix.Game.Network;
+using Brix.Legacy;
 using Brix.Lifecycle.Pooling;
 using Brix.UI.GameSelector;
 using CastleStoryPlus.Core;
@@ -115,6 +116,19 @@ internal static class GlobalBuildJob
 			}
 		}
 		BuildProject global = (selected != null && projects.Contains(selected)) ? selected : null;
+		// A new, empty build task (made by a path that still creates one) does not take over the team's build task:
+		// the existing task with work keeps its blueprints, workers and priority.
+		if (global != null && IsEmpty(global))
+		{
+			foreach (BuildProject project in projects)
+			{
+				if (project != global && !IsEmpty(project))
+				{
+					global = null;
+					break;
+				}
+			}
+		}
 		foreach (BuildProject project in projects)
 		{
 			if (global == null || (global != selected && Blueprints(project).Count > Blueprints(global).Count))
@@ -143,6 +157,11 @@ internal static class GlobalBuildJob
 					target.AddObject(blueprint.gameObject);
 					Commit(blueprint);
 				}
+			}
+			// A merge never lowers the priority the player gave either task.
+			if (PriorityLevels.Level(other.PriorityBias) > PriorityLevels.Level(global.PriorityBias))
+			{
+				global.PriorityBias = other.PriorityBias;
 			}
 			int crew = MoveCrew(other, global);
 			Plugin.Log.LogInfo("GlobalBuildJob: moved " + moving.Count + " blueprints and " + crew + " workers of " + other.name + " into " + global.name);
@@ -177,6 +196,11 @@ internal static class GlobalBuildJob
 			}
 		}
 		return moved;
+	}
+
+	private static bool IsEmpty(BuildProject project)
+	{
+		return Blueprints(project).Count == 0 && project.CrewCount() == 0;
 	}
 
 	private static HashSet<Blueprint> Blueprints(BuildProject project)
@@ -234,13 +258,20 @@ internal static class GlobalBuildJobCommitPatch
 }
 
 // The build button (and its hotkey) made a new, empty build task each time, which then took over the team's
-// blueprints. With a build task already there, it is selected instead.
+// blueprints and reset its priority. With a build task already there, it is selected instead. Every path goes through
+// the "Tool_Construction" instruction: the game's Lua menu (lua_NewBuildTask), the C# task menu and its hotkey.
 [Feature(Features.GlobalBuildJob, Features.GlobalBuildJobInfo)]
-[HarmonyPatch(typeof(UIGameObserver), "lua_NewBuildTask")]
+[HarmonyPatch(typeof(Instructions), nameof(Instructions.Execute))]
 internal static class GlobalBuildJobNewTaskPatch
 {
-	private static bool Prefix()
+	private static readonly AccessTools.FieldRef<int> BuildSubmenu = AccessTools.StaticFieldRefAccess<int>(AccessTools.Field(typeof(Instructions), "_buildSubmenu"));
+
+	private static bool Prefix(string s)
 	{
+		if (s != "Tool_Construction")
+		{
+			return true;
+		}
 		User user = User.LocalUser;
 		if (user == null || user.faction == null)
 		{
@@ -263,6 +294,7 @@ internal static class GlobalBuildJobNewTaskPatch
 		{
 			return true;
 		}
+		BuildSubmenu() = 0;
 		UIGameSelector.Select(best.gameObject);
 		return false;
 	}

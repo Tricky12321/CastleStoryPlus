@@ -18,6 +18,7 @@ using CastleStoryPlus.Core;
 using CastleStoryPlus.Economy;
 using CastleStoryPlus.Giant;
 using HarmonyLib;
+using MoonSharp.Interpreter;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -87,6 +88,14 @@ internal class TreasureChests : MonoBehaviour
 			_active = false;
 		});
 		Plugin.Root.AddComponent<TreasureChests>();
+		// The invasion's kill count (host) counted the treasure guards as corruptrons and biftrons, so the scoreboard
+		// showed kills before the first wave.
+		LuaInjection.AddFunction("IsBeast", (ScriptExecutionContext context, CallbackArguments args) =>
+		{
+			LuaDriver driver = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsBeast", allowNil: true) : null;
+			return DynValue.NewBoolean(driver != null && Beasts.KindOf(driver.gameObject) != null);
+		});
+		LuaInjection.AddPatch(Features.Treasure, "Gamemodes/invasion/message.lua", "\tlocal OnUnitKilled =\n\t\tfunction(ld, ld_attacker)\n", LuaInjection.Mode.InsertAfter, "\t\t\t---Castle Story Plus (Treasure): a treasure guard is no wave's unit\n\t\t\tif CastleStoryPlus.IsBeast ~= nil and CastleStoryPlus.IsBeast(ld) then return end\n");
 	}
 
 	private void Update()
