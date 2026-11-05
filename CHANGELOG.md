@@ -10,6 +10,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 - [CHANGE] **RangedReposition, 5 blocks:** a ranged fighter looking for a clear shot walks at most `[RangedReposition] MaxDistance` blocks along its route (5, was 8 as the crow flies with routes up to twice that); a config still on the old 8 is moved to 5 once.
 - [CHANGE] **Call to arms, no kit:** a worker who is called but gets no kit (none left for its role or quota) runs to the home crystal instead of staying at work; "stay at work" still stays.
 - [FIX] **Saves with unknown blocks:** a save with a block type the game does not know (a mod's block with that feature off) stopped loading at that block. Such blocks are left out and logged, and the world loads.
+- [CHANGE] **Options, Castle Story Plus tab, game look:** the mod's settings page looks like the game's own option pages: yellow rows with the setting's name in capitals and a line of its description, ENABLED/DISABLED switches, and the sections as yellow tabs (the shown one white).
 - [FIX] **Options, refresh rate row:** the row moved to the bottom of the Graphics page after a value was applied; it stays under Screen resolution.
 
 ## 0.8.5 — 2026-11-05

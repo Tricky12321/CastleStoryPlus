@@ -271,7 +271,7 @@ internal class AllSettingsPanel : MonoBehaviour
 			rect.offsetMax = Vector2.zero;
 			// A dark plate under the lists, as the game's pages have their own rows: the menu's picture is behind.
 			Image plate = root.gameObject.AddComponent<Image>();
-			plate.color = new Color(0f, 0f, 0f, 0.7f);
+			plate.color = new Color(0f, 0f, 0f, 0.45f);
 			VerticalLayoutGroup layout = root.gameObject.AddComponent<VerticalLayoutGroup>();
 			layout.padding = new RectOffset(10, 10, 8, 8);
 			layout.spacing = 4f;
@@ -394,6 +394,10 @@ internal class AllSettingsPanel : MonoBehaviour
 		{
 			refresher();
 		}
+		if (_embedded)
+		{
+			GameStyle();
+		}
 	}
 
 	private void Changed(Setting setting)
@@ -406,14 +410,40 @@ internal class AllSettingsPanel : MonoBehaviour
 
 	private void AddValueRow(Setting setting, bool withSection)
 	{
-		Transform row = CreateRow(_values, 28f);
+		Transform row = CreateRow(_values, _embedded ? 40f : 28f);
 		// A raycast target over the whole row, so pointing at it shows its description.
 		Image hover = row.gameObject.AddComponent<Image>();
-		hover.color = new Color(1f, 1f, 1f, 0.02f);
+		hover.color = _embedded ? GameRow : new Color(1f, 1f, 1f, 0.02f);
 		OnPointerEnter(row.gameObject, () => _description.text = Describe(setting));
 		string name = withSection ? setting.Definition.Section + " > " + setting.Definition.Key : setting.Definition.Key;
-		Text label = CreateText(row, name, 13, setting.Orphan ? Grey : TextColor, TextAnchor.MiddleLeft);
-		Flexible(label.gameObject);
+		if (_embedded)
+		{
+			// As the game's option rows: the name in capitals, a line of description under it.
+			HorizontalLayoutGroup rowLayout = row.GetComponent<HorizontalLayoutGroup>();
+			rowLayout.padding = new RectOffset(10, 8, 2, 2);
+			Transform names = CreateRect("Names", row);
+			VerticalLayoutGroup column = names.gameObject.AddComponent<VerticalLayoutGroup>();
+			column.childControlWidth = true;
+			column.childControlHeight = true;
+			column.childForceExpandWidth = true;
+			column.childForceExpandHeight = false;
+			column.childAlignment = TextAnchor.MiddleLeft;
+			Flexible(names.gameObject);
+			Text title = CreateText(names, Spaced(name).ToUpper(), 13, GameText, TextAnchor.MiddleLeft);
+			title.font = CastleStoryPlus.LuaUi.LuiStyle.Bold;
+			string line = ShortDescription(setting);
+			if (line.Length > 0)
+			{
+				Text sub = CreateText(names, line, 10, GameTextSoft, TextAnchor.MiddleLeft);
+				sub.font = CastleStoryPlus.LuaUi.LuiStyle.Regular;
+				sub.horizontalOverflow = HorizontalWrapMode.Overflow;
+			}
+		}
+		else
+		{
+			Text label = CreateText(row, name, 13, setting.Orphan ? Grey : TextColor, TextAnchor.MiddleLeft);
+			Flexible(label.gameObject);
+		}
 		if (setting.Orphan)
 		{
 			AddTextEditor(row, setting);
@@ -441,6 +471,99 @@ internal class AllSettingsPanel : MonoBehaviour
 		else
 		{
 			AddTextEditor(row, setting);
+		}
+	}
+
+	// The game's option rows: yellow, dark text.
+	private static readonly Color GameRow = new Color(1f, 197f / 255f, 10f / 255f, 1f);
+
+	private static readonly Color GameRowSelected = Color.white;
+
+	private static readonly Color GameText = new Color(0.1f, 0.1f, 0.1f, 1f);
+
+	private static readonly Color GameTextSoft = new Color(0.1f, 0.1f, 0.1f, 0.75f);
+
+	// "MaxDistance" as "Max Distance", "AutoSpawn" as "Auto Spawn".
+	private static string Spaced(string key)
+	{
+		System.Text.StringBuilder text = new System.Text.StringBuilder();
+		for (int i = 0; i < key.Length; i++)
+		{
+			if (i > 0 && char.IsUpper(key[i]) && char.IsLower(key[i - 1]))
+			{
+				text.Append(' ');
+			}
+			text.Append(key[i]);
+		}
+		return text.ToString();
+	}
+
+	// The description's first sentence, short enough for one line under the name.
+	private static string ShortDescription(Setting setting)
+	{
+		string text = (setting.Entry != null && setting.Entry.Description != null) ? setting.Entry.Description.Description : string.Empty;
+		if (string.IsNullOrEmpty(text))
+		{
+			return string.Empty;
+		}
+		int end = text.IndexOfAny(new[] { '.', ':', ';', '(' });
+		if (end > 0)
+		{
+			text = text.Substring(0, end);
+		}
+		return (text.Length > 90) ? text.Substring(0, 87) + "..." : text;
+	}
+
+	// A flat button of one colour (the kit's buttons are a dark sprite tinted on hover).
+	private static void Flat(Button button, Color color)
+	{
+		Image image = button.GetComponent<Image>();
+		if (image != null)
+		{
+			image.sprite = null;
+			image.color = color;
+		}
+		ColorBlock colors = button.colors;
+		colors.normalColor = Color.white;
+		colors.highlightedColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+		colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+		colors.selectedColor = Color.white;
+		button.colors = colors;
+	}
+
+	// The game's look on what the rows hold (buttons, fields, texts): run after every refresh, as the editors set their
+	// own colours.
+	private void GameStyle()
+	{
+		foreach (Button button in _values.GetComponentsInChildren<Button>(true))
+		{
+			Flat(button, new Color(0f, 0f, 0f, 0.08f));
+			foreach (Text text in button.GetComponentsInChildren<Text>(true))
+			{
+				text.color = GameText;
+				text.font = CastleStoryPlus.LuaUi.LuiStyle.Bold;
+			}
+		}
+		foreach (InputField field in _values.GetComponentsInChildren<InputField>(true))
+		{
+			Image image = field.GetComponent<Image>();
+			if (image != null)
+			{
+				image.color = new Color(1f, 1f, 1f, 0.85f);
+			}
+			if (field.textComponent != null)
+			{
+				field.textComponent.color = GameText;
+			}
+		}
+		string search = (_search.text ?? string.Empty).Trim();
+		foreach (Button button in _sectionButtons)
+		{
+			Text label = button.GetComponentInChildren<Text>();
+			bool selected = search.Length == 0 && label.text == _section;
+			Flat(button, selected ? GameRowSelected : GameRow);
+			label.color = GameText;
+			label.font = CastleStoryPlus.LuaUi.LuiStyle.Bold;
 		}
 	}
 
@@ -472,7 +595,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		_refreshers.Add(() =>
 		{
 			bool on = (bool)entry.BoxedValue;
-			value.text = on ? "ON" : "OFF";
+			value.text = _embedded ? (on ? "ENABLED" : "DISABLED") : (on ? "ON" : "OFF");
 			value.color = on ? On : Off;
 		});
 	}
