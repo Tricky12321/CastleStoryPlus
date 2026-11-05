@@ -3,7 +3,7 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
-## Unreleased
+## 0.8.2 — 2026-11-05
 
 - [CHANGE] **C# menus, gamemode panel:** the top-left panel of conquest, credit island and grab the gems (game name, time played, players, minimap, the "build more stockpiles" alert; for grab the gems also the time before the next gem and each team's score) is drawn in C# like invasion's and sandbox's, instead of the game's Lua panels, which took seconds to build when a map loads.
 - [CHANGE] **C# menus on by default:** the C# gamemode panel (`[LuaUi] CsScoreboard`) and the C# dialogs (`[LuaUi] CsModals`: intro, victory, defeat) are on by default; a config from before, which kept them off, is switched on once.
