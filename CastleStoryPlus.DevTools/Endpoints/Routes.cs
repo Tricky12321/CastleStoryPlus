@@ -55,6 +55,7 @@ internal static class Routes
 		TemplateEndpoints.Add(routes);
 		AnimatorEndpoints.Add(routes);
 		UiEndpoints.Add(routes);
+		MenuTreeEndpoints.Add(routes);
 		ComponentEndpoints.Add(routes);
 		ExperimentEndpoints.Add(routes);
 		JitEndpoints.Add(routes);

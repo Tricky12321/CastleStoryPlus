@@ -3,6 +3,17 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## 0.8.5 — 2026-11-05
+
+- [ADD] **Options, Castle Story Plus tab:** the game's own Options > Settings (title screen and in game) has a "Castle Story Plus" tab after Gameplay, with every setting of the mod (the sections, a search, each value's editor and description), saved at once.
+- [CHANGE] **Options, refresh rate:** Screen resolution lists each size once, and a new "Refresh rate" row under it lists AUTO and the rates the screen offers (also the rate it runs at now: a Wayland desktop lists only 60 Hz modes to the game). The rate picked is kept in `[Display] RefreshRate` and set in full screen.
+- [FIX] **Options, refresh rate (0.8.4):** the refresh rate fix of 0.8.4 was never active: its patches were not marked as part of a feature, so the mod did not apply them.
+- [ADD] **Home crystal, auto spawn:** the home crystal's popup has "Auto spawn bricktrons": while on, a new bricktron is made whenever the crystal has the energy for one and the team is under its limit (`[Crystal] AutoSpawn`, per player).
+- [ADD] **Treasure, guarded chest hint:** a bricktron that comes to a chest its guardians still guard shows "Defeat the animals guarding this chest first" to its player (also on a multiplayer client), at most every 15 seconds per chest.
+- [CHANGE] **Blueprints, more than 16:** the blueprint library keeps up to 100 saved blueprints instead of 16 (the game has no limit of its own; the list scrolls).
+- [FIX] **C# menus, missing texts:** the task popup's "raise priority" tooltip showed `##task_actions_priority_raise` (the game's localization lacks it). Missing texts now show English.
+- [ADD] **DevTools:** `GET /api/ui/menus`, `/api/ui/containers` and `/api/ui/tree` show the game's scene-built menus (menu components, their containers and items, any object's children), shown or not.
+
 ## 0.8.4 — 2026-11-05
 
 - [FIX] **Metallurgy, charcoal:** workers carried coal into a furnace burning charcoal and straight back out, over and over, while the furnace's fuel slot switched between coal and orange crystal. A worker carrying the charcoal out took every piece of coal, also the few the furnace keeps to burn, so the furnace sent for coal from the stockpiles as fuel, which was its product again. Carrying charcoal out now leaves the furnace's 2 pieces of fuel.
