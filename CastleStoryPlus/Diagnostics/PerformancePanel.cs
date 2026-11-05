@@ -185,6 +185,7 @@ internal class PerformancePanel : MonoBehaviour
 		GameObject canvas = CreateCanvas("PerformanceCanvas", transform, 951);
 		_window = canvas;
 		GameObject window = CreatePanel("PerformanceWindow", canvas.transform);
+		Draggable(window);
 		RectTransform rect = window.GetComponent<RectTransform>();
 		rect.pivot = new Vector2(1f, 1f);
 		SetRect(rect, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-16f, -16f), new Vector2(640f, Mathf.Min(WindowHeight, MaxWindowHeight)));

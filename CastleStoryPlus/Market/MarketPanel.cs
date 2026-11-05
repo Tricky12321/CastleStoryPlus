@@ -342,6 +342,7 @@ internal class MarketPanel : MonoBehaviour
 	{
 		GameObject canvasGo = CreateCanvas("MarketCanvas", transform, 900);
 		_window = CreateWindow(canvasGo.transform, Columns * TileWidth + (Columns - 1) * 4f + 28f);
+		Draggable(_window);
 		RectTransform windowRect = _window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(1f, 0.5f);
 		windowRect.anchorMax = new Vector2(1f, 0.5f);

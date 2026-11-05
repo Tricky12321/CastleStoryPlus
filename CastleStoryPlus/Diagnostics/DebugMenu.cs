@@ -287,6 +287,7 @@ end)
 		GameObject canvas = CreateCanvas("DebugMenuCanvas", transform, 950);
 		_window = canvas;
 		GameObject window = CreatePanel("DebugMenuWindow", canvas.transform);
+		Draggable(window);
 		SetRect(window.GetComponent<RectTransform>(), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-300f, 0f), new Vector2(560f, 870f));
 		VerticalLayoutGroup layout = window.AddComponent<VerticalLayoutGroup>();
 		layout.padding = new RectOffset(14, 14, 10, 14);

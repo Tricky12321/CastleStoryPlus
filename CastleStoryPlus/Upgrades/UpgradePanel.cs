@@ -356,6 +356,7 @@ internal class UpgradePanel : MonoBehaviour
 			_canvas = CreateCanvas("UpgradeCanvas", transform, 900).transform;
 		}
 		window = CreateWindow(_canvas, Width);
+		Draggable(window);
 		RectTransform windowRect = window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(1f, 0.5f);
 		windowRect.anchorMax = new Vector2(1f, 0.5f);

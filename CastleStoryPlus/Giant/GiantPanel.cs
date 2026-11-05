@@ -177,6 +177,7 @@ end
 	{
 		GameObject canvasGo = CreateCanvas("GiantCanvas", transform, 900);
 		_window = CreateWindow(canvasGo.transform, 380f);
+		Draggable(_window);
 		RectTransform windowRect = _window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(1f, 0.5f);
 		windowRect.anchorMax = new Vector2(1f, 0.5f);

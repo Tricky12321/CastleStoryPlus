@@ -268,6 +268,7 @@ end
 	{
 		GameObject canvasGo = CreateCanvas("ModSettingsCanvas", transform, 910);
 		_window = CreateWindow(canvasGo.transform, 500f);
+		Draggable(_window);
 		RectTransform windowRect = _window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(0.5f, 0.5f);
 		windowRect.anchorMax = new Vector2(0.5f, 0.5f);
