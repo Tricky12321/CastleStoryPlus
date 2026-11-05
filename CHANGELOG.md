@@ -3,6 +3,15 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [ADD] **BuildWatchdog:** a build task with blueprints and workers that finishes no block for a minute is reset: every blueprint is tried again (blueprints judged unreachable are forgotten), its workers' task and resource reservations are let go and they look for work afresh (`[BuildWatchdog] Seconds`, 0 off).
+- [FIX] **CustomBlocks, slabs on planks:** a wooden slab could not be placed on planks: the slabs use the brick's validator, whose support is stone only. Planks under a slab now hold it.
+- [CHANGE] **RangedReposition, 5 blocks:** a ranged fighter looking for a clear shot walks at most `[RangedReposition] MaxDistance` blocks along its route (5, was 8 as the crow flies with routes up to twice that); a config still on the old 8 is moved to 5 once.
+- [CHANGE] **Call to arms, no kit:** a worker who is called but gets no kit (none left for its role or quota) runs to the home crystal instead of staying at work; "stay at work" still stays.
+- [FIX] **Saves with unknown blocks:** a save with a block type the game does not know (a mod's block with that feature off) stopped loading at that block. Such blocks are left out and logged, and the world loads.
+- [FIX] **Options, refresh rate row:** the row moved to the bottom of the Graphics page after a value was applied; it stays under Screen resolution.
+
 ## 0.8.5 — 2026-11-05
 
 - [ADD] **Options, Castle Story Plus tab:** the game's own Options > Settings (title screen and in game) has a "Castle Story Plus" tab after Gameplay, with every setting of the mod (the sections, a search, each value's editor and description), saved at once.

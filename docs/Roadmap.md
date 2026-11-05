@@ -11,6 +11,10 @@ Features planned for Castle Story Plus over time. Nothing here is built yet. Whe
   furnace, forge, loom, research station, ...) and their settings (repeat, priority).
 - When the blueprint is placed and a workshop of it is built, the workshop starts with those recipes, so a copied base
   produces at once without setting every workshop up again.
+- A switch when inserting a saved blueprint chooses whether its workshops get the saved recipes or start empty.
+- Needed first: recipes chosen on a workshop's blueprint (before it is built), kept when it is built. A saved blueprint
+  holds only blueprints (the game's compound takes the selected blueprints, never built buildings), so that is where
+  its recipes come from.
 - To decide: whether placing a blueprint over an existing workshop changes its recipes, and how blueprints saved before
   this (without recipes) behave.
 

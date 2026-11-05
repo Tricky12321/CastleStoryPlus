@@ -144,6 +144,13 @@ internal static class UnreachableTasks
 
 	internal static int Count => Marked.Count;
 
+	// Every blueprint is tried again (BuildWatchdog: a build task that stalled).
+	internal static void ForgetAll()
+	{
+		Marked.Clear();
+		SoftFailed.Clear();
+	}
+
 	internal static bool IsMarked(GameObject go)
 	{
 		return go != null && Marked.ContainsKey(go);

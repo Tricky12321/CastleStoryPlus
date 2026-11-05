@@ -38,6 +38,9 @@ internal static class CallToArms
 
 	public const int AnyKit = -1;
 
+	// Called, but no kit is left for it: it runs to the home crystal (out of the fight) instead of staying at work.
+	public const int NoKit = -2;
+
 	// Per-worker roles (CharacterState.CallToArmsRole): Auto, a soldier job value, or stay at work.
 	public const int RoleAuto = 0;
 
@@ -112,7 +115,7 @@ internal static class CallToArms
 			{
 				continue;
 			}
-			// A fixed role without a free kit keeps the worker at work.
+			// A fixed soldier role without a free kit runs to the crystal; "stay at work" stays.
 			builders.Remove(builder);
 			Occupation.Job job = (Occupation.Job)role;
 			if (kits.ContainsKey(job) && kits[job] > 0)
@@ -120,6 +123,10 @@ internal static class CallToArms
 				kits[job]--;
 				called[job]++;
 				Send(builder, crystal, role);
+			}
+			else if (kits.ContainsKey(job))
+			{
+				Send(builder, crystal, NoKit);
 			}
 		}
 		if (CallToArmsSettings.AnyQuota)
@@ -134,18 +141,35 @@ internal static class CallToArms
 					Send(builder, crystal, (int)job);
 				}
 			}
+			// The rest (no quota left, or no kit for it) shelter at the crystal.
+			foreach (Labor builder in builders)
+			{
+				Send(builder, crystal, NoKit);
+			}
 		}
 		else
 		{
 			bool hasRally = CallToArmsSettings.HasRanged || CallToArmsSettings.HasMelee;
+			// As many as there are kits take one; the others shelter at the crystal.
+			int free = 0;
+			foreach (int count in kits.Values)
+			{
+				free += count;
+			}
 			foreach (Labor builder in builders)
 			{
-				if (hasRally)
+				if (free <= 0)
 				{
+					Send(builder, crystal, NoKit);
+				}
+				else if (hasRally)
+				{
+					free--;
 					Send(builder, crystal, AnyKit);
 				}
 				else
 				{
+					free--;
 					DirectOrderProject.AddCallToArmsGoal(builder, crystal);
 				}
 			}
@@ -339,6 +363,10 @@ internal static class CallToArms
 	// Server side: equip the requested kit, then run to the rally point for the class it ended up with.
 	private static Node EquipAndRallyNode(Labor labor, Orders orders)
 	{
+		if (orders.Job == NoKit)
+		{
+			return (orders.Crystal != null) ? labor.RunToExactly(Location.Of(orders.Crystal)) : Node.Empty;
+		}
 		StaticNode equip = (orders.Job == AnyKit) ? labor.GoEquipBestToolFromRack(Adjectif.accessoire) : Kits.GoEquipKitFromRack(labor, (Occupation.Job)orders.Job);
 		return (StaticNode)Node.Sequence.Do(equip).Do((Labor l) => RallyNode(l, orders), labor);
 	}
