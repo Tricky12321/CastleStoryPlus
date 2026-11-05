@@ -3,6 +3,11 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [ADD] **C# menus, world editor (started):** with `[LuaUi] CsWorldEditor` (off by default) the world editor's menu is drawn in C# and the game's Lua world editor menu is not loaded: the tab column (with its hotkeys), the home button, and the time, map and grid tabs. Terrain, markers, modes, save and workshop are not done yet and say so; switch the option off to use them.
+- [ADD] **DevTools:** `POST /api/world/new?gamemode=world_editor&map=` opens a map in the world editor, and `POST /api/ui/clickat?x=&y=` clicks the interface at a screen point (the C# menus' buttons, which `/api/ui/click` does not find).
+
 ## 0.8.2 — 2026-11-05
 
 - [FIX] **SidePlanks, crash loading a save:** a save with a large floor of wooden planks blueprints could crash the game while loading (stack overflow). A plank held from the side asked the plank beside it through the game's validator component, which also set that plank's state; each change revalidated the planks round it, and on a large floor the chain ran hundreds of planks deep. The plank beside it is now judged by the game's rule alone, without changing anything. (#20)

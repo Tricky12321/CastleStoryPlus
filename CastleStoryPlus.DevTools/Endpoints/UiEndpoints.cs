@@ -19,11 +19,52 @@ internal static class UiEndpoints
 		{
 			Parameters = "depth (path segments a group keeps, default 4)"
 		});
+		routes.Add(new Route("POST", "/api/ui/clickat", "Left-clicks the interface at a screen point, as the mouse does (down, up, click to the first element the event system hits there): for the code-built menus whose buttons are not uGUI Buttons", ClickAt)
+		{
+			Parameters = "x, y (pixels from the top left, as screenshots count; required)"
+		});
 		routes.Add(new Route("POST", "/api/ui/click", "Clicks a shown uGUI button (the mod's code-built windows) by its text, as a mouse click does: the first active, interactable button whose label contains the text", Click)
 		{
 			Parameters = "text (part of the button's label, case ignored; required), index (which match in reading order on the screen, default 0)"
 		});
 		routes.Add(new Route("GET", "/api/ui/overheads", "The overhead icons by kind (their parent's name): how many, how many show, how many of their canvases are on, how many are close enough to show", Overheads));
+	}
+
+	// A left click at a point, as the mouse gives one: down, up and click to what the event system's raycast finds
+	// there first (the handler that takes each event, from the hit object up).
+	private static object ClickAt(ApiRequest request)
+	{
+		UnityEngine.EventSystems.EventSystem events = UnityEngine.EventSystems.EventSystem.current;
+		if (events == null)
+		{
+			throw new ApiException(409, "No event system");
+		}
+		float x = request.Float("x", -1f);
+		float y = request.Float("y", -1f);
+		if (x < 0f || y < 0f)
+		{
+			throw new System.ArgumentException("'x' and 'y' (pixels from the top left) are required");
+		}
+		UnityEngine.EventSystems.PointerEventData data = new UnityEngine.EventSystems.PointerEventData(events)
+		{
+			button = UnityEngine.EventSystems.PointerEventData.InputButton.Left,
+			position = new Vector2(x, Screen.height - y),
+			clickCount = 1
+		};
+		List<UnityEngine.EventSystems.RaycastResult> hits = new List<UnityEngine.EventSystems.RaycastResult>();
+		events.RaycastAll(data, hits);
+		if (hits.Count == 0)
+		{
+			return Obj("clicked", null, "hit", null);
+		}
+		GameObject hit = hits[0].gameObject;
+		data.pointerCurrentRaycast = hits[0];
+		data.pointerPressRaycast = hits[0];
+		data.pressPosition = data.position;
+		GameObject down = UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(hit, data, UnityEngine.EventSystems.ExecuteEvents.pointerDownHandler);
+		GameObject up = UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(hit, data, UnityEngine.EventSystems.ExecuteEvents.pointerUpHandler);
+		GameObject click = UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(hit, data, UnityEngine.EventSystems.ExecuteEvents.pointerClickHandler);
+		return Obj("hit", hit.name, "down", (down != null) ? down.name : null, "up", (up != null) ? up.name : null, "clicked", (click != null) ? click.name : null);
 	}
 
 	private static object Click(ApiRequest request)

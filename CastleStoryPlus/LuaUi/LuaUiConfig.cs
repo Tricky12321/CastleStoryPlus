@@ -80,6 +80,13 @@ internal static class LuaUiConfig
 		get { return Switch("CsGameMenu", "Draw the whole in-game menu (bars, build menus, task popup, task list, settings) in C# and do not load the game's Lua GameMenu at all.", true); }
 	}
 
+	// The world editor's menu (Gamemodes/world_editor/Menu/WorldEditorMenu.lua, GS_WorldEditor) in C#: the Lua file is
+	// not loaded. Off by default while the C# one does not have every tab yet.
+	public static bool CsWorldEditor
+	{
+		get { return Switch("CsWorldEditor", "Draw the world editor's menu in C# and do not load the game's Lua world editor menu (not every tab is done yet)."); }
+	}
+
 	// A small C# copy of GameMenu's right bar, drawn next to the game's own, to check the C# menu kit in a game.
 	public static bool CsSmokeTest
 	{

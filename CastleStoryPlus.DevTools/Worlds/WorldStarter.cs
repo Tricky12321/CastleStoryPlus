@@ -54,6 +54,9 @@ internal class WorldStarter : MonoBehaviour
 	// A save to load instead of a new world (its last played mode and preset).
 	private bool _isSave;
 
+	// The map opened in the world editor instead.
+	private bool _isEditor;
+
 	private float _menuSince = -1f;
 
 	private float _giveUpAt;
@@ -74,9 +77,16 @@ internal class WorldStarter : MonoBehaviour
 		_isSave = true;
 	}
 
+	internal void BeginEditor(Asset_Map map)
+	{
+		Begin(map, BaseMapLibraryMenu.WorldEditorGamemode, null, 0);
+		_isEditor = true;
+	}
+
 	internal void Begin(Asset_Map map, Asset_Gamemode mode, Asset_GamemodePreset preset, int waveMinutes)
 	{
 		_isSave = false;
+		_isEditor = false;
 		_map = map;
 		_mode = mode;
 		_preset = preset;
@@ -150,6 +160,10 @@ internal class WorldStarter : MonoBehaviour
 				return;
 			}
 		}
+		else if (_isEditor)
+		{
+			EditWorld(_map);
+		}
 		else
 		{
 			StartWorld(_map, _mode, _preset, _waveMinutes);
@@ -181,12 +195,13 @@ internal class WorldStarter : MonoBehaviour
 		{
 			_loadedAt = Time.realtimeSinceStartup;
 		}
-		bool player = User.LocalUser != null && User.LocalUser.faction != null;
-		bool menu = !Plugin.IsEnabled(Features.CsMenus) || (LuaUiConfig.CsGameMenu ? CastleStoryPlus.GameUi.CsGameMenu.Model != null : (!LuaUiConfig.AnyGameMenu || GameMenuLink.Menu != null));
+		// The world editor has no bricktrons of the player's and its own menu.
+		bool player = _isEditor || (User.LocalUser != null && User.LocalUser.faction != null);
+		bool menu = !Plugin.IsEnabled(Features.CsMenus) || (_isEditor ? (!LuaUiConfig.CsWorldEditor || CastleStoryPlus.GameUi.CsWorldEditor.IsOpen) : LuaUiConfig.CsGameMenu ? CastleStoryPlus.GameUi.CsGameMenu.Model != null : (!LuaUiConfig.AnyGameMenu || GameMenuLink.Menu != null));
 		if (player && menu)
 		{
 			Phase = null;
-			LastResult = (_isSave ? "loaded " + _map.customName : "started " + _map.displayName) + " (" + _mode.codename + ")";
+			LastResult = (_isSave ? "loaded " + _map.customName : (_isEditor ? "editing " : "started ") + _map.displayName) + " (" + _mode.codename + ")";
 			return;
 		}
 		if (Time.realtimeSinceStartup - _loadedAt > MenuAttachSeconds)
@@ -215,6 +230,19 @@ internal class WorldStarter : MonoBehaviour
 		});
 		DevToolsPlugin.Log.LogInfo("DevTools: loading the save " + save.customName + " (" + mode.codename + ")");
 		return mode;
+	}
+
+	// The world editor library's: the map in the world editor context (its only mode is world_editor, with its
+	// default preset), then BaseMapStarterMenu.OnOk.
+	private static void EditWorld(Asset_Map map)
+	{
+		BaseMapLibraryMenu.SetSelectedMap(map, AssetPlayableContext.Singleplayer, BaseAssetMenu.MenuGameContext.WorldEditor, BaseAssetMenu.MenuTypeContext.New);
+		BaseMapLibraryMenu.SetSelectedAsLoaded();
+		GameParam.StartGame(() =>
+		{
+			BaseMapLibraryMenu.EmptySelected();
+		});
+		DevToolsPlugin.Log.LogInfo("DevTools: opening " + map.displayName + " in the world editor");
 	}
 
 	// The new game screen's own calls: SetSelectedMap picks the map's first mode and its default preset, then the

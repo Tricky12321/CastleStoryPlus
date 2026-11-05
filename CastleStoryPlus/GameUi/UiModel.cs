@@ -194,6 +194,59 @@ internal sealed class UiProgress : UiItem
 	public Func<string> Text;
 }
 
+// A setting that is on or off, as a row: its label and a check box (the world editor's options).
+internal sealed class UiToggle : UiItem
+{
+	public Func<string> Label;
+
+	public Func<bool> Value;
+
+	public Action<bool> Set;
+
+	// Greyed out (and not clickable) when false.
+	public Func<bool> Enabled;
+
+	// The row's width (the world editor's panels are 320 wide).
+	public float Width = 296f;
+}
+
+// A value on a slider: its label and the value as text over the slider (the world editor's time, grid opacity).
+internal sealed class UiSlider : UiItem
+{
+	public Func<string> Label;
+
+	public Func<float> Min;
+
+	public Func<float> Max;
+
+	public Func<float> Value;
+
+	// Told each new value while the handle is dragged.
+	public Action<float> Set;
+
+	// The value as shown (a time as 12:30, a percentage).
+	public Func<float, string> Format;
+
+	public bool WholeNumbers;
+
+	public Func<bool> Enabled;
+
+	public float Width = 296f;
+}
+
+// A picture (a texture, part of it) at a fixed size: the world editor's map preview.
+internal sealed class UiPicture : UiItem
+{
+	public Func<Texture> Texture;
+
+	// The part of the texture shown (x, y, width, height in 0 to 1); null for all of it.
+	public Func<Rect> Uv;
+
+	public float Width = 256f;
+
+	public float Height = 256f;
+}
+
 // How a section lays out its buttons: a grid of squares, or a wide row each (icon, label, detail).
 internal enum UiLayout
 {

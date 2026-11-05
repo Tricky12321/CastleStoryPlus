@@ -551,6 +551,12 @@ internal static class CsItemFactory
 				return CsStatusView.Create(parent, status);
 			case UiChoice choice:
 				return CsChoiceView.Create(parent, choice);
+			case UiToggle toggle:
+				return CsToggleView.Create(parent, toggle);
+			case UiSlider slider:
+				return CsSliderView.Create(parent, slider);
+			case UiPicture picture:
+				return CsPictureView.Create(parent, picture);
 			default:
 				return null;
 		}
