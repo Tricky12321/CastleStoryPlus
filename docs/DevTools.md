@@ -45,6 +45,9 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/ui/rect?q=` | Where a shown menu part is on the screen, by its object's name (a station's window: `CS market`, `CS Research`, ...) |
 | `POST /api/ui/click?text=&index=` | Clicks a shown button of the mod's windows by (part of) its label; `index` picks a match in reading order on the screen |
 | `POST /api/ui/clickat?x=&y=` | Left-clicks the interface at a screen point (pixels from the top left, as screenshots count), as the mouse does: for the C# menus, whose buttons are not uGUI Buttons |
+| `GET /api/ui/menus?q=` | The game's menu components (LegacyBaseMenu) in the loaded scenes, shown or not: path, type, and an enum menu's row, list and action containers |
+| `GET /api/ui/containers?q=&max=` | The game's menu containers whose path holds q, with their items: operation, title, group, instance, and the objects they open or close |
+| `GET /api/ui/tree?q=&depth=&index=` | An object's children (shown or not) with their components, active state, texts and rectangles |
 | `GET /api/net` | Multiplayer: server and client running, connections, the lobby's players (name, host, ready, faction, ping), the map, LAN games heard (`lanGames`) |
 | `POST /api/net/host?port=&name=` | Hosts a multiplayer game from the title screen, as the host button does (the lobby opens and picks an official map) |
 | `POST /api/net/relations?value=allied\|neutral\|enemy` | Host: how the players' factions stand to each other in a game in progress (the game mode's rule); rebuilds who is sent what |

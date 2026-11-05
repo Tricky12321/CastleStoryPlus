@@ -26,6 +26,16 @@ internal class AllSettingsPanel : MonoBehaviour
 
 	private const float ListHeight = 640f;
 
+	// Set while Embed adds a panel, so an Awake run at once (an active parent) does not build a window.
+	private static bool _embedding;
+
+	// Built into another menu (the game's Options): no window of its own, no Escape to close.
+	private bool _embedded;
+
+	private float _width = WindowWidth;
+
+	private float _listHeight = ListHeight;
+
 	private static readonly Color On = new Color(0.45f, 0.85f, 0.4f, 1f);
 
 	private static readonly Color Off = new Color(0.9f, 0.3f, 0.22f, 1f);
@@ -78,11 +88,83 @@ internal class AllSettingsPanel : MonoBehaviour
 		_instance.SetVisible(!_instance._window.activeSelf);
 	}
 
+	// The settings built into a page of another menu, filling the parent; shown while the page is. Built here, not
+	// in Awake: Unity runs Awake only once the object is active, and the page is usually hidden.
+	internal static AllSettingsPanel Embed(RectTransform parent, float width)
+	{
+		GameObject go = new GameObject("CSP all settings", typeof(RectTransform));
+		go.transform.SetParent(parent, false);
+		AllSettingsPanel panel;
+		_embedding = true;
+		try
+		{
+			panel = go.AddComponent<AllSettingsPanel>();
+		}
+		finally
+		{
+			_embedding = false;
+		}
+		panel._embedded = true;
+		panel._width = width;
+		panel._window = go;
+		panel.BuildContent(go.transform);
+		return panel;
+	}
+
 	private void Awake()
 	{
+		if (_embedding || _embedded)
+		{
+			return;
+		}
 		BuildWindow();
 		SetVisible(false);
 	}
+
+	private void OnEnable()
+	{
+		if (_embedded && _window != null)
+		{
+			SetVisible(true);
+			Fit();
+		}
+	}
+
+	private LayoutElement _sectionsSize;
+
+	private LayoutElement _valuesSize;
+
+	// The lists as tall as the page leaves them (header, description and notes under them take about 160).
+	private void Fit()
+	{
+		float height = ((RectTransform)_window.transform).rect.height;
+		if (height <= 0f || _sectionsSize == null)
+		{
+			return;
+		}
+		_listHeight = Mathf.Max(200f, height - 160f);
+		_sectionsSize.minHeight = _sectionsSize.preferredHeight = _listHeight;
+		_valuesSize.minHeight = _valuesSize.preferredHeight = _listHeight;
+		LayoutElement lists = _lists.GetComponent<LayoutElement>();
+		lists.minHeight = lists.preferredHeight = _listHeight;
+	}
+
+	private float _fittedHeight;
+
+	private void LateUpdate()
+	{
+		if (_embedded && _window != null)
+		{
+			float height = ((RectTransform)_window.transform).rect.height;
+			if (Mathf.Abs(height - _fittedHeight) > 1f)
+			{
+				_fittedHeight = height;
+				Fit();
+			}
+		}
+	}
+
+	private Transform _lists;
 
 	private void OnDestroy()
 	{
@@ -115,7 +197,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		{
 			UpdateCapture();
 		}
-		else if (UnityEngine.Input.GetKeyDown(KeyCode.Escape) && !_search.isFocused)
+		else if (!_embedded && UnityEngine.Input.GetKeyDown(KeyCode.Escape) && !_search.isFocused)
 		{
 			SetVisible(false);
 		}
@@ -173,33 +255,63 @@ internal class AllSettingsPanel : MonoBehaviour
 		windowRect.anchorMax = new Vector2(0.5f, 0.5f);
 		windowRect.pivot = new Vector2(0.5f, 0.5f);
 		windowRect.anchoredPosition = Vector2.zero;
+		BuildContent(_window.transform);
+	}
 
-		Transform header = CreateRow(_window.transform, 30f);
+	// The header (title, search, close), the section and value lists, the description and notes.
+	private void BuildContent(Transform root)
+	{
+		if (_embedded)
+		{
+			RectTransform rect = (RectTransform)root;
+			rect.anchorMin = Vector2.zero;
+			rect.anchorMax = Vector2.one;
+			rect.pivot = new Vector2(0.5f, 0.5f);
+			rect.offsetMin = Vector2.zero;
+			rect.offsetMax = Vector2.zero;
+			// A dark plate under the lists, as the game's pages have their own rows: the menu's picture is behind.
+			Image plate = root.gameObject.AddComponent<Image>();
+			plate.color = new Color(0f, 0f, 0f, 0.7f);
+			VerticalLayoutGroup layout = root.gameObject.AddComponent<VerticalLayoutGroup>();
+			layout.padding = new RectOffset(10, 10, 8, 8);
+			layout.spacing = 4f;
+			layout.childControlWidth = true;
+			layout.childControlHeight = true;
+			layout.childForceExpandWidth = true;
+			layout.childForceExpandHeight = false;
+		}
+		Transform header = CreateRow(root, 30f);
 		Text title = CreateText(header, "ALL SETTINGS", 18, Yellow, TextAnchor.MiddleLeft);
 		title.fontStyle = FontStyle.Bold;
 		Flexible(title.gameObject);
 		_search = CreateInputField(header, "Search all settings", 260f);
 		_search.onValueChanged.AddListener((string text) => ShowValues());
-		CreateButton(header, "X", 28f, () => SetVisible(false));
+		if (!_embedded)
+		{
+			CreateButton(header, "X", 28f, () => SetVisible(false));
+		}
 
-		Transform lists = CreateRow(_window.transform, ListHeight);
+		Transform lists = CreateRow(root, _listHeight);
+		_lists = lists;
 		lists.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.UpperLeft;
 		_sections = CreateScrollList(lists, out LayoutElement sectionsSize);
+		_sectionsSize = sectionsSize;
 		sectionsSize.minWidth = 210f;
 		sectionsSize.preferredWidth = 210f;
-		sectionsSize.minHeight = ListHeight;
-		sectionsSize.preferredHeight = ListHeight;
+		sectionsSize.minHeight = _listHeight;
+		sectionsSize.preferredHeight = _listHeight;
 		_values = CreateScrollList(lists, out LayoutElement valuesSize);
+		_valuesSize = valuesSize;
 		valuesSize.flexibleWidth = 1f;
-		valuesSize.minHeight = ListHeight;
-		valuesSize.preferredHeight = ListHeight;
+		valuesSize.minHeight = _listHeight;
+		valuesSize.preferredHeight = _listHeight;
 
-		_description = CreateText(_window.transform, string.Empty, 13, TextColor, TextAnchor.UpperLeft);
+		_description = CreateText(root, string.Empty, 13, TextColor, TextAnchor.UpperLeft);
 		_description.horizontalOverflow = HorizontalWrapMode.Wrap;
-		Fixed(_description.gameObject, WindowWidth - 28f, 54f);
-		_feedback = CreateText(_window.transform, string.Empty, 12, Yellow, TextAnchor.UpperLeft);
+		Fixed(_description.gameObject, _width - 28f, 54f);
+		_feedback = CreateText(root, string.Empty, 12, Yellow, TextAnchor.UpperLeft);
 		_feedback.horizontalOverflow = HorizontalWrapMode.Wrap;
-		Text note = CreateText(_window.transform, "Saved at once to BepInEx/config/com.tricky12321.castlestoryplus.cfg. Feature switches, and some values read when the game starts, apply after a restart.", 12, Grey, TextAnchor.UpperLeft);
+		Text note = CreateText(root, "Saved at once to BepInEx/config/com.tricky12321.castlestoryplus.cfg. Feature switches, and some values read when the game starts, apply after a restart.", 12, Grey, TextAnchor.UpperLeft);
 		note.horizontalOverflow = HorizontalWrapMode.Wrap;
 	}
 

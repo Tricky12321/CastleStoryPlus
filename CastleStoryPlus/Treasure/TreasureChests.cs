@@ -50,7 +50,18 @@ internal class TreasureChests : MonoBehaviour
 		public bool Made = true;
 
 		public GameObject Go;
+
+		// When a bricktron of this player last came to it while it was guarded (Time.unscaledTime).
+		public float HintedAt = -100f;
 	}
+
+	// Seconds between two "defeat the guardians" hints for one chest.
+	private const float HintSeconds = 15f;
+
+	// Host to every peer: the bricktron (its network id) that came to a guarded chest; its player's peer shows the hint.
+	private const short HintMessage = 204;
+
+	private const string HintText = "Defeat the animals guarding this chest first";
 
 	internal const string GuardRaidName = "Treasure guards";
 
@@ -124,6 +135,16 @@ internal class TreasureChests : MonoBehaviour
 
 	private static void LevelReady()
 	{
+		// Every peer (the host too, through its own client) takes the "defeat the guardians" hints.
+		NetworkClient client = Brix.Network.UNetManager.instance?.LocalNetworkClient;
+		if (client != null)
+		{
+			if (client.handlers.ContainsKey(HintMessage))
+			{
+				client.UnregisterHandler(HintMessage);
+			}
+			client.RegisterHandler(HintMessage, HintReceived);
+		}
 		Chests.Clear();
 		_active = false;
 		Asset_Map map = GameParam.Map;
@@ -564,6 +585,7 @@ internal class TreasureChests : MonoBehaviour
 			Vector3 at = chest.Go.transform.position;
 			if (Guarded(at))
 			{
+				HintGuarded(chest, at);
 				continue;
 			}
 			Labor opener = Opener(at);
@@ -571,6 +593,43 @@ internal class TreasureChests : MonoBehaviour
 			{
 				Open(chest, opener);
 			}
+		}
+	}
+
+	// A bricktron of this player came to a chest its guardians still guard: say why it does not open.
+	private static void HintGuarded(Chest chest, Vector3 at)
+	{
+		if (Time.unscaledTime - chest.HintedAt < HintSeconds)
+		{
+			return;
+		}
+		Labor opener = Opener(at);
+		NetworkIdentity identity = (opener != null) ? opener.GetComponent<NetworkIdentity>() : null;
+		if (identity == null)
+		{
+			return;
+		}
+		chest.HintedAt = Time.unscaledTime;
+		NetworkServer.SendToAll(HintMessage, new UnityEngine.Networking.NetworkSystem.IntegerMessage((int)identity.netId.Value));
+	}
+
+	// The hint on the peer whose bricktron came to the chest.
+	private static void HintReceived(NetworkMessage message)
+	{
+		try
+		{
+			uint id = (uint)message.ReadMessage<UnityEngine.Networking.NetworkSystem.IntegerMessage>().value;
+			GameObject go = ClientScene.FindLocalObject(new NetworkInstanceId(id));
+			Labor labor = (go != null) ? go.GetComponent<Labor>() : null;
+			Faction local = (User.LocalUser != null) ? User.LocalUser.faction : null;
+			if (labor != null && local != null && labor.faction == local)
+			{
+				GameSignals.Invoke(GameSignals.OnAutoFadeDialog, HintText, 3f);
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("Treasure: hint: " + ex.Message);
 		}
 	}
 

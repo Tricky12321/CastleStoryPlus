@@ -12,11 +12,12 @@ namespace CastleStoryPlus.GameUi;
 
 // The blueprint library (GameMenu.lua's blueprintsMenu): a sidebar beside the left bar with the name of the
 // blueprints selected in the world and a save button (a thumbnail is taken first), the saved blueprints' load,
-// publish to the Workshop and delete, and the list of saved blueprints (up to 16) with their thumbnails. All of it
+// publish to the Workshop and delete, and the list of saved blueprints (up to MaxCompounds) with their thumbnails. All of it
 // goes straight to the game's BlueprintCompounder, as the Lua's BlueprintSelection calls did.
 internal static class GameBlueprintLibrary
 {
-	private const int MaxCompounds = 16;
+	// The game itself has no limit; its Lua menu had 16 slots. The sidebar scrolls.
+	private const int MaxCompounds = 100;
 
 	private static readonly List<string> Compounds = new List<string>();
 

@@ -678,5 +678,15 @@ internal static class GamePopupBuilder
 				}
 			}
 		});
+		// A new bricktron whenever the crystal has the energy for one (Workers.AutoSpawn).
+		actions.Add(new UiToggle
+		{
+			Id = "idleTaskActionsAutoSpawn",
+			Label = () => "Auto spawn bricktrons",
+			Value = () => CastleStoryPlus.Workers.AutoSpawn.On,
+			Set = (bool on) => CastleStoryPlus.Workers.AutoSpawn.On = on,
+			// The popup is 320 wide with 10 of padding each side.
+			Width = 300f
+		});
 	}
 }

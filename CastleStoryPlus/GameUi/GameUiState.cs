@@ -234,10 +234,29 @@ internal static class GameUiState
 		get { return (UIGameObserver.projects != null && UIGameObserver.projects.all != null) ? UIGameObserver.projects.all.Count : 0; }
 	}
 
-	// The game's localized text for a ##key (GetLocalized).
+	// English for the keys the game's own menus use but its localization lacks (it showed the key itself).
+	private static readonly System.Collections.Generic.Dictionary<string, string> Missing = new System.Collections.Generic.Dictionary<string, string>
+	{
+		{ "##task_actions_priority_raise", "Raise priority" },
+		{ "##task_actions_priority_lower", "Lower priority" }
+	};
+
+	// The game's localized text for a ##key (GetLocalized). A key the localization lacks gets the English above, or
+	// its last words ("##task_actions_priority_raise": "Priority raise") instead of the key itself.
 	internal static string Text(string key)
 	{
-		return I2Helper.TryGet(key);
+		string text = I2Helper.TryGet(key);
+		if (string.IsNullOrEmpty(key) || !key.StartsWith("##") || (!string.IsNullOrEmpty(text) && !text.StartsWith("##")))
+		{
+			return text;
+		}
+		if (Missing.TryGetValue(key, out string english))
+		{
+			return english;
+		}
+		string[] words = key.Substring(2).Split('_');
+		string tail = (words.Length >= 2) ? words[words.Length - 2] + " " + words[words.Length - 1] : words[words.Length - 1];
+		return (tail.Length > 0) ? char.ToUpper(tail[0]) + tail.Substring(1) : text;
 	}
 
 	internal static Sprite Icon(IconKey key)

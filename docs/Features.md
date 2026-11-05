@@ -38,6 +38,7 @@ Workers find, share and finish their work on their own.
 | The pick up order on a loose item: each selected bricktron takes an item of that kind no other one is after (not all the same one), then picks up more of that kind lying round it until its hands are full. | `PickUpAround` |
 | Idle workers pick up loose items near the base and store them, no cleanup zone needed; items on top of a building are taken from its foot. The range is the home crystal's blue ring. With the base's "Auto cleanup" task they leave the items inside its zone to its crew and still take the ones outside it. | `AutoCleanup` |
 | Idle builders repair damaged blocks near the base, no repair zone needed. The range is the home crystal's green ring. | `AutoRepair` |
+| Auto spawn bricktrons: a switch in the home crystal's popup makes a new bricktron whenever the crystal has the energy for one and the team is under its limit (`[Crystal] AutoSpawn`, per player). | always on |
 
 The ranges of `AutoCleanup` and `AutoRepair` are set on the home crystal's task; "Show ranges" / "Hide ranges" on the crystal's context wheel shows or hides the rings.
 
