@@ -7,6 +7,7 @@ using Brix.Game.AI.InstructionType;
 using Brix.Game.AI.Nodes;
 using Brix.Game.AI.Pathfinding;
 using Brix.Game.Components;
+using Brix.Game.Components.Tracking;
 using Brix.Game.Locomotion;
 using Brix.Pathfinding;
 using Brix.Pathfinding.Test;
@@ -30,6 +31,8 @@ namespace CastleStoryPlus.Combat;
 // when the fighter is no longer where it was sent (moved by the player or a task). The aiming test is the one used
 // before every shot, run as if the fighter stood on each place (it is moved there and back within the test; nothing
 // sees it move). At most MaxTests places per search; a search that finds nothing is not repeated for RetrySeconds.
+// It never moves while another enemy in range can be shot from where it stands, nor for an enemy further off than
+// half its aggro range (a creature far behind the rock at the start of a wave sent archers off the wall).
 // Host only, like the game's own combat decisions.
 [Feature(Features.RangedReposition, Features.RangedRepositionInfo)]
 internal static class RangedReposition
@@ -42,7 +45,7 @@ internal static class RangedReposition
 
 	private const int MaxTests = 60;
 
-	private const float RetrySeconds = 2f;
+	private const float RetrySeconds = 5f;
 
 	private sealed class Place
 	{
@@ -109,16 +112,23 @@ internal static class RangedReposition
 	}
 
 	// Where the fighter's moves are kept round: where it stood before this first moved it. A fighter that is no longer
-	// on the place it was sent to (moved by the player or a task) gets a new anchor where it stands.
+	// on the place it was sent to (moved by the player or a task) gets a new anchor where it stands, unless it is
+	// still within MaxDistance of the anchor: a fighter nudged off its place while shooting re-anchored there and
+	// drifted a further 8 blocks each time, step by step towards the enemy.
 	private static Vector3 AnchorOf(Labor labor)
 	{
 		Vector3 at = labor.transform.position;
-		if (Anchors.TryGetValue(labor, out Anchor anchor) && (at - anchor.Sent).sqrMagnitude <= 2.25f)
+		if (Anchors.TryGetValue(labor, out Anchor anchor) && ((at - anchor.Sent).sqrMagnitude <= 2.25f || Flat(at - anchor.Home).sqrMagnitude <= MaxDistance.Value * MaxDistance.Value))
 		{
 			return anchor.Home;
 		}
 		Anchors.Remove(labor);
 		return at;
+	}
+
+	internal static Vector3 Flat(Vector3 v)
+	{
+		return new Vector3(v.x, 0f, v.z);
 	}
 
 	// The places round the anchor to try, nearest walk first: walked out from the anchor's place along the route graph's
@@ -290,7 +300,26 @@ internal static class RangedRepositionPatch
 			return true;
 		}
 		Location target = Location.Of(enemy);
-		if (profession.CanFireAt(target) || !RangedReposition.TryPlan(___labor, enemy))
+		if (profession.CanFireAt(target))
+		{
+			return true;
+		}
+		// The instinct names the nearest enemy, often a creature far off behind the rock while the wave is in range: an
+		// enemy it can shoot from where it stands comes first, and it stays put.
+		EnemyTracker tracker = ___labor.enemyTracker;
+		IGameComponent shootable = (tracker != null) ? tracker.GetClosestEnemy(___labor.GetAggroDistance(false), (IGameComponent c, Profession p) => c != null && p.CanFireAt(Location.Of(c.GameObject)), profession, TrackingLayer.Character) : null;
+		if (shootable != null)
+		{
+			__result = Order.Package.OfGameObject(Order.Combat.HoldPositionAndAttackWithPriority, shootable.GameObject, Labor.DecisionSource.Character);
+			return false;
+		}
+		// Only an enemy that has come close is worth leaving its place for; one far off is waited for.
+		float near = ___labor.GetAggroDistance(false) / 2f;
+		if (RangedReposition.Flat(enemy.transform.position - ___labor.transform.position).sqrMagnitude > near * near)
+		{
+			return true;
+		}
+		if (!RangedReposition.TryPlan(___labor, enemy))
 		{
 			return true;
 		}

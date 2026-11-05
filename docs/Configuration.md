@@ -9,7 +9,7 @@ The first start creates `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Ed
 | `[Saving] AutosaveMinutes` | `2` | minutes of play between autosaves, `0` = off |
 | `[Building] MoveStructureKey`, `CopyKey`, `PasteKey` | M, Ctrl+C, Ctrl+V | keys for moving buildings and copy/paste |
 | `[Debug] DebugMode` | off | opens the debug windows (F7, F8, F9) |
-| `[Debug] XRayKey` | X | turns the semi x-ray on and off, also without debug mode |
+| `[Debug] XRayKey` | F6 | turns the semi x-ray on and off, also without debug mode |
 
 **Debug mode** can be switched in the settings window or with the **Enable debug mode** checkbox in the game's Options > Gameplay (title screen and in game); it applies at once. The X-ray key does not work while placing blocks (X places a block by its next cell there), in a menu or while typing.
 

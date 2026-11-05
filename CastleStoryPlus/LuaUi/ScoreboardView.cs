@@ -70,11 +70,14 @@ if CastleStoryPlus_ScoreboardState == nil then
 			local counts = {}
 			local raids = fy_RaidProject:GetAllOfFaction(Faction.defaultEnemy)
 			for r = 1, #raids do
+				-- The wave number is kept on the raid (saved and sent to clients); a unit's own is lost on load and
+				-- never reaches clients. Raids of no wave (0: the treasure chests' guards) are not counted.
 				local crew = {}
-				if not CastleStoryPlus.IsGuardRaid(raids[r]) then crew = Project.GetCrew(raids[r]) end
+				local raidWave = raids[r].waveNumber or 0
+				if raidWave > 0 and not CastleStoryPlus.IsGuardRaid(raids[r]) then crew = Project.GetCrew(raids[r]) end
 				for c = 1, #crew do
 					local labor = crew[c]
-					local wave = labor.waveNumber or ((Registry.waveNumber or 1) - 1)
+					local wave = labor.waveNumber or raidWave
 					local t = counts[wave]
 					if t == nil then t = { 0, 0, 0, 0 } counts[wave] = t end
 					local oc = labor:GetOccupation()
