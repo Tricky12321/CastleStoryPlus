@@ -305,7 +305,7 @@ internal static class Features
 
 	public const string GlobalBuildJob = "GlobalBuildJob";
 
-	public const string GlobalBuildJobInfo = "One build task per team: every placed blueprint goes into it, other build tasks are merged into it, and placing with the idle group or the repair task selected no longer fails.";
+	public const string GlobalBuildJobInfo = "Placing with the idle group or the repair task selected no longer fails, and a new build task no longer takes over the others. With [Building] CombineBuildTasks (in-game: Settings > Build tasks) every blueprint goes into one build task per team and other build tasks are merged into it.";
 
 	public const string BlockAnchor = "BlockAnchor";
 

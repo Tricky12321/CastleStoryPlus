@@ -38,9 +38,43 @@ internal class UpdateCheck : MonoBehaviour
 
 	private static string InstallerName => IsWindows ? "install.ps1" : "install.sh";
 
+	private static UpdateCheck _instance;
+
+	// [Updates] SkippedVersion: the release the player chose "Don't show again" for; the title screen does not offer it
+	// again (a newer one is offered). The in-game settings still have the update button.
+	private static BepInEx.Configuration.ConfigEntry<string> _skipped;
+
 	private static void Enable()
 	{
-		Plugin.Root.AddComponent<UpdateCheck>();
+		_skipped = Plugin.Cfg.Bind("Updates", "SkippedVersion", string.Empty, "The release the title screen's update notice is not shown for (\"Don't show again\"). Empty: every new release is offered.");
+		_instance = Plugin.Root.AddComponent<UpdateCheck>();
+		// In a game too: the settings sidebar offers the update once one is found. The game is saved first.
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) => menu.Settings.Find("settings").Add(new GameUi.UiButton
+		{
+			Id = "update",
+			Visible = () => _instance != null && _instance._latest != null,
+			Label = () => "Update to " + _instance._latest,
+			Tooltip = () => "Castle Story Plus " + _instance._latest + " is available (you have v" + Plugin.Version + "). Saves the game, closes it, installs the update and starts the game again.",
+			Icon = () => GameUi.GameUiState.Icon(Brix.UI.Icons.IconKeys.UI_Down),
+			Enabled = () => !_instance._updating,
+			OnClick = (bool shift, bool ctrl) => _instance.UpdateNow()
+		}));
+	}
+
+	// The settings sidebar's update button: a game being played is saved first (as "save and quit" does).
+	private void UpdateNow()
+	{
+		if (_updating || _latest == null)
+		{
+			return;
+		}
+		if (Brix.Engine.Architecte.instance != null && GameParam.Map != null && !Menus.QuitDialogPatch.SaveBeforeLeaving())
+		{
+			Plugin.Log.LogWarning("Update: the game could not be saved; not updating");
+			return;
+		}
+		_updating = true;
+		StartCoroutine(RunUpdate());
 	}
 
 	// The original game's folder, which the installer installs into: in the Unity 6 port, the folder that holds the
@@ -62,9 +96,77 @@ internal class UpdateCheck : MonoBehaviour
 		}
 	}
 
+	// For the mod settings' UPDATES section.
+	internal static string Latest
+	{
+		get { return (_instance != null) ? _instance._latest : null; }
+	}
+
+	internal static string Status
+	{
+		get { return (_instance != null) ? _instance._status : "off"; }
+	}
+
+	internal static bool Busy
+	{
+		get { return _instance != null && (_instance._checking || _instance._updating); }
+	}
+
+	internal static string Skipped
+	{
+		get { return (_skipped != null) ? _skipped.Value : string.Empty; }
+		set
+		{
+			if (_skipped != null)
+			{
+				_skipped.Value = value ?? string.Empty;
+			}
+		}
+	}
+
+	internal static void CheckNow()
+	{
+		if (_instance != null && !_instance._checking)
+		{
+			_instance.StartCoroutine(_instance.Check());
+		}
+	}
+
+	internal static void Install()
+	{
+		_instance?.UpdateNow();
+	}
+
+	private string _status = "not checked yet";
+
+	private bool _checking;
+
 	private IEnumerator Start()
 	{
 		SceneManager.sceneLoaded += (Scene scene, LoadSceneMode mode) => ShowIfMenu();
+		yield return Check();
+	}
+
+	private IEnumerator Check()
+	{
+		_checking = true;
+		_status = "checking...";
+		try
+		{
+			IEnumerator inner = CheckReleases();
+			while (inner.MoveNext())
+			{
+				yield return inner.Current;
+			}
+		}
+		finally
+		{
+			_checking = false;
+		}
+	}
+
+	private IEnumerator CheckReleases()
+	{
 		WWW www = new WWW("https://api.github.com/repos/" + Repo + "/releases?per_page=30", null, GitHubHeaders());
 		yield return www;
 		// WWW holds native buffers until disposed.
@@ -74,6 +176,7 @@ internal class UpdateCheck : MonoBehaviour
 		if (!string.IsNullOrEmpty(error))
 		{
 			Plugin.Log.LogInfo("Update check failed: " + error);
+			_status = "could not check (" + error + ")";
 			yield break;
 		}
 		string best = null;
@@ -103,13 +206,16 @@ internal class UpdateCheck : MonoBehaviour
 		catch (Exception ex)
 		{
 			Plugin.Log.LogInfo("Update check failed: " + ex.Message);
+			_status = "could not check (" + ex.Message + ")";
 			yield break;
 		}
 		if (best == null || !IsNewer(best, Plugin.Version))
 		{
 			Plugin.Log.LogInfo("Castle Story Plus is up to date (installed v" + Plugin.Version + ", newest release " + (best ?? "none") + ")");
+			_status = "up to date (checked " + DateTime.Now.ToString("HH:mm") + ")";
 			yield break;
 		}
+		_status = best + " is available";
 		Plugin.Log.LogInfo("Castle Story Plus " + best + " is available (installed v" + Plugin.Version + ")");
 		_latest = best;
 		// The installer as it is in that tag's source, so installer fixes already apply to this update.
@@ -149,7 +255,7 @@ internal class UpdateCheck : MonoBehaviour
 
 	private void ShowIfMenu()
 	{
-		if (_latest == null || _dismissed || _notice != null || SceneManager.GetActiveScene().name != MenuScene)
+		if (_latest == null || _dismissed || _notice != null || SceneManager.GetActiveScene().name != MenuScene || (_skipped != null && _skipped.Value == _latest))
 		{
 			return;
 		}
@@ -184,7 +290,7 @@ internal class UpdateCheck : MonoBehaviour
 		Text body = NewText(panel, font, "You have v" + Plugin.Version + ". The update closes the game, installs and starts it again.", 15, FontStyle.Normal, new Color(0.85f, 0.85f, 0.85f));
 		Place(body.rectTransform, 16f, -44f, 408f, 40f);
 
-		NewButton(panel, font, "Update and restart", new Color(0.85f, 0.6f, 0.05f), 16f, 200f, () =>
+		NewButton(panel, font, "Update and restart", new Color(0.85f, 0.6f, 0.05f), 16f, 170f, () =>
 		{
 			if (!_updating)
 			{
@@ -193,8 +299,17 @@ internal class UpdateCheck : MonoBehaviour
 				StartCoroutine(RunUpdate());
 			}
 		});
-		NewButton(panel, font, "Later", new Color(0.3f, 0.3f, 0.33f), 228f, 120f, () =>
+		NewButton(panel, font, "Later", new Color(0.3f, 0.3f, 0.33f), 194f, 80f, () =>
 		{
+			_dismissed = true;
+			Destroy(_notice);
+		});
+		NewButton(panel, font, "Don't show again", new Color(0.3f, 0.3f, 0.33f), 282f, 142f, () =>
+		{
+			if (_skipped != null)
+			{
+				_skipped.Value = _latest;
+			}
 			_dismissed = true;
 			Destroy(_notice);
 		});
@@ -264,7 +379,8 @@ internal class UpdateCheck : MonoBehaviour
 			yield break;
 		}
 		Plugin.Log.LogInfo("Updating to " + _latest + " with " + installer + "; closing the game");
-		Application.Quit();
+		// As the game's own quit: a save still being written finishes first.
+		Brix.Utils.ApplicationQuitter.Quit();
 	}
 
 	private static string Quote(string value)

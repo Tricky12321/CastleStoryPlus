@@ -17,7 +17,7 @@ public static class DataConverter
 	public const string GraphicsName = "graphics.txt";
 
 	// engineTypes: the player's engine-types.assets, for converting the shaders to the player's format.
-	public static void ConvertAll(string classPackage, string dataDir, string outDir, Action<string> log, string engineTypes = null)
+	public static void ConvertAll(string classPackage, string dataDir, string outDir, Action<string> log, string engineTypes = null, string managedDir = null)
 	{
 		Directory.CreateDirectory(outDir);
 		// A fresh conversion: bundles of an earlier one (perhaps of another layout) must not linger.
@@ -25,7 +25,7 @@ public static class DataConverter
 		{
 			File.Delete(old);
 		}
-		using (var converter = new BundleConverter(classPackage, dataDir, engineTypes))
+		using (var converter = new BundleConverter(classPackage, dataDir, engineTypes, managedDir))
 		{
 			IList<string> scenes = converter.ReadScenes();
 			var resources = converter.ReadResources();

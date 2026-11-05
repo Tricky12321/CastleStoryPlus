@@ -26,18 +26,49 @@ public sealed class Installer
 	public Action<string> Log = _ => { };
 	public Action<string, float> Progress = (_, _) => { };
 
+	// Game files changed by a mod whose originals were kept (GameFiles.Verify): relative path, original's path.
+	private readonly Dictionary<string, string> _originals = new Dictionary<string, string>();
+
 	public void Run()
 	{
 		Progress("Checking game files", 0f);
-		List<string> problems = GameFiles.Verify(GameDataDir, Manifest, (done, total) => Progress("Checking game files", 0.3f * done / Math.Max(1, total)));
+		List<string> problems = GameFiles.Verify(GameDataDir, Manifest, (done, total) => Progress("Checking game files", 0.3f * done / Math.Max(1, total)), _originals);
 		if (problems.Count > 0)
 		{
 			throw new GameFilesException(problems);
 		}
+		foreach (KeyValuePair<string, string> original in _originals)
+		{
+			Log("using the original " + original.Key + " kept in " + GameFiles.OriginalsFolder + " (the game's copy was changed by a mod)");
+		}
 		Log("game files match the manifest");
+		string gameManaged = Path.Combine(GameDataDir, "Managed");
+		string clean = (_originals.Count > 0) ? CleanManaged(gameManaged) : null;
+		try
+		{
+			Install(clean ?? gameManaged);
+		}
+		finally
+		{
+			if (clean != null)
+			{
+				try
+				{
+					Directory.Delete(clean, true);
+				}
+				catch (Exception e)
+				{
+					// Still open (the converter's assembly reader): left for the next install to replace.
+					Log("could not remove " + clean + ": " + e.Message);
+				}
+			}
+		}
+	}
 
+	private void Install(string gameManaged)
+	{
 		Progress("Patching game code", 0.3f);
-		InstallCode();
+		InstallCode(gameManaged);
 		Progress("Copying game settings", 0.38f);
 		GameSettings.Copy(ClassPackage, GameDataDir, PlayerDataDir, Log);
 		Progress("Copying plugins", 0.4f);
@@ -45,7 +76,7 @@ public sealed class Installer
 		Progress("Copying game data", 0.45f);
 		CopyTree(Path.Combine(GameDataDir, "StreamingAssets"), Path.Combine(PlayerDataDir, "StreamingAssets"));
 		Progress("Converting game content", 0.7f);
-		DataConverter.ConvertAll(ClassPackage, GameDataDir, ContentDir, Log, Path.Combine(PlayerDataDir, GameSettings.TypesName));
+		DataConverter.ConvertAll(ClassPackage, GameDataDir, ContentDir, Log, Path.Combine(PlayerDataDir, GameSettings.TypesName), gameManaged);
 		// The game reads and writes Info/ (game data, saves, settings) relative to its folder; the port runs there too,
 		// so both share one Info.
 		File.WriteAllText(Path.Combine(ContentDir, GameRootName), Path.GetFullPath(Path.Combine(GameDataDir, "..")));
@@ -162,9 +193,29 @@ public sealed class Installer
 		}
 	}
 
-	private void InstallCode()
+	// A copy of the game's Managed folder with the kept originals in place of the files a mod changed, so the port
+	// is made from (and its references resolve to) the game's own code. Never inside the game's folder.
+	private string CleanManaged(string gameManaged)
 	{
-		string gameManaged = Path.Combine(GameDataDir, "Managed");
+		string clean = Path.Combine(ContentDir, "managed-original");
+		if (Directory.Exists(clean))
+		{
+			Directory.Delete(clean, true);
+		}
+		Directory.CreateDirectory(clean);
+		foreach (string file in Directory.GetFiles(gameManaged, "*.dll"))
+		{
+			File.Copy(file, Path.Combine(clean, Path.GetFileName(file)));
+		}
+		foreach (KeyValuePair<string, string> original in _originals)
+		{
+			File.Copy(original.Value, Path.Combine(clean, original.Key.Substring("Managed/".Length).Replace('/', Path.DirectorySeparatorChar)), true);
+		}
+		return clean;
+	}
+
+	private void InstallCode(string gameManaged)
+	{
 		string playerManaged = Path.Combine(PlayerDataDir, "Managed");
 		DeleteOld(playerManaged);
 		DeleteOld(PlayerDataDir);
