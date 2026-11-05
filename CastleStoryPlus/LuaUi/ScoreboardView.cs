@@ -152,6 +152,8 @@ end
 
 	private bool _gems;
 
+	private bool _tutorial;
+
 	private Text _gemTimer;
 
 	private readonly List<Text> _gemScores = new List<Text>();
@@ -302,11 +304,22 @@ end
 		_current._invasion = invasion;
 		_current._modeKey = modeKey;
 		_current._gems = gems;
+		// The sandbox tutorial (LTD.lua) was connected by SandboxMenu.lua, which is not loaded with this view.
+		_current._tutorial = mode == "sandbox" && GameUi.GameTutorial.Connect(script);
 		_current.Build();
 		script.OnScriptKilled += OnScriptKilled;
 		RectTransform rect = parent as RectTransform;
 		Plugin.Log.LogInfo("CsMenus: scoreboard (" + mode + ") drawn in C#" + ((rect != null) ? (", under " + parent.name + " " + rect.rect.size + " anchors " + rect.anchorMin + "-" + rect.anchorMax) : string.Empty));
 		return true;
+	}
+
+	private void OnDestroy()
+	{
+		if (_tutorial)
+		{
+			_tutorial = false;
+			GameUi.GameTutorial.Disconnect(_script);
+		}
 	}
 
 	private static void OnScriptKilled(Script script)

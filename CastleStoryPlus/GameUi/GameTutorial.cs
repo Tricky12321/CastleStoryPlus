@@ -24,4 +24,37 @@ internal static class GameTutorial
 		LuaInjection.AddPatch(Features.CsMenus, File, "local OnClose =\n\tfunction()\n", LuaInjection.Mode.InsertAfter,
 			"\t\tif DisconnectLTD and _menu.ltdConnected then _menu.ltdConnected = false DisconnectLTD() end\n");
 	}
+
+	// With the C# gamemode panel (CsScoreboard) SandboxMenu.lua is not loaded: the panel loads and connects the
+	// tutorial in the sandbox script itself while it is shown. Whether it was connected.
+	internal static bool Connect(MoonSharp.Interpreter.Script script)
+	{
+		if (!LuaUiConfig.CsGameMenu || script == null)
+		{
+			return false;
+		}
+		return Run(script, "require(\"LTD.lua\") if ConnectLTD and not CastleStoryPlus_LtdConnected then CastleStoryPlus_LtdConnected = true ConnectLTD() end");
+	}
+
+	internal static void Disconnect(MoonSharp.Interpreter.Script script)
+	{
+		if (script != null)
+		{
+			Run(script, "if DisconnectLTD and CastleStoryPlus_LtdConnected then CastleStoryPlus_LtdConnected = false DisconnectLTD() end");
+		}
+	}
+
+	private static bool Run(MoonSharp.Interpreter.Script script, string code)
+	{
+		try
+		{
+			script.DoString(code);
+			return true;
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogWarning("GameTutorial: " + ex.Message);
+			return false;
+		}
+	}
 }
