@@ -20,7 +20,7 @@ namespace CastleStoryPlus.UI;
 
 // "Castle Story Plus settings" window, opened from the in-game Settings menu. Every value is a BepInEx
 // config entry, so a change here is written to BepInEx/config/com.tricky12321.castlestoryplus.cfg at once.
-// Autosave, firefly energy, giant bricktron values, debug mode and keys apply immediately; feature switches apply after a restart.
+// Autosave, firefly energy, giant bricktron values, debug mode, keys and feature switches (FeatureToggle) apply immediately.
 [Feature]
 internal class ModSettingsPanel : MonoBehaviour
 {

@@ -311,7 +311,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		Fixed(_description.gameObject, _width - 28f, 54f);
 		_feedback = CreateText(root, string.Empty, 12, Yellow, TextAnchor.UpperLeft);
 		_feedback.horizontalOverflow = HorizontalWrapMode.Wrap;
-		Text note = CreateText(root, "Saved at once to BepInEx/config/com.tricky12321.castlestoryplus.cfg. Feature switches, and some values read when the game starts, apply after a restart.", 12, Grey, TextAnchor.UpperLeft);
+		Text note = CreateText(root, "Saved at once to BepInEx/config/com.tricky12321.castlestoryplus.cfg and used at once. A few values read when the game starts (graphics, menus) apply after a restart.", 12, Grey, TextAnchor.UpperLeft);
 		note.horizontalOverflow = HorizontalWrapMode.Wrap;
 	}
 
@@ -402,7 +402,15 @@ internal class AllSettingsPanel : MonoBehaviour
 
 	private void Changed(Setting setting)
 	{
-		_feedback.text = (setting.Orphan || setting.Definition.Section == "Features") ? setting.Definition.Key + " applies after a restart." : string.Empty;
+		_feedback.text = setting.Orphan ? setting.Definition.Key + " applies when its feature is switched on." : string.Empty;
+		if (setting.Definition.Section == "Features")
+		{
+			// The feature switched at once (FeatureToggle): its values are bound now, or left as text.
+			_feedback.text = setting.Definition.Key + " switched " + (((bool)setting.Entry.BoxedValue) ? "on" : "off") + ".";
+			FillSections();
+			ShowValues();
+			return;
+		}
 		Refresh();
 	}
 
@@ -436,7 +444,14 @@ internal class AllSettingsPanel : MonoBehaviour
 			{
 				Text sub = CreateText(names, line, 10, GameTextSoft, TextAnchor.MiddleLeft);
 				sub.font = CastleStoryPlus.LuaUi.LuiStyle.Regular;
-				sub.horizontalOverflow = HorizontalWrapMode.Overflow;
+				// One line, cut at the editor: wrapped, and only one line high.
+				sub.horizontalOverflow = HorizontalWrapMode.Wrap;
+				sub.verticalOverflow = VerticalWrapMode.Truncate;
+				LayoutElement subSize = sub.gameObject.GetComponent<LayoutElement>() ?? sub.gameObject.AddComponent<LayoutElement>();
+				subSize.preferredHeight = 12f;
+				subSize.minHeight = 12f;
+				subSize.minWidth = 0f;
+				subSize.preferredWidth = 0f;
 			}
 		}
 		else
@@ -572,7 +587,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		string head = "[" + setting.Definition.Section + "] " + setting.Definition.Key;
 		if (setting.Orphan)
 		{
-			return head + ": its feature is off in this session, so the mod has not read it; the value is kept as text and applies when the feature runs (after a restart).";
+			return head + ": its feature is off in this session, so the mod has not read it; the value is kept as text and applies when the feature is switched on.";
 		}
 		ConfigEntryBase entry = setting.Entry;
 		string text = head + " (default " + TomlTypeConverter.ConvertToString(entry.DefaultValue, entry.SettingType) + ")";
