@@ -64,6 +64,12 @@ internal static class RefreshRateSetting
 		return System.Math.Abs(a.value - b.value) < 0.5;
 	}
 
+	// A Wayland desktop: a program cannot switch the screen's mode, so the list holds only the rate the desktop set.
+	internal static bool Wayland
+	{
+		get { return Application.platform == RuntimePlatform.LinuxPlayer && !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")); }
+	}
+
 	internal static string Label(RefreshRate rate)
 	{
 		double rounded = System.Math.Round(rate.value);
@@ -201,6 +207,19 @@ internal static class RefreshRateSetting
 // list window), with its own operation and title.
 internal static class RefreshRateRow
 {
+	internal static void Below(Transform row, Transform resolution)
+	{
+		if (row.parent != resolution.parent)
+		{
+			return;
+		}
+		int at = resolution.GetSiblingIndex() + ((row.GetSiblingIndex() > resolution.GetSiblingIndex()) ? 1 : 0);
+		if (row.GetSiblingIndex() != at)
+		{
+			row.SetSiblingIndex(at);
+		}
+	}
+
 	internal static void Ensure(Container container)
 	{
 		Container.Item source = container.GetItem(LegacyBaseMenu.Operation.Resolution);
@@ -211,6 +230,8 @@ internal static class RefreshRateRow
 		Container.Item item = container.GetItem(RefreshRateSetting.Operation);
 		if (item != null && item.instance != null)
 		{
+			// The page builds its rows again when shown (and puts ours last): back under the resolution row.
+			Below(item.instance.transform, source.instance.transform);
 			return;
 		}
 		if (item == null)
@@ -223,7 +244,7 @@ internal static class RefreshRateRow
 			item.containerPopulatorOperation = RefreshRateSetting.Operation;
 			item.titleText = RefreshRateSetting.Title;
 			item.localizeTitle = RefreshRateSetting.Title;
-			item.subtitleText = "&&Set your screen's refresh rate (full screen)";
+			item.subtitleText = RefreshRateSetting.Wayland ? "&&Wayland: your desktop sets the rate, only its own is listed" : "&&Set your screen's refresh rate (full screen)";
 			item.localizeSubtitle = item.subtitleText;
 			item.subsubtitleText = string.Empty;
 			item.isDefaultInGroup = false;
@@ -233,7 +254,8 @@ internal static class RefreshRateRow
 		GameObject go = Object.Instantiate(source.instance.gameObject, source.instance.transform.parent, false);
 		go.name = "CSP_RefreshRateOption";
 		go.hideFlags = HideFlags.DontSave;
-		go.transform.SetSiblingIndex(source.instance.transform.GetSiblingIndex() + 1);
+		Below(go.transform, source.instance.transform);
+		go.AddComponent<RefreshRateRowPlace>().Resolution = source.instance.transform;
 		Containee containee = go.GetComponent<Containee>();
 		containee.container = container;
 		go.SetActive(source.instance.gameObject.activeSelf);
@@ -251,6 +273,21 @@ internal static class RefreshRateRow
 		if (containee.subsubtitle != null)
 		{
 			containee.subsubtitle.text = string.Empty;
+		}
+	}
+}
+
+// Keeps the refresh rate row under the resolution row: the page lays its rows out again now and then (a refresh of
+// its options), which put the copy last.
+internal class RefreshRateRowPlace : MonoBehaviour
+{
+	public Transform Resolution;
+
+	private void LateUpdate()
+	{
+		if (Resolution != null)
+		{
+			RefreshRateRow.Below(transform, Resolution);
 		}
 	}
 }

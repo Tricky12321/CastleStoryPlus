@@ -25,7 +25,7 @@ namespace CastleStoryPlus.Combat;
 // edge, behind a merlon) stood still and waited, or ran out to the enemy. Now it first looks for a place near it to
 // shoot from, from where the game's own aiming test finds the shot's flight clear, walks there and holds that place
 // while it shoots. The places are walked out from its anchor along the route graph's plain steps, up to
-// [RangedReposition] MaxDistance blocks (8) out, at most 1 block lower (so it does not climb down off the wall) or 2
+// [RangedReposition] MaxDistance blocks (5) of walking out, at most 1 block lower (so it does not climb down off the wall) or 2
 // higher, and on ground its team can reach; the nearest walk first. The anchor is where it stood before this first
 // moved it, so searching again from each new place does not take it step by step down to the enemy; it is set anew
 // when the fighter is no longer where it was sent (moved by the player or a task). The aiming test is the one used
@@ -82,7 +82,17 @@ internal static class RangedReposition
 
 	private static void Enable()
 	{
-		MaxDistance = Plugin.Cfg.Bind("RangedReposition", "MaxDistance", 8, new ConfigDescription("How far, in blocks, a ranged fighter whose shots would hit the castle or rock may go to find a place with a clear shot.", new AcceptableValueRange<int>(1, 20)));
+		MaxDistance = Plugin.Cfg.Bind("RangedReposition", "MaxDistance", 5, new ConfigDescription("How far, in blocks walked, a ranged fighter whose shots would hit the castle or rock may go to find a place with a clear shot.", new AcceptableValueRange<int>(1, 20)));
+		// 8 was the default before the walk was limited to 5 blocks: a config still on it moves to 5, once.
+		ConfigEntry<bool> moved = Plugin.Cfg.Bind("RangedReposition", "MovedTo5", false, "Set when MaxDistance was moved from the old default 8 to 5.");
+		if (!moved.Value)
+		{
+			if (MaxDistance.Value == 8)
+			{
+				MaxDistance.Value = 5;
+			}
+			moved.Value = true;
+		}
 		GameSession.OnLeave(() =>
 		{
 			NextSearch.Clear();
@@ -159,7 +169,8 @@ internal static class RangedReposition
 		{
 			TerrainPathNode node = Open.Dequeue();
 			int steps = Steps[node.position];
-			if (steps >= radius * 2 || node.siblings == null)
+			// A route of at most MaxDistance blocks: no place further to walk.
+			if (steps >= radius || node.siblings == null)
 			{
 				continue;
 			}

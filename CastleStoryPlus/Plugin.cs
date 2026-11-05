@@ -16,7 +16,7 @@ public class Plugin : BaseUnityPlugin
 
 	public const string Name = "Castle Story Plus";
 
-	public const string Version = "0.8.5";
+	public const string Version = "0.8.6";
 
 	internal static ManualLogSource Log;
 
@@ -30,7 +30,7 @@ public class Plugin : BaseUnityPlugin
 	// The plugin's folder (its Assets, Lua and the menu assembly). A reloaded copy (ModReload) has no file of its own.
 	internal static string Directory;
 
-	// The [Features] switches, and whether each feature was patched at startup (switches apply after a restart).
+	// The [Features] switches, and whether each feature is on now (FeatureToggle switches it while the game runs).
 	internal static readonly List<ConfigEntry<bool>> FeatureSwitches = new List<ConfigEntry<bool>>();
 
 	internal static readonly Dictionary<string, bool> LoadedFeatures = new Dictionary<string, bool>();
@@ -72,6 +72,15 @@ public class Plugin : BaseUnityPlugin
 				FeatureSwitches.Add(entry);
 				enabled = entry.Value;
 				LoadedFeatures[feature.Name] = enabled;
+				FeatureToggle.Watch(entry, feature.Name);
+			}
+			if (feature.Name != null)
+			{
+				FeatureToggle.Register(harmony, feature.Name, type);
+				if (enabled)
+				{
+					FeatureToggle.MarkStarted(feature.Name);
+				}
 			}
 			if (!enabled)
 			{
