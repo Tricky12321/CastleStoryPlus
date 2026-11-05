@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## 0.8.2 — 2026-11-05
 
+- [FIX] **SidePlanks, crash loading a save:** a save with a large floor of wooden planks blueprints could crash the game while loading (stack overflow). A plank held from the side asked the plank beside it through the game's validator component, which also set that plank's state; each change revalidated the planks round it, and on a large floor the chain ran hundreds of planks deep. The plank beside it is now judged by the game's rule alone, without changing anything. (#20)
+- [ADD] **DevTools:** `GET /api/saves` lists the single-player saves and `POST /api/world/load?name=` loads one in its last played mode.
 - [CHANGE] **C# menus, gamemode panel:** the top-left panel of conquest, credit island and grab the gems (game name, time played, players, minimap, the "build more stockpiles" alert; for grab the gems also the time before the next gem and each team's score) is drawn in C# like invasion's and sandbox's, instead of the game's Lua panels, which took seconds to build when a map loads.
 - [CHANGE] **C# menus on by default:** the C# gamemode panel (`[LuaUi] CsScoreboard`) and the C# dialogs (`[LuaUi] CsModals`: intro, victory, defeat) are on by default; a config from before, which kept them off, is switched on once.
 - [FIX] **C# menus, sandbox tutorial:** with the C# gamemode panel the sandbox's beginner's guide (LTD.lua) was never started, as only the game's Lua sandbox panel loaded it; the C# panel now loads and connects it while it is shown.
