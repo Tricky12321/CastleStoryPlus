@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Doorstop entry point in the original game that starts the Unity 6 port instead (see Entrypoint.cs). It runs on
+       the game's Mono 2.6, so it is net35 with nothing but the base library. -->
+  <PropertyGroup>
+    <AssemblyName>CastleStoryPlus.PortLauncher</AssemblyName>
+    <RootNamespace>CastleStoryPlus.PortLauncher</RootNamespace>
+  </PropertyGroup>
+</Project>

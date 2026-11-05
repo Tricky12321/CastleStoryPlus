@@ -75,7 +75,7 @@ internal sealed class AssignNow : MonoBehaviour
 			return;
 		}
 		Task current = labor.CurrentTask;
-		if (current != null && !From(current, project) && current.CanInterrupt)
+		if (current != null && !From(current, project) && !TaskPrediction.LetGoUnstarted(labor, "moved to another task") && current.CanInterrupt)
 		{
 			labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
 		}

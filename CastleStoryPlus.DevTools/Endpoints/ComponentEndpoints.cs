@@ -138,7 +138,6 @@ internal static class ComponentEndpoints
 			{
 				continue;
 			}
-			Behaviour behaviour = component as Behaviour;
 			List<string> others = new List<string>();
 			foreach (Component other in component.GetComponents<Component>())
 			{
@@ -153,7 +152,7 @@ internal static class ComponentEndpoints
 				"type", component.GetType().FullName,
 				"scene", scene.IsValid() ? scene.name : null,
 				"active", component.gameObject.activeInHierarchy,
-				"enabled", behaviour != null ? (object)behaviour.enabled : null,
+				"enabled", Enabled(component),
 				"others", others,
 				"transform", fields ? LocalTransform(component.transform) : null,
 				"fields", fields ? Fields(component) : null));
@@ -244,7 +243,7 @@ internal static class ComponentEndpoints
 		return false;
 	}
 
-	private static string Path(Transform transform)
+	internal static string Path(Transform transform)
 	{
 		string path = transform.name;
 		for (Transform parent = transform.parent; parent != null; parent = parent.parent)

@@ -27,7 +27,9 @@ namespace CastleStoryPlus.WorkerAI;
 // range of the crystal's AutoCleanup / AutoRepair setting (the crystal's + and -, or dragging the zone's edge, which
 // changes the setting); the zone stays on the crystal. The tasks cannot be deleted and are made again if they are
 // missing (a new world, an old save). They are ordinary cleanup and repair zones with one more bit in their state
-// flags, so a save stays loadable without the mod (where they are plain zones). Host only, for the host's faction.
+// flags, so a save stays loadable without the mod (where they are plain zones). Made by the host for every player's
+// faction. The settings are the host's: another player's zone starts at the host's range, and dragging its edge
+// changes only that faction's range.
 [Feature(Features.BaseJobs, Features.BaseJobsInfo)]
 internal static class BaseJobs
 {
@@ -45,6 +47,13 @@ internal static class BaseJobs
 
 	// The radius each task was last given, to tell the player's drag of its edge from the setting's change.
 	private static readonly Dictionary<Project, int> GivenRadius = new Dictionary<Project, int>();
+
+	// The ranges of the other players' zones, dragged by them (the host's own are its settings).
+	private static readonly Dictionary<Faction, int> CleanupRadius = new Dictionary<Faction, int>();
+
+	private static readonly Dictionary<Faction, int> RepairRadius = new Dictionary<Faction, int>();
+
+	private static readonly HashSet<Faction> Done = new HashSet<Faction>();
 
 	internal const string CleanupName = "Auto cleanup";
 
@@ -68,6 +77,8 @@ internal static class BaseJobs
 		{
 			_nextCheck = 0f;
 			GivenRadius.Clear();
+			CleanupRadius.Clear();
+			RepairRadius.Clear();
 		});
 	}
 
@@ -133,23 +144,30 @@ internal static class BaseJobs
 			return;
 		}
 		_nextCheck = Time.time + CheckSeconds;
-		User user = User.LocalUser;
-		Faction faction = (user != null) ? user.faction : null;
-		if (faction == null)
+		Faction own = (User.LocalUser != null) ? User.LocalUser.faction : null;
+		Done.Clear();
+		// Every player's faction, once (allies may share one); a player that joins later is seen at the next check.
+		foreach (User user in Object.FindObjectsOfType<User>())
 		{
-			return;
+			Faction faction = (user != null) ? user.faction : null;
+			if (faction == null || !Done.Add(faction))
+			{
+				continue;
+			}
+			FireflyNest home = GiantBricktron.HomeNest(faction);
+			if (home == null)
+			{
+				continue;
+			}
+			XYZ center = XYZ.FromVector3(home.transform.position);
+			bool mine = faction == own;
+			Ensure(user, faction, center, cleanup: true, AutoCleanup.Radius, mine ? null : CleanupRadius);
+			Ensure(user, faction, center, cleanup: false, AutoRepair.Radius, mine ? null : RepairRadius);
 		}
-		FireflyNest home = GiantBricktron.HomeNest(faction);
-		if (home == null)
-		{
-			return;
-		}
-		XYZ center = XYZ.FromVector3(home.transform.position);
-		Ensure(user, faction, center, cleanup: true, AutoCleanup.Radius);
-		Ensure(user, faction, center, cleanup: false, AutoRepair.Radius);
 	}
 
-	private static void Ensure(User user, Faction faction, XYZ center, bool cleanup, ConfigEntry<int> setting)
+	// others: the ranges of other players' factions (null for the host's own, whose range is the setting).
+	private static void Ensure(User user, Faction faction, XYZ center, bool cleanup, ConfigEntry<int> setting, Dictionary<Faction, int> others)
 	{
 		Project project = Find(faction, cleanup);
 		if (project == null)
@@ -175,12 +193,24 @@ internal static class BaseJobs
 			project.MaxSize = BaseRanges.Max;
 		}
 		int wanted = (setting != null) ? BaseRanges.Clamped(setting) : DefaultRadius;
+		if (others != null && others.TryGetValue(faction, out int theirs))
+		{
+			wanted = theirs;
+		}
 		int current = (int)beacon.radius;
 		// The player dragged the zone's edge: that is the new range.
-		if (setting != null && GivenRadius.TryGetValue(project, out int given) && current != given && current >= BaseRanges.Min)
+		if (GivenRadius.TryGetValue(project, out int given) && current != given && current >= BaseRanges.Min)
 		{
-			setting.Value = Mathf.Clamp(current, BaseRanges.Min, BaseRanges.Max);
-			wanted = BaseRanges.Clamped(setting);
+			wanted = Mathf.Clamp(current, BaseRanges.Min, BaseRanges.Max);
+			if (others != null)
+			{
+				others[faction] = wanted;
+			}
+			else if (setting != null)
+			{
+				setting.Value = wanted;
+				wanted = BaseRanges.Clamped(setting);
+			}
 		}
 		if (current != wanted)
 		{

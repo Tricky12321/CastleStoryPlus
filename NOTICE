@@ -27,4 +27,6 @@ What the license covers
 Third-party software shipped in the release packages keeps its own license:
 - BepInEx and HarmonyX (LGPL-2.1 and MIT).
 - shaderc (Apache-2.0), in the Unity 6 port's installer.
+- LiteNetLib (MIT, Ruslan Pyrch), the Unity 6 port's network transport.
+The Unity 6 port's packages hold these licences in licenses/.
 - SMOL-V's format (MIT, Aras Pranckevičius), implemented in CastleStoryPlus.Port/SmolV.cs.

@@ -61,7 +61,7 @@ public class DevToolsPlugin : BaseUnityPlugin
 		new Harmony(Guid).PatchAll(typeof(DevToolsPlugin).Assembly);
 		if (ApiEnabled.Value)
 		{
-			_server = new ApiServer(ApiPort.Value, Endpoints.Routes.Build());
+			_server = new ApiServer(Port(), Endpoints.Routes.Build());
 			_server.Start();
 		}
 		Log.LogInfo(Name + " " + Version + " loaded");
@@ -73,5 +73,17 @@ public class DevToolsPlugin : BaseUnityPlugin
 		{
 			_server.Stop();
 		}
+	}
+
+	// CSP_API_PORT overrides the config, so two players of one install (a multiplayer host and a client) answer on
+	// ports of their own.
+	private static int Port()
+	{
+		string text = System.Environment.GetEnvironmentVariable("CSP_API_PORT");
+		if (!string.IsNullOrEmpty(text) && int.TryParse(text, out int port) && port > 0 && port < 65536)
+		{
+			return port;
+		}
+		return ApiPort.Value;
 	}
 }

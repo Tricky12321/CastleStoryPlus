@@ -9,7 +9,7 @@ Each feature has a switch in the `[Features]` section of the config file (see [C
 - [Worker AI](#worker-ai) · [Economy and resources](#economy-and-resources) · [Mining and metallurgy](#mining-and-metallurgy) · [Nature](#nature)
 - [Building](#building) · [Storage](#storage) · [Workshops, market and research](#workshops-market-and-research)
 - [Army and combat](#army-and-combat) · [Workers and experience](#workers-and-experience) · [Pathfinding](#pathfinding)
-- [UI](#ui) · [Menus, saving and loading](#menus-saving-and-loading) · [Performance](#performance) · [Debug tools](#debug-tools)
+- [UI](#ui) · [Menus, saving and loading](#menus-saving-and-loading) · [Multiplayer](#multiplayer) · [Performance](#performance) · [Debug tools](#debug-tools)
 
 ## Worker AI
 
@@ -213,6 +213,14 @@ New blocks, new buildings and faster ways to build.
 | **Renderer choice (Unity 6 port, Linux):** OpenGL Core or Vulkan (`[Graphics] Renderer`, Default is OpenGL Core), in Castle Story Plus settings with a "Save and restart now" button. Unity picks the graphics API only when the game starts, so a choice that differs from the running one starts the game again with `-force-glcore` or `-force-vulkan` (also when it was started from Steam or a shortcut). Offered when the install converted the shaders for both (`Content/graphics.txt`); a start that does not get the chosen API goes back to Default. | (always on) |
 
 **C# menus:** the whole in-game menu (`[LuaUi] CsGameMenu`, on by default; the game's GameMenu.lua is then not loaded at all), the gamemodes' intro, victory and defeat dialogs (`CsModals`) and the title screen's buttons (`CsMainMenu`) are drawn in C#. The other `[LuaUi]` switches draw parts of the Lua menu in C# when `CsGameMenu` is off.
+
+## Multiplayer
+
+| Feature | Switch |
+|---|---|
+| **Unity 6 port:** multiplayer works again: the port carries the game's UNet over UDP (LAN, typed-in address), and over the internet through Steam without opening a port. A hosted game is listed in the online list at once (the game waited for Castle Story's NAT server, which is gone, so the list stayed empty), the list shows games from all regions, and joining one from the list or from a friend's invitation connects over Steam's peer-to-peer networking through Valve's relays. The port plays with the port, not with the original game. | `SteamRelay` |
+| **Unity 6 port:** desync protection. Every peer keeps its own copy of the world and works out by itself what falls when a structure loses its support, so the players' worlds could drift apart and stay apart. Every 10 seconds (`[Multiplayer] DesyncCheckSeconds`, 0: off) the host compares every chunk of the world (16 x 16 columns: terrain dug or added, placed blocks) with the other players'. A chunk that differs twice in a row is put right by vote: the most players win, the host's world when the vote is even, and the others get the winners' chunk. The chat says when your world was corrected. Players without the feature are left out of the vote. | `DesyncProtection` |
+| **Unity 6 port, multiplayer:** material delivered to an allied player's blueprint is hidden on the other players' screens, as it is in the blueprint. Their game is not sent the blueprint, so the material lay in a heap there that could not be picked up. | `HiddenDeliveries` |
 
 ## Performance
 

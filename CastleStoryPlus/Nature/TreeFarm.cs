@@ -400,6 +400,12 @@ internal class TreeFarmTick : MonoBehaviour
 			Report("no team build task");
 			return;
 		}
+		// A team build task made for the farm (GlobalBuildJob, when the team had none) is not committed, and the
+		// builders find no work in an uncommitted task: the saplings stayed blueprints.
+		if (team.State != null && !team.State.Commited)
+		{
+			user.GetComponent<UNetGroupe>().CmdCommit(team.gameObject);
+		}
 		int spacing = (TreeFarm.Spacing != null) ? TreeFarm.Spacing.Value : 3;
 		List<XYZ> columns = new List<XYZ>();
 		for (int x = box.min.x; x <= box.max.x; x++)
@@ -495,7 +501,7 @@ internal class TreeFarmTick : MonoBehaviour
 		}
 		if (_planted == 0)
 		{
-			Report(_looked + " spots looked at in box " + _box.min + " - " + _box.max + ": " + _noGround + " without ground, " + _taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(_reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + _invalid + " refused by the sapling's placing rules");
+			Report(_looked + " spots looked at in box " + _box.min + " - " + _box.max + ": " + _noGround + " without ground, " + _taken + " taken (" + string.Join(", ", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(_reasons, (KeyValuePair<string, int> r) => r.Key + " " + r.Value))) + "), " + _invalid + " refused by the sapling's placing rules" + (_invalid > 0 ? " (last: " + LastRefusal + ")" : string.Empty));
 		}
 		EndPass();
 	}
@@ -548,6 +554,14 @@ internal class TreeFarmTick : MonoBehaviour
 			// (PlaceSapling) decide whether it can stand there.
 			below.Dispose();
 			ground = true;
+#if UNITY6
+			// In the Unity 6 port a blueprint over rounded ground has no support; the player's placing puts it in the
+			// rounded cell, so the sapling goes there too.
+			if (Voxel.IsCrust(cell - XYZ.up))
+			{
+				cell = cell - XYZ.up;
+			}
+#endif
 			spot = cell;
 			LastReason = WhyTaken(cell);
 			return LastReason == null;
@@ -594,6 +608,9 @@ internal class TreeFarmTick : MonoBehaviour
 		return null;
 	}
 
+	// What the sapling's placing rules answered the last time they refused a spot, for the log.
+	private static string LastRefusal;
+
 	// As the player's placing does (UNetBlueprint._PrepareSpawnBlueprint, fitted to the cell), into the team's build task.
 	private static bool PlaceSapling(User user, BuildProject team, XYZ cell)
 	{
@@ -616,6 +633,7 @@ internal class TreeFarmTick : MonoBehaviour
 		ValidationResult result = (validator != null) ? validator.Validate() : ValidationResult.Valid;
 		if ((result & (ValidationResult.Valid | ValidationResult.Buildable)) == 0)
 		{
+			LastRefusal = result + " with the blueprint at " + blueprint.transform.position;
 			ObjectPoolSingleton.Release(blueprint.gameObject);
 			return false;
 		}

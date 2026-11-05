@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# Builds the Unity 6 port's release, one zip per system:
-#   dist/CastleStoryPlus-Port-<version>-linux.zip     start with run_bepinex.sh
-#   dist/CastleStoryPlus-Port-<version>-windows.zip   start with CastleStoryPlus.exe
-# Each holds a fresh player build (PlayerBuild.Release<os>, nothing of the game), its first-start installer
-# (Installer/: CastleStoryPlus.Port, classdata.tpk, the game file manifest), BepInEx 5 and the mod
-# (BepInEx/plugins/CastleStoryPlus).
+# Builds the release of Castle Story Plus (the Unity 6 port), one zip per system:
+#   dist/CastleStoryPlus-<version>-linux.zip     install.sh
+#   dist/CastleStoryPlus-<version>-windows.zip   install.bat + install.ps1
+#
+#   CastleStoryPlus-<version>-<os>/
+#     installer(s), README.md, LICENSE, NOTICE, licenses/
+#     CastleStoryPlus-Unity6/   the port: a fresh player build (PlayerBuild.Release<os>, nothing of the game), its
+#                               first-start installer (Installer/: CastleStoryPlus.Port, classdata.tpk, the game file
+#                               manifest), BepInEx 5 and the mod (BepInEx/plugins/CastleStoryPlus, with installer/ for
+#                               the in-game updater)
+#     launcher/CastleStoryPlus.PortLauncher.dll   doorstop entry point for the original game: starts the port
+#     bepinex/                  BepInEx 5 (its doorstop) for the original game, used when the game has none
+#
+# The installers put CastleStoryPlus-Unity6 in the game's folder and point the game's doorstop at the launcher, so
+# Steam's Play starts the port. The zips have the names the mod for the original game had, so its in-game updater
+# (0.8.0 and before) finds them and moves over to the port.
 #
 #   tools/package-port.sh [linux|windows]...   (both when none is given)
 #
@@ -23,7 +33,7 @@ mkdir -p "$CACHE"
 # pack <os> <Platform> <bepinex zip name>
 pack() {
 	local os="$1" platform="$2" bepinex="$3"
-	local name="CastleStoryPlus-Port-$VERSION-$os"
+	local name="CastleStoryPlus-$VERSION-$os"
 	local out="$ROOT/dist/$name"
 	local dev="$PROJECT/Build/$platform"
 	local build="$PROJECT/Build/Release/$platform"
@@ -32,7 +42,8 @@ pack() {
 		exit 1
 	fi
 
-	# The player, from an empty folder.
+	# The player, from an empty folder (with LiteNetLib for its network transport).
+	"$ROOT/tools/player-litenetlib.sh"
 	"$UNITY" -batchmode -quit -projectPath "$PROJECT" -executeMethod "CastleStoryPlus.Player.Editor.PlayerBuild.Release$platform" \
 		-logFile "$ROOT/dist/player-$os.log" >/dev/null 2>&1 || true
 	if ! grep -q "\[PlayerBuild\] Succeeded" "$ROOT/dist/player-$os.log"; then
@@ -60,14 +71,37 @@ pack() {
 	cp "$bin/CastleStoryPlus.dll" "$ROOT/CastleStoryPlus.UI/bin/player/Release/net48/CastleStoryPlus.UI.dll" "$plugin/"
 	cp -r "$bin/Lua" "$bin/Assets" "$plugin/"
 	echo "$VERSION" > "$plugin/version.txt"
+	# The in-game updater runs the installer shipped with the plugin when it cannot download the release's own.
+	mkdir -p "$plugin/installer"
+	local installers
+	if [ "$os" = windows ]; then
+		installers=(install.bat install.ps1)
+	else
+		installers=(install.sh)
+	fi
+	local file
+	for file in "${installers[@]}"; do
+		case "$file" in *.bat) ;; *) cp "$ROOT/installer/$file" "$plugin/installer/" ;; esac
+	done
+
+	# The launcher the original game's doorstop starts.
+	dotnet build "$ROOT/CastleStoryPlus.PortLauncher" -c Release -nologo -v quiet
 
 	rm -rf "$out" "$ROOT/dist/$name.zip"
-	mkdir -p "$out"
-	cp -r "$build/." "$out/"
+	mkdir -p "$out/CastleStoryPlus-Unity6" "$out/launcher" "$out/bepinex"
+	cp -r "$build/." "$out/CastleStoryPlus-Unity6/"
+	cp "$ROOT/CastleStoryPlus.PortLauncher/bin/Release/net35/CastleStoryPlus.PortLauncher.dll" "$out/launcher/"
+	python3 -m zipfile -e "$CACHE/$bepinex" "$out/bepinex"
+	for file in "${installers[@]}"; do
+		cp "$ROOT/installer/$file" "$out/"
+	done
+	find "$out" -name "*.sh" -exec chmod +x {} +
 	cp "$ROOT/installer/README-Port.md" "$out/README.md"
-cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$out/"
+	cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$out/"
+	# The licences of the third-party libraries the port ships (NOTICE lists them).
+	cp -r "$ROOT/installer/licenses" "$out/licenses"
 	# Unity's debugging symbols for the player are not shipped.
-	rm -rf "$out"/*_BurstDebugInformation_DoNotShip "$out"/*_BackUpThisFolder_ButDontShipItWithYourGame
+	rm -rf "$out"/CastleStoryPlus-Unity6/*_BurstDebugInformation_DoNotShip "$out"/CastleStoryPlus-Unity6/*_BackUpThisFolder_ButDontShipItWithYourGame
 
 	# Nothing of the game, and nothing for development only.
 	local bad

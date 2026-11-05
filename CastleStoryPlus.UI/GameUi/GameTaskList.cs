@@ -945,7 +945,11 @@ internal class CsPopupView : MonoBehaviour
 		row.GetWorldCorners(corners);
 		Vector2 left = parent.InverseTransformPoint(corners[1]);
 		float x = left.x - parent.rect.xMin;
-		x = Mathf.Clamp(x, CsPanelView.BarWidth, parent.rect.width - CsPanelView.BarWidth - Width);
+		// Beside an open sidebar, not over it: on a small screen the popup covered the build menu's right-hand
+		// structures. When the screen is too narrow for both, the left sidebar is kept clear.
+		float min = CsPanelView.BarWidth + ((CsPanelView.LeftOpen > 0) ? CsPanelView.Width + 4f : 0f);
+		float max = parent.rect.width - CsPanelView.BarWidth - ((CsPanelView.RightOpen > 0) ? CsPanelView.Width + 4f : 0f) - Width;
+		x = Mathf.Max(Mathf.Min(x, max), min);
 		_rect.anchoredPosition = new Vector2(x, GameTaskList.Height + 4f);
 	}
 

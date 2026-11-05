@@ -145,12 +145,13 @@ internal static class UiKit
 		layout.childControlHeight = true;
 		layout.childForceExpandWidth = false;
 		layout.childForceExpandHeight = false;
+		// The height is the least a row has: a row whose text wraps to more lines grows with it.
 		LayoutElement element = rect.gameObject.AddComponent<LayoutElement>();
 		element.minHeight = height;
-		element.preferredHeight = height;
 		return rect;
 	}
 
+	// Text wraps at its width, so a long line in a window goes on the next line instead of running past its edge.
 	public static Text CreateText(Transform parent, string text, int size, Color color, TextAnchor alignment)
 	{
 		Text label = CreateRect("Text", parent).gameObject.AddComponent<Text>();
@@ -160,7 +161,7 @@ internal static class UiKit
 		label.alignment = alignment;
 		label.text = text;
 		label.raycastTarget = false;
-		label.horizontalOverflow = HorizontalWrapMode.Overflow;
+		label.horizontalOverflow = HorizontalWrapMode.Wrap;
 		return label;
 	}
 
@@ -180,6 +181,7 @@ internal static class UiKit
 		button.targetGraphic = image;
 		button.onClick.AddListener(() => onClick());
 		Text label = CreateText(rect, text, 13, TextColor, TextAnchor.MiddleCenter);
+		label.horizontalOverflow = HorizontalWrapMode.Overflow;
 		SetRect(label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 		if (width > 0f)
 		{

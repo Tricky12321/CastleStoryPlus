@@ -40,13 +40,26 @@ internal class UpdateCheck : MonoBehaviour
 
 	private static void Enable()
 	{
-#if !UNITY6_PLAYER
 		Plugin.Root.AddComponent<UpdateCheck>();
+	}
+
+	// The original game's folder, which the installer installs into: in the Unity 6 port, the folder that holds the
+	// port's own (CastleStoryPlus-Unity6, where the installer put it); null when the port was unpacked elsewhere by hand.
+	private static string GameDir
+	{
+		get
+		{
+#if UNITY6_PLAYER
+			DirectoryInfo port = new DirectoryInfo(BepInEx.Paths.GameRootPath);
+			if (port.Name == "CastleStoryPlus-Unity6" && port.Parent != null && Directory.Exists(Path.Combine(port.Parent.FullName, "Castle Story_Data")))
+			{
+				return port.Parent.FullName;
+			}
+			return null;
 #else
-		// The Unity 6 port is a package of its own (tools/package-port.sh); these releases and their installers are the
-		// mod for the original game, and would install it into the port's player.
-		Plugin.Log.LogInfo("Update check: off in the Unity 6 port");
+			return BepInEx.Paths.GameRootPath;
 #endif
+		}
 	}
 
 	private IEnumerator Start()
@@ -217,13 +230,13 @@ internal class UpdateCheck : MonoBehaviour
 				Plugin.Log.LogWarning("Could not download the " + _latest + " installer (" + error + "); using the shipped one");
 			}
 		}
-		if (!File.Exists(installer))
+		string gameDir = GameDir;
+		if (!File.Exists(installer) || gameDir == null)
 		{
 			Application.OpenURL("https://github.com/" + Repo + "/releases/tag/" + _latest);
 			_updating = false;
 			yield break;
 		}
-		string gameDir = BepInEx.Paths.GameRootPath;
 		int pid = Process.GetCurrentProcess().Id;
 		string log = Path.Combine(BepInEx.Paths.BepInExRootPath, "CastleStoryPlus.Update.log");
 		ProcessStartInfo start;

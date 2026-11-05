@@ -30,14 +30,14 @@
 
 ## Install
 
-Download the package for your system from the [latest release](https://github.com/Tricky12321/CastleStoryPlus/releases/latest). Each package is complete: installer, BepInEx 5.4.23.5 and Castle Story Plus.
+Castle Story Plus runs on the Unity 6 port: Castle Story on a current Unity, made from your own Castle Story install the first time it starts (you must own the game on Steam; nothing of the game is in the packages). Download the package for your system from the [latest release](https://github.com/Tricky12321/CastleStoryPlus/releases/latest). Each package is complete: installer, the port with Castle Story Plus and BepInEx 5.4.23.5.
 
 | System | Package | How |
 |---|---|---|
 | Windows | `CastleStoryPlus-<version>-windows.zip` | Unpack it and double-click `install.bat`. |
 | Linux | `CastleStoryPlus-<version>-linux.zip` | Unpack it and run `bash install.sh`. |
 
-The installer finds Castle Story in your Steam libraries, installs BepInEx if it is missing and installs Castle Story Plus. Run it again at any time to update; the game also offers updates from the main menu. In multiplayer every player needs the same version of the mod.
+The installer finds Castle Story in your Steam libraries and puts the port in its folder; Play in Steam then starts the port. Run it again at any time to update; the game also offers updates from the main menu, and Castle Story Plus 0.8.0 and older move over to the port that way. In multiplayer every player needs the same version.
 
 > **Linux launch option:** the game needs the Steam launch option `./run_bepinex.sh %command%`. If Steam is closed while the installer runs, it sets the option itself. Otherwise set it once yourself: right-click Castle Story > Properties > Launch Options.
 

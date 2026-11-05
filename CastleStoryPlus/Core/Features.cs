@@ -510,4 +510,16 @@ internal static class Features
 	public const string Upgrades = "Upgrades";
 
 	public const string UpgradesInfo = "Smithy, armoury and research station buildings (build menu, crafting): research weapon and armour upgrades in three tiers (iron, steel, crystal), and colony upgrades for dark crystals (more bricktrons, work speed, storage room (+33% per tier, stockpiles stack up to 4 layers high), cheaper bricktrons, walking speed, firefly energy, giant bricktrons, time between waves, more yield from digging and mining), for the whole team. Researched tiers show on the soldiers' gear, and soldiers wear the researched chainmail, gambeson, plate, great helm and heater shield. Starting a research reserves its whole cost from the stockpiles at once and locks that upgrade at the team's other stations until it is finished or cancelled. Workers walk inside. A stockpile only piles as high as there is room over it, and nothing can be built where its goods stand.";
+
+	public const string SteamRelay = "SteamRelay";
+
+	public const string SteamRelayInfo = "Unity 6 port: multiplayer over the internet through Steam without opening a port. A hosted game is listed in the online list at once (the game waited for Castle Story's NAT server, which is gone), the list shows games from all regions, and joining one (from the list or a friend's invitation) connects over Steam's peer-to-peer networking through Valve's relays. LAN games and typed-in addresses connect directly.";
+
+	public const string HiddenDeliveries = "HiddenDeliveries";
+
+	public const string HiddenDeliveriesInfo = "Unity 6 port, multiplayer: material delivered to a blueprint the other player's game does not have (an ally's blueprint, which only its own faction is sent) is hidden there, as it is in the blueprint, instead of lying in a heap that cannot be picked up.";
+
+	public const string DesyncProtection = "DesyncProtection";
+
+	public const string DesyncProtectionInfo = "Unity 6 port, multiplayer: the players' worlds (terrain and placed blocks) are compared every [Multiplayer] DesyncCheckSeconds. Where they differ twice in a row, the majority's world is taken (the host's when the vote is even) and the others are corrected; the chat says so. Each peer works out by itself what falls when a structure loses its support, so the worlds could drift apart and stay apart.";
 }
