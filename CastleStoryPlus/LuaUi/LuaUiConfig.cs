@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace CastleStoryPlus.LuaUi;
 
-// The [LuaUi] switches: one per part of the game's UI that has a C# replacement. All but CsModals and CsMainMenu are off by default, and
+// The [LuaUi] switches: one per part of the game's UI that has a C# replacement. CsScoreboard, CsModals, CsMainMenu and CsGameMenu are on by default, the rest off, and
 // a part that is off is not touched at all (no Lua patch, no Harmony patch), so the game's own menu is built as
 // before. Bound on first use rather than in an Enable(): features are enabled in no particular order, and a later
 // part's patch classes read these from their Prepare() while the plugin starts. Each is read once, so it applies
@@ -16,7 +16,7 @@ internal static class LuaUiConfig
 	// The gamemode's top-right panel (GS_Scoreboard: wave timer, kills, crystals, players).
 	public static bool CsScoreboard
 	{
-		get { return Switch("CsScoreboard", "Draw the gamemode's top-right panel (wave timer, kills, crystals, players) in C#."); }
+		get { return Switch("CsScoreboard", "Draw the gamemode's top-right panel (wave timer, kills, crystals, players) in C#.", true); }
 	}
 
 	// GameMenu's top bar, left bar and right bar.
@@ -64,7 +64,7 @@ internal static class LuaUiConfig
 	// The gamemodes' dialogs (LUI/Menus/Game/Menu_Modal.lua in GS_Modal: intro, victory, defeat). On by default.
 	public static bool CsModals
 	{
-		get { return Switch("CsModals", "Draw the gamemodes' dialogs (intro, victory, defeat) in C#.", false); }
+		get { return Switch("CsModals", "Draw the gamemodes' dialogs (intro, victory, defeat) in C#.", true); }
 	}
 
 	// The title screen's button columns (SceneMenu's legacy "Left: ..." containers). On by default.
@@ -99,14 +99,53 @@ internal static class LuaUiConfig
 		get { return CsScoreboard || CsModals || AnyGameMenu; }
 	}
 
+	// The parts once off by default and since moved to C# for good: a config written before keeps false, so it is
+	// switched on once (DefaultsVersion 1); a player can still switch one off again after that.
+	private static readonly HashSet<string> NowOn = new HashSet<string> { "CsScoreboard", "CsModals" };
+
+	private const int DefaultsVersion = 1;
+
+	private static BepInEx.Configuration.ConfigEntry<int> _defaults;
+
 	// Switched off as a whole with the CsMenus feature.
 	private static bool Switch(string key, string description, bool byDefault = false)
 	{
 		if (!Read.TryGetValue(key, out bool value))
 		{
-			value = Plugin.IsEnabled(Core.Features.CsMenus) && Plugin.Cfg.Bind(Section, key, byDefault, description + " Restart to apply.").Value;
+			if (!Plugin.IsEnabled(Core.Features.CsMenus))
+			{
+				value = false;
+			}
+			else
+			{
+				BepInEx.Configuration.ConfigEntry<bool> entry = Plugin.Cfg.Bind(Section, key, byDefault, description + " Restart to apply.");
+				if (NowOn.Contains(key) && Migrating() && !entry.Value)
+				{
+					entry.Value = true;
+					Plugin.Log.LogInfo("LuaUi: " + key + " switched on (now the C# menu by default)");
+				}
+				value = entry.Value;
+			}
 			Read[key] = value;
 		}
 		return value;
+	}
+
+	// Whether this start applies the default changes: decided (and recorded) on the first read, so every part read
+	// later in the same start is switched on too.
+	private static bool _migrating;
+
+	private static bool Migrating()
+	{
+		if (_defaults == null)
+		{
+			_defaults = Plugin.Cfg.Bind(Section, "DefaultsVersion", 0, "Which of the C# menus' default changes this config has had (set by the mod; do not change).");
+			_migrating = _defaults.Value < DefaultsVersion;
+			if (_migrating)
+			{
+				_defaults.Value = DefaultsVersion;
+			}
+		}
+		return _migrating;
 	}
 }

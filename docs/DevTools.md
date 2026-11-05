@@ -70,6 +70,8 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `POST /api/speed?speed=&forSeconds=` | Sets the game speed for testing, 0.25 to 20 (single player or host only). `forSeconds`: back to 1x by itself after that many real seconds |
 | `GET /api/worlds?q=` | The maps a new single-player game can start on (codename, name, size) with their modes and presets |
 | `POST /api/world/new?map=&gamemode=&preset=&waves=` | Starts a new single-player world (leaves the current game without saving); answers at once, `GET /api/status` shows `worldStart` and `loading` |
+| `GET /api/saves` | The single-player saves (name, map, last played mode, when), newest first |
+| `POST /api/world/load?name=` | Loads a single-player save (by name or part of it) in its last played mode, as the title screen's Continue does; from a game it first leaves without saving. Answers at once; poll `GET /api/status` like for a new world |
 | `GET /api/base` | The player's faction, home crystal (position, ground height, energy, bricktrons it can spawn), bricktrons by job, projects |
 | `GET /api/ground?x=&z=&radius=&flat=` | Terrain heights round a point (default the home crystal), and flat squares to build on |
 | `GET /api/blueprints/keys?all=` | The build menu's blueprints with their footprint |

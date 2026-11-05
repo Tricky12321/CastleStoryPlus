@@ -148,7 +148,12 @@ internal class DebugMenu : MonoBehaviour
 	private static void Enable()
 	{
 		_key = Plugin.Cfg.Bind("Debug", "DebugMenuKey", KeyCode.F8, "Key that opens the debug menu (energy, bricktrons, resources, enemies, waves). Host only.");
-		_xrayKey = Plugin.Cfg.Bind("Debug", "XRayKey", KeyCode.X, "Key that turns the semi x-ray (the tunnels and shafts under the ground) on and off, also without debug mode. Not while placing blocks (where X places a block by its next cell) or typing.");
+		_xrayKey = Plugin.Cfg.Bind("Debug", "XRayKey", KeyCode.F6, "Key that turns the semi x-ray (the tunnels and shafts under the ground) on and off, also without debug mode. Not while placing blocks or typing.");
+		// X, the old default, is also the game's "back to work": one press did both.
+		if (_xrayKey.Value == KeyCode.X)
+		{
+			_xrayKey.Value = KeyCode.F6;
+		}
 		FastSpeedKeys = Plugin.Cfg.Bind("Debug", "FastSpeedKeys", false, "Speed keys 4 and 5 for very fast game speeds ([GameSpeed] Speed4 and Speed5, 10x and 20x) in single player. Switched in the debug menu.");
 		LuaInjection.AddFunction("DebugWave", (ScriptExecutionContext context, CallbackArguments args) =>
 		{

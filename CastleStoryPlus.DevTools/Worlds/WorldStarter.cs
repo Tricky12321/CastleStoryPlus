@@ -51,6 +51,9 @@ internal class WorldStarter : MonoBehaviour
 
 	private int _waveMinutes;
 
+	// A save to load instead of a new world (its last played mode and preset).
+	private bool _isSave;
+
 	private float _menuSince = -1f;
 
 	private float _giveUpAt;
@@ -65,8 +68,15 @@ internal class WorldStarter : MonoBehaviour
 	internal bool Busy => Phase != null;
 
 	// Main thread. The map, mode and preset come from WorldEndpoints, already checked.
+	internal void BeginSave(Asset_Map save)
+	{
+		Begin(save, null, null, 0);
+		_isSave = true;
+	}
+
 	internal void Begin(Asset_Map map, Asset_Gamemode mode, Asset_GamemodePreset preset, int waveMinutes)
 	{
+		_isSave = false;
 		_map = map;
 		_mode = mode;
 		_preset = preset;
@@ -130,7 +140,20 @@ internal class WorldStarter : MonoBehaviour
 		{
 			return;
 		}
-		StartWorld(_map, _mode, _preset, _waveMinutes);
+		if (_isSave)
+		{
+			_mode = LoadSave(_map);
+			if (_mode == null)
+			{
+				Phase = null;
+				LastResult = "failed: the save " + _map.customName + " has no mode to load it in (from another version?)";
+				return;
+			}
+		}
+		else
+		{
+			StartWorld(_map, _mode, _preset, _waveMinutes);
+		}
 		Phase = "loading";
 		_giveUpAt = Time.realtimeSinceStartup + LoadTimeoutSeconds;
 	}
@@ -163,7 +186,7 @@ internal class WorldStarter : MonoBehaviour
 		if (player && menu)
 		{
 			Phase = null;
-			LastResult = "started " + _map.displayName + " (" + _mode.codename + ")";
+			LastResult = (_isSave ? "loaded " + _map.customName : "started " + _map.displayName) + " (" + _mode.codename + ")";
 			return;
 		}
 		if (Time.realtimeSinceStartup - _loadedAt > MenuAttachSeconds)
@@ -172,6 +195,26 @@ internal class WorldStarter : MonoBehaviour
 			LastResult = "failed: " + _map.displayName + " loaded but " + (player ? "its in-game menu was not built" : "the local player was not spawned") + "; the game is probably unusable, see /api/log?problems=true and start again";
 			DevToolsPlugin.Log.LogWarning("DevTools: " + LastResult);
 		}
+	}
+
+	// As the title screen's Continue loads a save (ContainerGenericPopulator.ContinueLatestSave): in its last played
+	// mode and preset. The mode, or null when the save has none.
+	private static Asset_Gamemode LoadSave(Asset_Map save)
+	{
+		BaseMapLibraryMenu.SetSelectedMap(save, AssetPlayableContext.Singleplayer, BaseAssetMenu.MenuGameContext.Normal, BaseAssetMenu.MenuTypeContext.Existing);
+		Asset_Gamemode mode = GameParam.SelectedGamemode;
+		if (mode == null)
+		{
+			BaseMapLibraryMenu.EmptySelected();
+			return null;
+		}
+		BaseMapLibraryMenu.SetSelectedAsLoaded();
+		GameParam.StartGame(() =>
+		{
+			BaseMapLibraryMenu.EmptySelected();
+		});
+		DevToolsPlugin.Log.LogInfo("DevTools: loading the save " + save.customName + " (" + mode.codename + ")");
+		return mode;
 	}
 
 	// The new game screen's own calls: SetSelectedMap picks the map's first mode and its default preset, then the

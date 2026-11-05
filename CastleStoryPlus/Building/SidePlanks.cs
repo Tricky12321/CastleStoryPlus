@@ -98,10 +98,17 @@ internal static class SidePlanks
 		return false;
 	}
 
-	// The neighbour by the game's rule alone.
+	// The neighbour by the game's rule alone. Asked of the rule itself (the component's validator), not of the
+	// neighbour's ValidatorComponent: that one also sets the neighbour's state (a blueprint turned invalid, a block
+	// made unstable), and each change revalidated the planks round it, which asked their neighbours again: on a large
+	// plank floor the chain ran hundreds of planks deep and the game crashed (stack overflow) loading such a save.
 	private static bool HeldByGame(ValidationData neighbour)
 	{
 		IValidator validator = neighbour.Validator;
+		if (validator is ValidatorComponent component)
+		{
+			validator = component.Validator;
+		}
 		if (validator == null)
 		{
 			return false;

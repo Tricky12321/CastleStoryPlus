@@ -44,6 +44,12 @@ internal static class WorldEndpoints
 			Parameters = "map (codename, short codename or name; default: the first official map), gamemode (codename, default sandbox), preset (codename, short codename or name; default: the mode's default), waves (Invasion only: minutes between waves, 5 to 30)",
 			TimeoutMs = 60000
 		});
+		routes.Add(new Route("GET", "/api/saves", "The single-player saves (name, map, last played mode, when), newest first", Saves));
+		routes.Add(new Route("POST", "/api/world/load", "Loads a single-player save in its last played mode, from the title screen or from a game (left without saving), as the title screen's Continue does. Answers at once; GET /api/status shows worldStart and loading until the world is in", LoadSave)
+		{
+			Parameters = "name (the save's name, or part of it; GET /api/saves lists them)",
+			TimeoutMs = 60000
+		});
 		routes.Add(new Route("GET", "/api/base", "The player's base: faction, home crystal (position, voxel, energy, bricktrons it can spawn; isHome false: the game has not marked it yet, as before the intro is closed, so the faction's crystal nearest its bricktrons), bricktrons by job, build projects", Base));
 		routes.Add(new Route("GET", "/api/ground", "Terrain heights around a point: per column the top solid voxel (build on y+1), the trees in the area (count and the 10 nearest root voxels), and optionally flat squares to build on, nearest first", Ground)
 		{
@@ -65,6 +71,61 @@ internal static class WorldEndpoints
 
 	// The new game screen's maps: new maps (not saves) playable in single player, with their supported modes (the
 	// map's markers checked by each mode's validator, which loadSubassets does).
+	private static List<Asset_Map> SaveList()
+	{
+		List<Asset_Map> result = new List<Asset_Map>();
+		foreach (Asset_Map save in AssetDispensary.saves.SendQuery(AssetQueryParameters.AllSPSources | AssetQueryParameters.RefreshCache, AssetPlayableContext.Singleplayer))
+		{
+			if (save != null)
+			{
+				result.Add(save);
+			}
+		}
+		result.Sort((a, b) => b.dateTimeCreated.CompareTo(a.dateTimeCreated));
+		return result;
+	}
+
+	private static object Saves(ApiRequest request)
+	{
+		List<object> saves = new List<object>();
+		foreach (Asset_Map save in SaveList())
+		{
+			Asset_Gamemode mode = save.GetLastPlayedGamemode();
+			saves.Add(Obj("name", save.customName, "map", save.displayName, "codename", save.codename, "mode", (mode != null) ? mode.codename : null, "currentVersion", save.IsCurrentVersion(), "saved", save.dateTimeCreated.ToString("yyyy-MM-dd HH:mm:ss")));
+		}
+		return Obj("count", saves.Count, "saves", saves);
+	}
+
+	private static object LoadSave(ApiRequest request)
+	{
+		WorldStarter starter = WorldStarter.Instance;
+		if (starter == null)
+		{
+			throw new ApiException(503, "The world starter is not ready");
+		}
+		if (starter.Busy)
+		{
+			throw new ApiException(409, "A world is already being started: " + starter.Phase);
+		}
+		if (Architecte.instance != null && !Architecte.commence)
+		{
+			throw new ApiException(409, "A world is loading; wait until it is in (GET /api/status)");
+		}
+		string name = request.String("name", null);
+		if (string.IsNullOrEmpty(name))
+		{
+			throw new ApiException(400, "Give the save's name: name= (GET /api/saves lists them)");
+		}
+		List<Asset_Map> saves = SaveList();
+		Asset_Map save = saves.Find(s => string.Equals(s.customName, name, StringComparison.OrdinalIgnoreCase)) ?? saves.Find(s => s.customName != null && s.customName.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0);
+		if (save == null)
+		{
+			throw new ApiException(404, "No save '" + name + "' (GET /api/saves lists them)");
+		}
+		starter.BeginSave(save);
+		return Obj("loading", true, "phase", starter.Phase, "name", save.customName, "map", save.displayName, "hint", "Poll GET /api/status until inGame is true and worldStart is null");
+	}
+
 	private static List<Asset_Map> Maps()
 	{
 		List<Asset_Map> result = new List<Asset_Map>();

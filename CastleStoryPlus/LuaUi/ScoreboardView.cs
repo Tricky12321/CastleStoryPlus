@@ -11,11 +11,12 @@ using UnityEngine.UI;
 
 namespace CastleStoryPlus.LuaUi;
 
-// [LuaUi] CsScoreboard: the gamemode's top-right panel (GS_Scoreboard) drawn in C# for invasion, the tutorial
-// (which uses the invasion panel) and sandbox. The game's Lua panel (InvasionMenu.lua, SandboxMenu.lua and their
-// panels) took seconds to build when a map loads. Each gamemode's ui.lua asks CastleStoryPlus.CsScoreboard first;
-// for other gamemodes (conquest, credit island, grab the gems) it answers false and the game's Lua panel is built
-// as before. The values are read through a small Lua function run in the gamemode's own script (the same Registry,
+// [LuaUi] CsScoreboard: the gamemode's top-right panel (GS_Scoreboard) drawn in C# for every gamemode: invasion,
+// the tutorial (which uses the invasion panel), sandbox, conquest, credit island and grab the gems. The game's Lua
+// panel (InvasionMenu.lua, SandboxMenu.lua and their copies per gamemode) took seconds to build when a map loads.
+// Each gamemode's ui.lua asks CastleStoryPlus.CsScoreboard first; the game's Lua panel is only built when the view
+// cannot be set up. Conquest and credit island show what sandbox shows (their Lua panels are copies of it with
+// their own name); grab the gems adds the time before the next gem and each team's score. The values are read through a small Lua function run in the gamemode's own script (the same Registry,
 // Data.Storage and raids the Lua panel read), a few times a second; only the drawing is C#. The view is a child of
 // GS_Scoreboard, so GameMenu hiding the scoreboard while a left sidebar is open (GS_Scoreboard:SetVisible, its
 // CanvasGroup) hides it too. GS_Scoreboard ("Menu: Scoreboard (Lua)", 320 wide, right of the left bar) has a
@@ -70,11 +71,14 @@ if CastleStoryPlus_ScoreboardState == nil then
 			local counts = {}
 			local raids = fy_RaidProject:GetAllOfFaction(Faction.defaultEnemy)
 			for r = 1, #raids do
+				-- The wave number is kept on the raid (saved and sent to clients); a unit's own is lost on load and
+				-- never reaches clients. Raids of no wave (0: the treasure chests' guards) are not counted.
 				local crew = {}
-				if not CastleStoryPlus.IsGuardRaid(raids[r]) then crew = Project.GetCrew(raids[r]) end
+				local raidWave = raids[r].waveNumber or 0
+				if raidWave > 0 and not CastleStoryPlus.IsGuardRaid(raids[r]) then crew = Project.GetCrew(raids[r]) end
 				for c = 1, #crew do
 					local labor = crew[c]
-					local wave = labor.waveNumber or ((Registry.waveNumber or 1) - 1)
+					local wave = labor.waveNumber or raidWave
 					local t = counts[wave]
 					if t == nil then t = { 0, 0, 0, 0 } counts[wave] = t end
 					local oc = labor:GetOccupation()
@@ -110,6 +114,22 @@ if CastleStoryPlus_ScoreboardState == nil then
 end
 ";
 
+	// Grab the gems: the time before the next gem and each team's score, from the gamemode's own data scripts.
+	private const string GemsLuaSide = @"
+if CastleStoryPlus_ScoreboardGems == nil then
+	local clientside = require(""Data/Data_Clientside.lua"")
+	local factions = require(""Data/Data_Faction.lua"")
+	function CastleStoryPlus_ScoreboardGems()
+		local g = { clientside:GetPumpkinSpawnRemainingTime() }
+		for i, faction in ipairs(factions:GetAllOwned()) do
+			table.insert(g, faction.name)
+			table.insert(g, clientside:GetScore(faction))
+		end
+		return g
+	end
+end
+";
+
 	private const float Width = 272f;
 
 	private const float RefreshSeconds = 0.25f;
@@ -126,6 +146,21 @@ end
 	private Script _script;
 
 	private bool _invasion;
+
+	// The gamemode's name key ("##mode_sandbox", "##mode_conquest"...); for invasion it is read from the game.
+	private string _modeKey;
+
+	private bool _gems;
+
+	private bool _tutorial;
+
+	private Text _gemTimer;
+
+	private readonly List<Text> _gemScores = new List<Text>();
+
+	private readonly List<Image> _gemFlags = new List<Image>();
+
+	private Transform _gemRows;
 
 	private RectTransform _root;
 
@@ -203,7 +238,27 @@ end
 		Patch("Gamemodes/invasion/invasion_ui.lua", "invasion");
 		Patch("Gamemodes/tutorial/invasion_ui.lua", "tutorial");
 		Patch("Gamemodes/sandbox/ui.lua", "sandbox");
+		Patch("Gamemodes/conquest/ui.lua", "conquest");
+		Patch("Gamemodes/creditisland/ui.lua", "creditisland");
+		LuaInjection.AddPatch(Features.CsMenus, "Gamemodes/grabthegems/Data/Data_Menu.lua", "GS_Scoreboard:LoadMenuFromClosure(self._DoLoadScoreboard)\n", LuaInjection.Mode.Replace, "if not CastleStoryPlus.CsScoreboard(\"grabthegems\", GS_Scoreboard) then GS_Scoreboard:LoadMenuFromClosure(self._DoLoadScoreboard) end\n");
 		GameSession.OnLeave(Drop);
+	}
+
+	private static string ModeKey(string mode)
+	{
+		switch (mode)
+		{
+			case "sandbox":
+				return "##mode_sandbox";
+			case "conquest":
+				return "##mode_conquest";
+			case "creditisland":
+				return "##mode_creditisland";
+			case "grabthegems":
+				return "##mode_gtg";
+			default:
+				return null;
+		}
 	}
 
 	private static void Patch(string file, string mode)
@@ -216,13 +271,19 @@ end
 	private static bool Show(string mode, LuaMenuComponent component, Script script)
 	{
 		bool invasion = mode == "invasion" || mode == "tutorial";
-		if ((!invasion && mode != "sandbox") || script == null)
+		string modeKey = ModeKey(mode);
+		if ((!invasion && modeKey == null) || script == null)
 		{
 			return false;
 		}
+		bool gems = mode == "grabthegems";
 		try
 		{
 			script.DoString(LuaSide);
+			if (gems)
+			{
+				script.DoString(GemsLuaSide);
+			}
 		}
 		catch (InterpreterException ex)
 		{
@@ -241,11 +302,24 @@ end
 		_current = go.AddComponent<ScoreboardView>();
 		_current._script = script;
 		_current._invasion = invasion;
+		_current._modeKey = modeKey;
+		_current._gems = gems;
+		// The sandbox tutorial (LTD.lua) was connected by SandboxMenu.lua, which is not loaded with this view.
+		_current._tutorial = mode == "sandbox" && GameUi.GameTutorial.Connect(script);
 		_current.Build();
 		script.OnScriptKilled += OnScriptKilled;
 		RectTransform rect = parent as RectTransform;
 		Plugin.Log.LogInfo("CsMenus: scoreboard (" + mode + ") drawn in C#" + ((rect != null) ? (", under " + parent.name + " " + rect.rect.size + " anchors " + rect.anchorMin + "-" + rect.anchorMax) : string.Empty));
 		return true;
+	}
+
+	private void OnDestroy()
+	{
+		if (_tutorial)
+		{
+			_tutorial = false;
+			GameUi.GameTutorial.Disconnect(_script);
+		}
 	}
 
 	private static void OnScriptKilled(Script script)
@@ -308,7 +382,78 @@ end
 		{
 			BuildEnemy();
 		}
+		if (_gems)
+		{
+			BuildGems();
+		}
 		Refresh();
+	}
+
+	// PumpkinFactionUnitsPanel: the time before the next gem, then each team's flag and score.
+	private void BuildGems()
+	{
+		RectTransform gems = Block(4);
+		Transform timer = Row(gems, 20f);
+		Text label = LuiWidgets.Label(timer, LuaBridge.Localized("##mode_gtg_timebeforenextgem"), 13, LuiStyle.Gray, TextAnchor.MiddleLeft, null);
+		UiKit.Flexible(label.gameObject);
+		_gemTimer = LuiWidgets.Label(timer, string.Empty, 13, LuiStyle.Gray, TextAnchor.MiddleRight, null);
+		_gemRows = Row(gems, 36f);
+	}
+
+	private static IconKey FlagOf(string faction)
+	{
+		switch (faction)
+		{
+			case "Blue":
+				return IconKeys.FlagBlue;
+			case "Red":
+				return IconKeys.FlagRed;
+			case "Green":
+				return IconKeys.FlagGreen;
+			default:
+				return IconKeys.FlagOrange;
+		}
+	}
+
+	private void RefreshGems()
+	{
+		DynValue result = LuaBridge.Call(_script.Globals.Get("CastleStoryPlus_ScoreboardGems"), "CsScoreboard gems", new DynValue[0]);
+		if (result.Type != DataType.Table)
+		{
+			return;
+		}
+		Table g = result.Table;
+		Set(_gemTimer, LuaBridge.String(g.Get(1), string.Empty));
+		int teams = (g.Length - 1) / 2;
+		for (int i = 0; i < teams; i++)
+		{
+			string faction = LuaBridge.String(g.Get(2 + i * 2), string.Empty);
+			int score = (int)LuaBridge.Number(g.Get(3 + i * 2), 0f);
+			if (i >= _gemScores.Count)
+			{
+				RectTransform cell = LuiWidgets.Horizontal(_gemRows, 2f, 0);
+				Destroy(cell.GetComponent<ContentSizeFitter>());
+				UiKit.Flexible(cell.gameObject);
+				RectTransform image = UiKit.CreateRect("Flag", cell);
+				UiKit.Fixed(image.gameObject, 32f, 32f);
+				Image flag = image.gameObject.AddComponent<Image>();
+				flag.preserveAspect = true;
+				flag.raycastTarget = false;
+				_gemFlags.Add(flag);
+				_gemScores.Add(LuiWidgets.Label(cell, "0", 12, LuiStyle.White, TextAnchor.MiddleLeft, null));
+			}
+			Sprite sprite = FlagOf(faction).Get64();
+			if (_gemFlags[i].sprite != sprite)
+			{
+				_gemFlags[i].sprite = sprite;
+			}
+			Set(_gemScores[i], score.ToString());
+			Active(_gemScores[i].transform.parent.gameObject, true);
+		}
+		for (int i = teams; i < _gemScores.Count; i++)
+		{
+			Active(_gemScores[i].transform.parent.gameObject, false);
+		}
 	}
 
 	private void BuildEnemy()
@@ -489,13 +634,17 @@ end
 		{
 			_root.anchoredPosition = new Vector2(0f, top);
 		}
-		string modeKey = _invasion ? ((mode == "##mode_invasion") ? "##mode_invasion" : "##mode_tutorial") : "##mode_sandbox";
+		string modeKey = _invasion ? ((mode == "##mode_invasion") ? "##mode_invasion" : "##mode_tutorial") : _modeKey;
 		Set(_mode, LuaBridge.Localized(modeKey));
 		Set(_modeTime, LuaBridge.String(LuaBridge.Get(data, "elapsed"), string.Empty));
 		string names = LuaBridge.String(LuaBridge.Get(data, "names"), string.Empty);
 		Set(_names, names);
 		Active(_names.gameObject, names.Length > 0);
 		Active(_alert, LuaBridge.Bool(LuaBridge.Get(data, "noRoom"), false));
+		if (_gems)
+		{
+			RefreshGems();
+		}
 		if (!_invasion)
 		{
 			return;

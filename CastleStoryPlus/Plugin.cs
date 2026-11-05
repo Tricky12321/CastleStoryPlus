@@ -16,7 +16,7 @@ public class Plugin : BaseUnityPlugin
 
 	public const string Name = "Castle Story Plus";
 
-	public const string Version = "0.8.1";
+	public const string Version = "0.8.2";
 
 	internal static ManualLogSource Log;
 
