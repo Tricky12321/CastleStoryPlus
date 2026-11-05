@@ -58,6 +58,15 @@ internal static class UiKit
 		return canvasGo;
 	}
 
+	// The window can be moved with the mouse (DragWindow).
+	public static void Draggable(GameObject window)
+	{
+		if (window.GetComponent<DragWindow>() == null)
+		{
+			window.AddComponent<DragWindow>();
+		}
+	}
+
 	// A vertical window that grows with its content.
 	public static GameObject CreateWindow(Transform parent, float width)
 	{

@@ -167,6 +167,7 @@ internal class AllSettingsPanel : MonoBehaviour
 	{
 		GameObject canvasGo = CreateCanvas("AllSettingsCanvas", transform, 911);
 		_window = CreateWindow(canvasGo.transform, WindowWidth);
+		Draggable(_window);
 		RectTransform windowRect = _window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(0.5f, 0.5f);
 		windowRect.anchorMax = new Vector2(0.5f, 0.5f);

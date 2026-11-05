@@ -44,6 +44,8 @@ internal abstract class CsStationWindow : MonoBehaviour
 
 	private bool _shown;
 
+	private CsWindowDrag _drag;
+
 	protected abstract float Width { get; }
 
 	// The selected station when it is this window's kind, else null.
@@ -72,6 +74,7 @@ internal abstract class CsStationWindow : MonoBehaviour
 		Rect.anchoredPosition = new Vector2(CsPanelView.BarWidth, GameTaskList.Height + 4f);
 		Rect.sizeDelta = new Vector2(Width, 0f);
 		gameObject.name = name;
+		_drag = CsWindowDrag.Add(Rect, name);
 		Image background = gameObject.AddComponent<Image>();
 		UiTheme.Round(background, UiTheme.BgPopup, UiTheme.PanelRadius);
 		VerticalLayoutGroup layout = gameObject.AddComponent<VerticalLayoutGroup>();
@@ -181,9 +184,14 @@ internal abstract class CsStationWindow : MonoBehaviour
 		CsRowParts.SetText(Subtitle, text);
 	}
 
-	// Above the selected row of the task list, kept on screen (as the task popup).
+	// Above the selected row of the task list, kept on screen; where the player moved it, if moved (CsWindowDrag) (as the task popup).
 	private void Place()
 	{
+		if (_drag.TryPlace(out Vector2 moved))
+		{
+			Rect.anchoredPosition = moved;
+			return;
+		}
 		GameTaskList list = GameTaskList.Current;
 		RectTransform row = (list != null) ? list.SelectedRow() : null;
 		RectTransform parent = (RectTransform)Rect.parent;

@@ -3,6 +3,14 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## 0.8.4 — 2026-11-05
+
+- [FIX] **Metallurgy, charcoal:** workers carried coal into a furnace burning charcoal and straight back out, over and over, while the furnace's fuel slot switched between coal and orange crystal. A worker carrying the charcoal out took every piece of coal, also the few the furnace keeps to burn, so the furnace sent for coal from the stockpiles as fuel, which was its product again. Carrying charcoal out now leaves the furnace's 2 pieces of fuel.
+- [FIX] **Options, refresh rate:** picking a refresh rate in Screen resolution (e.g. 240 Hz) did not always take: the game saved only the width and height and let the system choose the rate, did not set the resolution again when only the rate changed, and showed the lowest rate of that size when the options opened again. The rate picked is kept (`[Display] RefreshRate`), set with the resolution in full screen (on Windows in exclusive full screen when it is not the desktop's rate) and shown in the list. Port only. On Linux the desktop (compositor) can still decide the full screen rate.
+- [ADD] **Movable windows:** windows can be moved with the mouse (drag with the left button, kept on screen):
+  - the in-game menu's task popup and the buildings' windows (research station, smithy, armoury, market). They stay where they are put until the game is left; a double click puts a window back in its place;
+  - the debug menu (F8), the performance and system log panels, the mod settings, all settings, market, call to arms, giant and upgrade windows. They stay where they are put while the game runs.
+
 ## 0.8.3 — 2026-11-05
 
 - [FIX] **Port, dropdowns:** the new game screen's mode and preset lists (and every other dropdown of the game's menus) opened unseen, so no other mode or preset could be chosen. The port's layout fix for the game's cloned menus was copied into the dropdown's list without its values and shrank the list to nothing.

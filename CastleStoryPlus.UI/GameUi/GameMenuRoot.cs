@@ -130,6 +130,7 @@ internal class GameMenuRoot : MonoBehaviour
 		GameActions.SetScoreboardVisible(true);
 		GameActions.Forget();
 		GameUiState.Reset();
+		CsWindowDrag.Reset();
 	}
 
 	private void Update()

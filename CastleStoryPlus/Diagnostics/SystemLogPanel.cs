@@ -135,6 +135,7 @@ internal class SystemLogPanel : MonoBehaviour
 		GameObject canvas = CreateCanvas("SystemLogCanvas", transform, 950);
 		_window = canvas;
 		GameObject window = CreatePanel("SystemLogWindow", canvas.transform);
+		Draggable(window);
 		RectTransform rect = window.GetComponent<RectTransform>();
 		SetRect(rect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1100f, 700f));
 		VerticalLayoutGroup layout = window.AddComponent<VerticalLayoutGroup>();

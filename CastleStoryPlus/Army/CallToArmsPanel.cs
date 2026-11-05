@@ -615,6 +615,7 @@ internal class CallToArmsPanel : MonoBehaviour
 		_hint.SetActive(false);
 
 		_window = CreateWindow(canvasGo.transform, 380f);
+		Draggable(_window);
 		RectTransform windowRect = _window.GetComponent<RectTransform>();
 		windowRect.anchorMin = new Vector2(1f, 0.5f);
 		windowRect.anchorMax = new Vector2(1f, 0.5f);
