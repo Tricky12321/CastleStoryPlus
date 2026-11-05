@@ -208,6 +208,10 @@ internal static class WorldEndpoints
 		string mapName = request.String("map", null);
 		string modeName = request.String("gamemode", request.String("mode", Sandbox));
 		List<Asset_Map> maps = Maps();
+		if (modeName.Equals(WorldEditor, StringComparison.OrdinalIgnoreCase))
+		{
+			return EditWorld(starter, maps, mapName);
+		}
 		Asset_Map map = null;
 		foreach (Asset_Map candidate in maps)
 		{
@@ -255,6 +259,24 @@ internal static class WorldEndpoints
 			"gamemode", mode.codename,
 			"preset", (preset != null) ? preset.codename : null,
 			"enemies", mode.codename != Sandbox,
+			"hint", "Poll GET /api/status until inGame is true and worldStart is null");
+	}
+
+	// The world editor on a map (the title screen's world editor library: a map opened in the world_editor mode).
+	private static object EditWorld(WorldStarter starter, List<Asset_Map> maps, string mapName)
+	{
+		Asset_Map map = maps.Find(m => (mapName == null) ? m.authorType == AssetAuthorType.Official : Matches(m.codename, m.shortCodename, m.displayName, mapName));
+		if (map == null)
+		{
+			throw new ApiException(404, (mapName == null) ? "No official map" : "No map '" + mapName + "' (GET /api/worlds lists them)");
+		}
+		starter.BeginEditor(map);
+		return Obj(
+			"starting", true,
+			"phase", starter.Phase,
+			"map", map.displayName,
+			"mapCodename", map.codename,
+			"gamemode", WorldEditor,
 			"hint", "Poll GET /api/status until inGame is true and worldStart is null");
 	}
 

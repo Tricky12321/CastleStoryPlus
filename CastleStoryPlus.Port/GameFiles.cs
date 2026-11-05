@@ -29,8 +29,13 @@ public static class GameFiles
 		log(lines.Count + " files in " + manifestPath);
 	}
 
-	// The problems found ("missing <file>", "changed <file>"); empty when the install matches.
-	public static List<string> Verify(string dataDir, string manifestPath, Action<int, int> progress)
+	// Where a mod that changed the game's code kept the originals (Managed.orig/<file> beside Managed/<file>).
+	public const string OriginalsFolder = "Managed.orig/";
+
+	// The problems found ("missing <file>", "changed <file>"); empty when the install matches. A changed or missing
+	// file in Managed/ whose original is kept unchanged in Managed.orig/ is no problem: it is added to originals
+	// (relative path, full path of the original) for the install to use instead.
+	public static List<string> Verify(string dataDir, string manifestPath, Action<int, int> progress, Dictionary<string, string> originals = null)
 	{
 		var problems = new List<string>();
 		string[] lines = File.ReadAllLines(manifestPath).Where(l => l.Length > 66).ToArray();
@@ -40,17 +45,32 @@ public static class GameFiles
 			string relative = lines[i].Substring(66);
 			string path = Path.Combine(dataDir, relative.Replace('/', Path.DirectorySeparatorChar));
 			progress?.Invoke(i, lines.Length);
-			if (!File.Exists(path))
+			bool exists = File.Exists(path);
+			if (exists && string.Equals(Hash(path), expected, StringComparison.OrdinalIgnoreCase))
 			{
-				problems.Add("missing " + relative);
+				continue;
 			}
-			else if (!string.Equals(Hash(path), expected, StringComparison.OrdinalIgnoreCase))
+			string original = Original(dataDir, relative);
+			if (originals != null && original != null && string.Equals(Hash(original), expected, StringComparison.OrdinalIgnoreCase))
 			{
-				problems.Add("changed " + relative);
+				originals[relative] = original;
+				continue;
 			}
+			problems.Add((exists ? "changed " : "missing ") + relative);
 		}
 		progress?.Invoke(lines.Length, lines.Length);
 		return problems;
+	}
+
+	// The kept original of a file in Managed/, or null.
+	private static string Original(string dataDir, string relative)
+	{
+		if (!relative.StartsWith("Managed/", StringComparison.Ordinal))
+		{
+			return null;
+		}
+		string path = Path.Combine(dataDir, (OriginalsFolder + relative.Substring("Managed/".Length)).Replace('/', Path.DirectorySeparatorChar));
+		return File.Exists(path) ? path : null;
 	}
 
 	public static string Hash(string path)

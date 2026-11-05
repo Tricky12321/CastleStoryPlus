@@ -38,22 +38,34 @@ internal static class NestedCanvasFix
 }
 
 // Puts a nested canvas's layout back to its template's once it is under another canvas.
+// The fields are serialized so a clone of the clone (a dropdown's list) carries them; one that captured nothing
+// leaves its layout alone (else the list got scale 0 and opened unseen).
 internal sealed class NestedCanvasLayout : MonoBehaviour
 {
+	[SerializeField]
+	private bool captured;
+
+	[SerializeField]
 	private Vector2 anchorMin;
 
+	[SerializeField]
 	private Vector2 anchorMax;
 
+	[SerializeField]
 	private Vector2 anchoredPosition;
 
+	[SerializeField]
 	private Vector2 sizeDelta;
 
+	[SerializeField]
 	private Vector2 pivot;
 
+	[SerializeField]
 	private Vector3 localScale;
 
 	internal void Capture(RectTransform template)
 	{
+		captured = true;
 		anchorMin = template.anchorMin;
 		anchorMax = template.anchorMax;
 		anchoredPosition = template.anchoredPosition;
@@ -80,7 +92,7 @@ internal sealed class NestedCanvasLayout : MonoBehaviour
 	private void Restore()
 	{
 		Transform parent = transform.parent;
-		if (parent == null || parent.GetComponentInParent<Canvas>() == null)
+		if (!captured || parent == null || parent.GetComponentInParent<Canvas>() == null)
 		{
 			return;
 		}

@@ -55,6 +55,9 @@ namespace CastleStoryPlus.Player
 		private volatile bool running;
 		private volatile bool succeeded;
 		private volatile string failure;
+
+		// install.log, for the failure's explanation (set on the worker thread, which may not ask Unity for paths).
+		private string logPath = LogName;
 		private float restartAt = -1f;
 
 		public static string PlayerRoot => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
@@ -99,7 +102,10 @@ namespace CastleStoryPlus.Player
 			}
 			if (failure != null)
 			{
-				AddLine(failure, true);
+				foreach (string line in failure.Split('\n'))
+				{
+					AddLine(line, true);
+				}
 				SetStep("The install failed. Nothing of the game was changed.", progress);
 				failure = null;
 				installButton.interactable = true;
@@ -148,7 +154,8 @@ namespace CastleStoryPlus.Player
 			StreamWriter file = null;
 			try
 			{
-				file = new StreamWriter(Path.Combine(Path.GetDirectoryName(playerData), LogName), false) { AutoFlush = true };
+				logPath = Path.Combine(Path.GetDirectoryName(playerData), LogName);
+				file = new StreamWriter(logPath, false) { AutoFlush = true };
 				file.WriteLine(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " installing from " + gameData);
 				StreamWriter log = file;
 				var sink = new InstallerDomain.Sink(
@@ -195,11 +202,17 @@ namespace CastleStoryPlus.Player
 			file?.WriteLine(error);
 			if (problems != null && problems.Length > 0)
 			{
+				// Every file in install.log; the screen says what kind of difference it is and what to do.
 				foreach (string problem in problems)
 				{
-					logged.Enqueue(problem);
+					file?.WriteLine(problem);
 				}
-				failure = problems.Length + " game files are missing or not the version this port is made for. It needs the " + platform + " version of Castle Story; verify the game's files in Steam and try again.";
+				List<string> explanation = InstallFailure.Explain(problems, platform, logPath);
+				foreach (string line in explanation)
+				{
+					file?.WriteLine(line);
+				}
+				failure = string.Join("\n", explanation.ToArray());
 			}
 			else
 			{

@@ -30,14 +30,15 @@ public sealed class BundleConverter : IDisposable
 	private readonly ShaderConverter shaders;
 
 	// engineTypes: the player's engine-types.assets, for converting the shaders (without it they stay as they are).
-	public BundleConverter(string classPackage, string dataDir, string engineTypes = null)
+	// managedDir: the game's code to read the scripts' fields from (default dataDir/Managed).
+	public BundleConverter(string classPackage, string dataDir, string engineTypes = null, string managedDir = null)
 	{
 		this.dataDir = dataDir;
 		shaders = engineTypes == null ? null : new ShaderConverter(engineTypes);
 		manager = new AssetsManager();
 		manager.LoadClassPackage(classPackage);
 		classes = manager.LoadClassDatabaseFromPackage(EngineVersion);
-		manager.MonoTempGenerator = new MonoCecilTempGenerator(Path.Combine(dataDir, "Managed"));
+		manager.MonoTempGenerator = new MonoCecilTempGenerator(managedDir ?? Path.Combine(dataDir, "Managed"));
 	}
 
 	// An asset in a bundle's container: its name, where it is (file id as seen from the AssetBundle object's file) and

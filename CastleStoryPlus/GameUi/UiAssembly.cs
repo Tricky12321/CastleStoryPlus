@@ -25,6 +25,13 @@ internal static class UiAssembly
 
 	internal static Func<GameMenuModel> Model;
 
+	// The world editor's menu (CsWorldEditor).
+	internal static Action OpenWorldEditor;
+
+	internal static Action CloseWorldEditor;
+
+	internal static Func<bool> WorldEditorOpen;
+
 	// Every view reads its item again.
 	internal static Action MarkAll;
 
@@ -106,9 +113,11 @@ internal static class UiAssembly
 	internal static bool Reload()
 	{
 		bool open = Model != null && Model() != null;
+		bool editor = WorldEditorOpen != null && WorldEditorOpen();
 		try
 		{
 			Close?.Invoke();
+			CloseWorldEditor?.Invoke();
 		}
 		catch (Exception ex)
 		{
@@ -118,6 +127,10 @@ internal static class UiAssembly
 		if (open && Open != null)
 		{
 			Open(true);
+		}
+		if (editor && OpenWorldEditor != null)
+		{
+			OpenWorldEditor();
 		}
 		return loaded;
 	}

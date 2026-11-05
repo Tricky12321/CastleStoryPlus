@@ -19,6 +19,9 @@ internal static class UiEntry
 		UiAssembly.Close = Close;
 		UiAssembly.Model = () => (_root != null) ? _root.Model : null;
 		UiAssembly.MarkAll = CsItemViews.MarkAll;
+		UiAssembly.OpenWorldEditor = CastleStoryPlus.WorldEditor.WorldEditorRoot.Open;
+		UiAssembly.CloseWorldEditor = CastleStoryPlus.WorldEditor.WorldEditorRoot.Close;
+		UiAssembly.WorldEditorOpen = () => CastleStoryPlus.WorldEditor.WorldEditorRoot.IsOpen;
 	}
 
 	// reload: the menu is built again in a game already going (no help at the start, as at the game's start).

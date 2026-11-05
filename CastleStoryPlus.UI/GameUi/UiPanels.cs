@@ -49,15 +49,23 @@ internal class CsPanelView : MonoBehaviour
 
 	private readonly List<SectionView> _sections = new List<SectionView>();
 
+	private float _width = Width;
+
 	public static CsPanelView Create(Transform parent, UiPanel panel, bool rightSide)
+	{
+		return Create(parent, panel, rightSide, BarWidth, Width, Bottom);
+	}
+
+	// Beside a bar barWidth wide, width wide, from bottom up to the top of the screen (the world editor's panels).
+	public static CsPanelView Create(Transform parent, UiPanel panel, bool rightSide, float barWidth, float width, float bottom)
 	{
 		RectTransform rect = UiKit.CreateRect("CS panel " + panel.Id, parent);
 		float x = rightSide ? 1f : 0f;
 		rect.anchorMin = new Vector2(x, 0f);
 		rect.anchorMax = new Vector2(x, 1f);
 		rect.pivot = new Vector2(x, 0.5f);
-		rect.offsetMin = new Vector2(rightSide ? -BarWidth - Width : BarWidth, Bottom);
-		rect.offsetMax = new Vector2(rightSide ? -BarWidth : BarWidth + Width, 0f);
+		rect.offsetMin = new Vector2(rightSide ? -barWidth - width : barWidth, bottom);
+		rect.offsetMax = new Vector2(rightSide ? -barWidth : barWidth + width, 0f);
 		Image background = rect.gameObject.AddComponent<Image>();
 		LuiStyle.Paint(background, LuiStyle.FrameSprite, LuiStyle.BgPanel);
 		VerticalLayoutGroup layout = rect.gameObject.AddComponent<VerticalLayoutGroup>();
@@ -70,6 +78,7 @@ internal class CsPanelView : MonoBehaviour
 		view._panel = panel;
 		view._rect = rect;
 		view._rightSide = rightSide;
+		view._width = width;
 		view.BuildHeader();
 		view.BuildSections();
 		if (panel.Group != null)
@@ -118,8 +127,8 @@ internal class CsPanelView : MonoBehaviour
 			if (buttons)
 			{
 				// As many columns as cells of the section's size fit, a little smaller to leave a gap between them.
-				int columns = Mathf.Max(1, Mathf.FloorToInt((Width - 16f) / Mathf.Max(1f, section.CellSize)));
-				float cell = Mathf.Floor((Width - 16f - (columns - 1) * CellGap) / columns);
+				int columns = Mathf.Max(1, Mathf.FloorToInt((_width - 16f) / Mathf.Max(1f, section.CellSize)));
+				float cell = Mathf.Floor((_width - 16f - (columns - 1) * CellGap) / columns);
 				view.Body = LuiWidgets.Grid(_content, new Vector2(cell, cell), CellGap, columns);
 			}
 			else

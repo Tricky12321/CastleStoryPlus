@@ -94,6 +94,39 @@ if (-not $GameDir) {
 $Exe = Join-Path $GameDir "Castle Story.exe"
 if (-not (Test-Path $Exe)) { Fail "not a Castle Story folder: $GameDir" }
 Log "game folder: $GameDir"
+
+# Windows does not let a file be replaced while a program has it open: nothing is changed until no program runs from
+# the game's folder (the port, the original game holding the launcher, Unity's crash handler).
+function Wait-GameClosed {
+    $deadline = (Get-Date).AddSeconds(60)
+    while ($true) {
+        $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($GameDir, [StringComparison]::OrdinalIgnoreCase) })
+        if ($running.Count -eq 0) { return }
+        if ((Get-Date) -gt $deadline) {
+            Fail ("the game is still running (" + (($running | ForEach-Object { $_.ProcessName }) -join ", ") + "); close it and run the installer again")
+        }
+        Start-Sleep -Seconds 1
+    }
+}
+
+# A step that can fail while Windows still holds a file a moment after its program closed (an antivirus scan, the
+# Steam overlay): tried again for about 20 seconds before giving up.
+function Retry($what, [scriptblock]$step) {
+    for ($i = 1; $i -le 10; $i++) {
+        try {
+            & $step
+            return
+        }
+        catch {
+            if ($i -eq 10) {
+                Fail "$what failed: $($_.Exception.Message). Close the game and any program using its folder, then run the installer again."
+            }
+            Start-Sleep -Seconds 2
+        }
+    }
+}
+
+Wait-GameClosed
 $DoorstopConfig = Join-Path $GameDir "doorstop_config.ini"
 
 function Set-TargetAssembly($path) {
@@ -169,13 +202,34 @@ try {
         if (Test-Path $config) {
             Copy-Item -Recurse -Force $config $keptConfig
         }
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $target
-        Copy-Item -Recurse -Force (Join-Path $source $PortDir) $GameDir
+        # The new version is put together beside the old one first, then the folders are swapped by renaming: a
+        # file still held open makes the swap fail before anything is lost, and the old version is put back.
+        $staged = "$target.new"
+        $old = "$target.old"
+        Retry "removing what an earlier update left" {
+            foreach ($leftover in @($staged, $old)) {
+                if (Test-Path $leftover) { Remove-Item -Recurse -Force -ErrorAction Stop $leftover }
+            }
+        }
+        Copy-Item -Recurse -Force -ErrorAction Stop (Join-Path $source $PortDir) $staged
         if (Test-Path $keptConfig) {
-            Copy-Item -Recurse -Force $keptConfig (Join-Path $target "BepInEx")
+            Copy-Item -Recurse -Force -ErrorAction Stop $keptConfig (Join-Path $staged "BepInEx")
+        }
+        Retry "moving the installed version aside" {
+            if (Test-Path $target) { Move-Item -ErrorAction Stop $target $old }
+        }
+        try {
+            Move-Item -ErrorAction Stop $staged $target
+        }
+        catch {
+            if (Test-Path $old) { Move-Item -ErrorAction SilentlyContinue $old $target }
+            Fail "could not put the new version in place: $($_.Exception.Message). The installed version was kept."
         }
         Set-Content -Path $versionFile -Value $version
-        Copy-Item -Force (Join-Path $source "launcher\CastleStoryPlus.PortLauncher.dll") (Join-Path $GameDir "BepInEx\core")
+        Retry "replacing the launcher" {
+            Copy-Item -Force -ErrorAction Stop (Join-Path $source "launcher\CastleStoryPlus.PortLauncher.dll") (Join-Path $GameDir "BepInEx\core")
+        }
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $old
         # The mod for the original game gives way to the port.
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue (Join-Path $GameDir $OldPluginDir), (Join-Path $GameDir $OldBootstrap)
         $was = if ($installed) { " (was $installed)" } else { "" }

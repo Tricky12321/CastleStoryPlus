@@ -295,6 +295,8 @@ end
 		bodySize.preferredHeight = 720f;
 		bodySize.flexibleHeight = 0f;
 
+		AddUpdateRows();
+
 		if (AutoSave.Minutes != null)
 		{
 			AddSection("SAVING");
@@ -449,6 +451,44 @@ end
 		Fixed(value.gameObject, 70f, 26f);
 		CreateButton(row, "+", 26f, () => step(1));
 		return value;
+	}
+
+	// UPDATES: the installed and newest version, a check for a new release, the update itself (the game is saved, closed,
+	// updated and started again) and the title screen's notice switched back on for a release it was hidden for.
+	private void AddUpdateRows()
+	{
+		AddSection("UPDATES");
+		Transform row = CreateRow(_body, 26f);
+		Text status = CreateText(row, string.Empty, 14, TextColor, TextAnchor.MiddleLeft);
+		Flexible(status.gameObject);
+		Button check = CreateButton(row, "Check now", 110f, () =>
+		{
+			Updates.UpdateCheck.CheckNow();
+			Refresh();
+		});
+		Transform actions = CreateRow(_body, 26f);
+		Flexible(CreateRect("Spacer", actions).gameObject);
+		Button notice = CreateButton(actions, "Show the update notice again", 230f, () =>
+		{
+			Updates.UpdateCheck.Skipped = string.Empty;
+			Refresh();
+		});
+		Button install = CreateButton(actions, string.Empty, 190f, () =>
+		{
+			SetVisible(false);
+			Updates.UpdateCheck.Install();
+		});
+		Text installLabel = install.GetComponentInChildren<Text>();
+		_refreshers.Add(() =>
+		{
+			string latest = Updates.UpdateCheck.Latest;
+			status.text = "Installed v" + Plugin.Version + ": " + Updates.UpdateCheck.Status;
+			check.interactable = !Updates.UpdateCheck.Busy;
+			install.gameObject.SetActive(latest != null);
+			installLabel.text = "Update to " + latest;
+			install.interactable = !Updates.UpdateCheck.Busy;
+			notice.gameObject.SetActive(!string.IsNullOrEmpty(Updates.UpdateCheck.Skipped));
+		});
 	}
 
 	// An ON/OFF button that applies at once (unlike the feature switches).

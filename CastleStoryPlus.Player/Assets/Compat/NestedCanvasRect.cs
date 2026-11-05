@@ -6,17 +6,22 @@ namespace CastleStoryPlus.Compat
 	// drew. The game clones its UI templates as root objects and moves them under their canvas right after, so with
 	// Unity 6 their nested canvases keep the screen's size (a small arrow sprite covering the screen). This puts back the
 	// template's layout once the canvas is nested again.
+	// The fields are serialized: a clone of a cloned template (a dropdown's list, which Unity's Dropdown instantiates
+	// from its template) carries this component too, and with fields Unity does not copy it put scale 0 and size 0 on
+	// the list, so the dropdown opened unseen. A copy that has captured nothing leaves its layout alone.
 	public sealed class NestedCanvasRect : MonoBehaviour
 	{
-		private Vector2 anchorMin;
-		private Vector2 anchorMax;
-		private Vector2 anchoredPosition;
-		private Vector2 sizeDelta;
-		private Vector2 pivot;
-		private Vector3 localScale;
+		[SerializeField] private bool captured;
+		[SerializeField] private Vector2 anchorMin;
+		[SerializeField] private Vector2 anchorMax;
+		[SerializeField] private Vector2 anchoredPosition;
+		[SerializeField] private Vector2 sizeDelta;
+		[SerializeField] private Vector2 pivot;
+		[SerializeField] private Vector3 localScale;
 
 		public void Capture(RectTransform template)
 		{
+			captured = true;
 			anchorMin = template.anchorMin;
 			anchorMax = template.anchorMax;
 			anchoredPosition = template.anchoredPosition;
@@ -43,7 +48,7 @@ namespace CastleStoryPlus.Compat
 		private void Restore()
 		{
 			Transform parent = transform.parent;
-			if (parent == null || parent.GetComponentInParent<Canvas>() == null)
+			if (!captured || parent == null || parent.GetComponentInParent<Canvas>() == null)
 			{
 				return;
 			}
