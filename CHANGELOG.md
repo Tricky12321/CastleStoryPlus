@@ -3,6 +3,14 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [FIX] **Port, dropdowns:** the new game screen's mode and preset lists (and every other dropdown of the game's menus) opened unseen, so no other mode or preset could be chosen. The port's layout fix for the game's cloned menus was copied into the dropdown's list without its values and shrank the list to nothing.
+- [CHANGE] **Installer, game files that do not match:** instead of a count, the installer says what is wrong (the game's code changed by a mod, files missing, or a different game version such as a Steam beta branch) and how to fix it in Steam (verify the game's files, Betas: None). The full list goes to install.log. A game file changed by a mod whose original was kept in `Managed.orig` is no longer a problem: the original is used.
+- [CHANGE] **GlobalBuildJob, build tasks separate by default:** a new setting in the in-game settings (Build tasks: one task / separate; `[Building] CombineBuildTasks`) chooses whether every blueprint goes into one build task per team. Separate is the default: the build button makes a new build task again, and only blueprints placed with no build task selected go to an existing one.
+- [ADD] **Update in game:** when a newer release is found, the in-game settings have an "Update to vX" button: it saves the game, closes it, installs the update and starts the game again (as the title screen's notice does).
+- [ADD] **System report:** `BepInEx/system-report.txt` holds the mod's and game's versions, the operating system (also Wine/Proton), processor, memory, graphics card and API, screen, the game's own settings and every mod setting, for bug reports. Rewritten each time a scene loads; nothing is sent anywhere.
+
 ## 0.8.2 — 2026-11-05
 
 - [FIX] **SidePlanks, crash loading a save:** a save with a large floor of wooden planks blueprints could crash the game while loading (stack overflow). A plank held from the side asked the plank beside it through the game's validator component, which also set that plank's state; each change revalidated the planks round it, and on a large floor the chain ran hundreds of planks deep. The plank beside it is now judged by the game's rule alone, without changing anything. (#20)

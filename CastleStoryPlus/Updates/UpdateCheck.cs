@@ -38,9 +38,38 @@ internal class UpdateCheck : MonoBehaviour
 
 	private static string InstallerName => IsWindows ? "install.ps1" : "install.sh";
 
+	private static UpdateCheck _instance;
+
 	private static void Enable()
 	{
-		Plugin.Root.AddComponent<UpdateCheck>();
+		_instance = Plugin.Root.AddComponent<UpdateCheck>();
+		// In a game too: the settings sidebar offers the update once one is found. The game is saved first.
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) => menu.Settings.Find("settings").Add(new GameUi.UiButton
+		{
+			Id = "update",
+			Visible = () => _instance != null && _instance._latest != null,
+			Label = () => "Update to " + _instance._latest,
+			Tooltip = () => "Castle Story Plus " + _instance._latest + " is available (you have v" + Plugin.Version + "). Saves the game, closes it, installs the update and starts the game again.",
+			Icon = () => GameUi.GameUiState.Icon(Brix.UI.Icons.IconKeys.UI_Down),
+			Enabled = () => !_instance._updating,
+			OnClick = (bool shift, bool ctrl) => _instance.UpdateNow()
+		}));
+	}
+
+	// The settings sidebar's update button: a game being played is saved first (as "save and quit" does).
+	private void UpdateNow()
+	{
+		if (_updating || _latest == null)
+		{
+			return;
+		}
+		if (Brix.Engine.Architecte.instance != null && GameParam.Map != null && !Menus.QuitDialogPatch.SaveBeforeLeaving())
+		{
+			Plugin.Log.LogWarning("Update: the game could not be saved; not updating");
+			return;
+		}
+		_updating = true;
+		StartCoroutine(RunUpdate());
 	}
 
 	// The original game's folder, which the installer installs into: in the Unity 6 port, the folder that holds the
@@ -264,7 +293,8 @@ internal class UpdateCheck : MonoBehaviour
 			yield break;
 		}
 		Plugin.Log.LogInfo("Updating to " + _latest + " with " + installer + "; closing the game");
-		Application.Quit();
+		// As the game's own quit: a save still being written finishes first.
+		Brix.Utils.ApplicationQuitter.Quit();
 	}
 
 	private static string Quote(string value)

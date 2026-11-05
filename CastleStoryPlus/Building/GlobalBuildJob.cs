@@ -24,10 +24,46 @@ namespace CastleStoryPlus.Building;
 // the one with the most blueprints, made when there is none. The blueprints of any other build task are moved into it
 // and the emptied task deleted. A blueprint that lands outside the selected task is committed at once, as the game
 // does when its task is deselected.
+// [Building] CombineBuildTasks (off by default, also in the in-game settings) chooses this one task; off, every build
+// task stays its own (the build button makes a new one, as in the game) and only blueprints placed without a build task
+// selected go to an existing one (the one with the most blueprints), or a new one, instead of being lost.
 [Feature(Features.GlobalBuildJob, Features.GlobalBuildJobInfo)]
 [HarmonyPatch(typeof(UNetBlueprint), "_FinishSpawnBlueprint")]
 internal static class GlobalBuildJob
 {
+	private static BepInEx.Configuration.ConfigEntry<bool> _combine;
+
+	// One build task per team (true) or separate build tasks (false). Read when blueprints are placed, so a change
+	// applies at once; in multiplayer the host's applies (blueprints are placed on the server).
+	internal static bool Combine
+	{
+		get { return _combine != null && _combine.Value; }
+		set
+		{
+			if (_combine != null)
+			{
+				_combine.Value = value;
+			}
+		}
+	}
+
+	private static void Enable()
+	{
+		_combine = Plugin.Cfg.Bind("Building", "CombineBuildTasks", false, "One build task per team: every placed blueprint goes into it and other build tasks are merged into it. Off: build tasks stay separate (the build button makes a new one).");
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) =>
+		{
+			GameUi.UiSection section = menu.Settings.SectionAfter("settings", "buildtasks", () => "Build tasks");
+			section.Add(new GameUi.UiChoice
+			{
+				Id = "combineBuildTasks",
+				Label = () => "Blueprints go to",
+				Options = new[] { "One task", "Separate" },
+				Selected = () => Combine ? 0 : 1,
+				Select = (int option) => Combine = option == 0
+			});
+		});
+	}
+
 	// Set while a blueprint is handed to the team's build task instead of the selected one: it is committed when the
 	// task takes it (GlobalBuildJobCommitPatch).
 	internal static bool CommitAdded;
@@ -116,6 +152,10 @@ internal static class GlobalBuildJob
 			}
 		}
 		BuildProject global = (selected != null && projects.Contains(selected)) ? selected : null;
+		if (!Combine)
+		{
+			return Separate(user, global, projects);
+		}
 		// A new, empty build task (made by a path that still creates one) does not take over the team's build task:
 		// the existing task with work keeps its blueprints, workers and priority.
 		if (global != null && IsEmpty(global))
@@ -171,6 +211,25 @@ internal static class GlobalBuildJob
 			}
 		}
 		return global;
+	}
+
+	// Separate build tasks: the selected build task as it is; with none selected, the one with the most blueprints (or
+	// a new one), so a blueprint placed with the idle group or the repair task selected is still built. Nothing merged.
+	private static BuildProject Separate(User user, BuildProject selected, List<BuildProject> projects)
+	{
+		if (selected != null)
+		{
+			return selected;
+		}
+		BuildProject best = null;
+		foreach (BuildProject project in projects)
+		{
+			if (best == null || Blueprints(project).Count > Blueprints(best).Count)
+			{
+				best = project;
+			}
+		}
+		return (best != null) ? best : Create(user);
 	}
 
 	// The workers of a merged build task go with its blueprints: deleting the task sent them to the idle group, so the
@@ -268,7 +327,7 @@ internal static class GlobalBuildJobNewTaskPatch
 
 	private static bool Prefix(string s)
 	{
-		if (s != "Tool_Construction")
+		if (s != "Tool_Construction" || !GlobalBuildJob.Combine)
 		{
 			return true;
 		}
