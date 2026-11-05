@@ -542,7 +542,9 @@ internal class AllSettingsPanel : MonoBehaviour
 		colors.normalColor = Color.white;
 		colors.highlightedColor = new Color(0.92f, 0.92f, 0.92f, 1f);
 		colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+#if UNITY6
 		colors.selectedColor = Color.white;
+#endif
 		button.colors = colors;
 	}
 
