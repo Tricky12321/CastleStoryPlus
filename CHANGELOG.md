@@ -3,7 +3,7 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
-## Unreleased
+## 0.8.6 — 2026-11-05
 
 - [ADD] **BuildWatchdog:** a build task with blueprints and workers that finishes no block for a minute is reset: every blueprint is tried again (blueprints judged unreachable are forgotten), its workers' task and resource reservations are let go and they look for work afresh (`[BuildWatchdog] Seconds`, 0 off).
 - [FIX] **CustomBlocks, slabs on planks:** a wooden slab could not be placed on planks: the slabs use the brick's validator, whose support is stone only. Planks under a slab now hold it.
