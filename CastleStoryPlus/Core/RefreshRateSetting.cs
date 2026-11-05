@@ -64,6 +64,12 @@ internal static class RefreshRateSetting
 		return System.Math.Abs(a.value - b.value) < 0.5;
 	}
 
+	// A Wayland desktop: a program cannot switch the screen's mode, so the list holds only the rate the desktop set.
+	internal static bool Wayland
+	{
+		get { return Application.platform == RuntimePlatform.LinuxPlayer && !string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")); }
+	}
+
 	internal static string Label(RefreshRate rate)
 	{
 		double rounded = System.Math.Round(rate.value);
@@ -238,7 +244,7 @@ internal static class RefreshRateRow
 			item.containerPopulatorOperation = RefreshRateSetting.Operation;
 			item.titleText = RefreshRateSetting.Title;
 			item.localizeTitle = RefreshRateSetting.Title;
-			item.subtitleText = "&&Set your screen's refresh rate (full screen)";
+			item.subtitleText = RefreshRateSetting.Wayland ? "&&Wayland: your desktop sets the rate, only its own is listed" : "&&Set your screen's refresh rate (full screen)";
 			item.localizeSubtitle = item.subtitleText;
 			item.subsubtitleText = string.Empty;
 			item.isDefaultInGroup = false;

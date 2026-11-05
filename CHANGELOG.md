@@ -12,6 +12,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 - [FIX] **Saves with unknown blocks:** a save with a block type the game does not know (a mod's block with that feature off) stopped loading at that block. Such blocks are left out and logged, and the world loads.
 - [CHANGE] **Feature switches apply at once:** switching a feature on or off in the settings takes effect while the game runs (its patches are applied or taken off, its components switched), not after a restart. What a feature changes in the game's Lua menus follows the next time that menu loads.
 - [CHANGE] **Options, Castle Story Plus tab, game look:** the mod's settings page looks like the game's own option pages: yellow rows with the setting's name in capitals and a line of its description, ENABLED/DISABLED switches, and the sections as yellow tabs (the shown one white).
+- [CHANGE] **Options, refresh rate on Wayland:** under a Wayland desktop the refresh rate row says that the desktop sets the rate and only its own is listed (a program cannot switch the screen's mode there).
 - [FIX] **Options, refresh rate row:** the row moved to the bottom of the Graphics page after a value was applied; it stays under Screen resolution.
 
 ## 0.8.5 — 2026-11-05
