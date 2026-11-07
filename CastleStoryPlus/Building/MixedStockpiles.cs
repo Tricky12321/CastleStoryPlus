@@ -400,14 +400,14 @@ internal class MixedStockpileVisual : MonoBehaviour
 			while (left > 0 && column < centres.Length)
 			{
 				int inColumn = Mathf.Min(left, perColumn);
-				BuildColumn(resource, centres[column], (float)inColumn / perColumn);
+				BuildColumn(resource, centres[column], (float)inColumn / perColumn, inColumn);
 				left -= inColumn;
 				column++;
 			}
 		}
 	}
 
-	private void BuildColumn(Ressource resource, Vector2 centre, float fill)
+	private void BuildColumn(Ressource resource, Vector2 centre, float fill, int items)
 	{
 		Factory.AssetKey key = Description.RepresentativeOf(resource);
 		GameObject prefab = (key != null) ? Factory.Peek(key) : null;
@@ -420,13 +420,15 @@ internal class MixedStockpileVisual : MonoBehaviour
 		Bounds bounds = sourceFilter.sharedMesh.bounds;
 		if (resource.GetType().Name == "Rope")
 		{
-			BuildSpread(resource, centre, fill, sourceFilter, sourceRenderer, bounds);
+			BuildSpread(resource, centre, fill, items, sourceFilter, sourceRenderer, bounds);
 			return;
 		}
 		float scale = Mathf.Min(ColumnWidth / Mathf.Max(0.01f, bounds.size.x), ColumnWidth / Mathf.Max(0.01f, bounds.size.z));
 		scale = Mathf.Min(scale, ColumnHeight / Mathf.Max(0.01f, bounds.size.y));
 		float unitHeight = bounds.size.y * scale;
-		int units = Mathf.Max(1, Mathf.RoundToInt(fill * ColumnHeight / Mathf.Max(0.01f, unitHeight)));
+		// As high as the column is full, but never more pieces than items: a column of one or two large items (bricks
+		// stand a quarter of the column high) showed a whole stack for a single one.
+		int units = Mathf.Clamp(Mathf.RoundToInt(fill * ColumnHeight / Mathf.Max(0.01f, unitHeight)), 1, Mathf.Max(1, items));
 		for (int i = 0; i < units; i++)
 		{
 			GameObject piece = new GameObject(resource.GetType().Name);
@@ -445,12 +447,12 @@ internal class MixedStockpileVisual : MonoBehaviour
 	// coils.
 	private const int SpreadLayers = 2;
 
-	private void BuildSpread(Ressource resource, Vector2 centre, float fill, MeshFilter sourceFilter, MeshRenderer sourceRenderer, Bounds bounds)
+	private void BuildSpread(Ressource resource, Vector2 centre, float fill, int items, MeshFilter sourceFilter, MeshRenderer sourceRenderer, Bounds bounds)
 	{
 		float cell = ColumnWidth / 2f;
 		float scale = Mathf.Min(cell / Mathf.Max(0.01f, bounds.size.x), cell / Mathf.Max(0.01f, bounds.size.z));
 		float unitHeight = bounds.size.y * scale;
-		int count = Mathf.Clamp(Mathf.RoundToInt(fill * 4 * SpreadLayers), 1, 4 * SpreadLayers);
+		int count = Mathf.Clamp(Mathf.RoundToInt(fill * 4 * SpreadLayers), 1, Mathf.Min(4 * SpreadLayers, Mathf.Max(1, items)));
 		for (int i = 0; i < count; i++)
 		{
 			int layer = i / 4;

@@ -121,6 +121,7 @@ internal static class NavMeshEndpoints
 			"voxelsAverage", System.Math.Round(Per(NavMeshRoutes.RouteVoxels, NavMeshRoutes.Routed), 1),
 			"mended", NavMeshRoutes.Mended,
 			"eased", NavMeshRoutes.Eased,
+			"loopsCut", NavMeshRoutes.Loops,
 			"linksTaken", Obj("climbs", NavMeshRoutes.Climbs, "stepDowns", NavMeshRoutes.StepDowns, "ladders", NavMeshRoutes.LadderRuns),
 			"reasons", reasons,
 			"recent", new List<string>(NavMeshRoutes.Recent));

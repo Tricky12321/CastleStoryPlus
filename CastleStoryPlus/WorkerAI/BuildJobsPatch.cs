@@ -258,6 +258,9 @@ internal static class BuildPickUpAmountPatch
 	// Only the ones the game would build now: none higher than the first one, and none with an unbuilt blueprint by
 	// its feet (BuildGoal.AdjacentLower). Filling a higher blueprint built the next floor before the gaps of the one
 	// under it; once covered, those gaps could not be reached any more and the building stayed unfinished.
+	// A blueprint not yet committed (a build the player has not confirmed) is left out, unless the first one is not
+	// committed either: a repair area's blueprints for broken blocks are never committed (its provider has no
+	// AutoCommit) and are built as they are, so leaving them out made a repair worker carry one plank per trip.
 	private static List<BuildGoal> NearbyGoals(BuildGoal goal, Labor labor, Ressource ressource)
 	{
 		List<BuildGoal> result = new List<BuildGoal>();
@@ -266,10 +269,11 @@ internal static class BuildPickUpAmountPatch
 			return result;
 		}
 		Vector3 at = goal.transform.position;
+		bool committedOnly = goal.Commited;
 		foreach (Blueprint blueprint in goal.Provider.TrackedBlueprints)
 		{
 			BuildGoal other = (blueprint == null) ? null : blueprint.GetComponent<BuildGoal>();
-			if (other == null || other == goal || other.IsNullOrReleased() || other.IsAnti || !other.Commited || !blueprint.State.HasFlag(PlacementFlags.buildable) || other.recepteur == null || other.recepteur.IsFull())
+			if (other == null || other == goal || other.IsNullOrReleased() || other.IsAnti || (committedOnly && !other.Commited) || !blueprint.State.HasFlag(PlacementFlags.buildable) || other.recepteur == null || other.recepteur.IsFull())
 			{
 				continue;
 			}

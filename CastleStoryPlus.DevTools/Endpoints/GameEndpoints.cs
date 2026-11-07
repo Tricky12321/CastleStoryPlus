@@ -36,9 +36,9 @@ internal static class GameEndpoints
 			OffMainThread = true
 		});
 		routes.Add(new Route("GET", "/api/features", "The mod's features and whether each is on", Features));
-		routes.Add(new Route("GET", "/api/bricktrons", "Bricktrons: name, job, activity, task (its target, whether it can be interrupted), pending task, autonomy, moving, position, carrying (enemies with all=true; healtron: true marks a Healtron)", Bricktrons)
+		routes.Add(new Route("GET", "/api/bricktrons", "Bricktrons: name, job, activity, task (its target, whether it can be interrupted), pending task, autonomy, moving, position, carrying (enemies with all=true; healtron: true marks a Healtron); with route=true the route being walked (locomotion state, occupied and entering voxel, the route's voxels round the current one with the kind of step)", Bricktrons)
 		{
-			Parameters = "all (true: every faction, else only the player's), q (name/job filter)"
+			Parameters = "all (true: every faction, else only the player's), q (name/job filter), route (true: add the route being walked)"
 		});
 		routes.Add(new Route("GET", "/api/objects", "Things in the world by type name (buildings, blueprints, resources, units; trees as Nature.Tree, nearest first)", Objects)
 		{
@@ -104,6 +104,7 @@ internal static class GameEndpoints
 	{
 		bool all = request.Bool("all", false);
 		string filter = request.String("q", string.Empty);
+		bool route = request.Bool("route", false);
 		Faction local = (User.LocalUser != null) ? User.LocalUser.faction : null;
 		List<object> result = new List<object>();
 		foreach (Labor labor in Object.FindObjectsOfType<Labor>())
@@ -138,7 +139,8 @@ internal static class GameEndpoints
 				"taskCanInterrupt", (task != null) ? (object)task.CanInterrupt : null,
 				"pending", (labor.PendingTask != null) ? labor.PendingTask.Description : null,
 				"autonomy", (labor.Autonomy != null) ? labor.Autonomy.Id.ToString() : null,
-				"moving", Moving(labor)));
+				"moving", Moving(labor),
+				"route", route ? Route(labor) : null));
 		}
 		return Obj("count", result.Count, "bricktrons", result);
 	}
@@ -163,6 +165,47 @@ internal static class GameEndpoints
 			return null;
 		}
 		return Obj("walking", locomotion.Walking, "running", locomotion.Running, "inPlace", locomotion.InPlace, "ladder", locomotion.IsUsingLadder, "airborne", locomotion.IsAirborne, "grabbed", locomotion.IsGrabbed);
+	}
+
+	// The route the bricktron walks: its locomotion state, the voxel it occupies and the one it is entering, and the
+	// route's voxels from a few before the current one to a few after, each with the kind of step onto it.
+	private static object Route(Labor labor)
+	{
+		Locomotion4 locomotion = labor.GetComponent<Locomotion4>();
+		if (locomotion == null || locomotion.PathIterator == null)
+		{
+			return null;
+		}
+		DestinationIterator iterator = locomotion.PathIterator;
+		WalkNode destination = iterator.Destination;
+		List<WalkNode> nodes = (List<WalkNode>)HarmonyLib.AccessTools.Field(typeof(DestinationIterator), "Nodes").GetValue(iterator);
+		System.Reflection.FieldInfo branchField = HarmonyLib.AccessTools.Field(typeof(WalkNode), "_branchType");
+		List<object> steps = new List<object>();
+		int from = Mathf.Max(0, iterator.CurrentIndex - 3);
+		int to = Mathf.Min(nodes.Count, iterator.CurrentIndex + 8);
+		for (int i = from; i < to; i++)
+		{
+			WalkNode node = nodes[i];
+			if (node == null || node.PathNode == null)
+			{
+				continue;
+			}
+			steps.Add(Obj("index", i, "voxel", Xyz(node.Voxel), "step", branchField.GetValue(node).ToString(), "current", i == iterator.CurrentIndex));
+		}
+		object occupied = (locomotion.presence != null && locomotion.presence.CurrentPathNode != null) ? Xyz(locomotion.presence.CurrentPathNode.RepresentativePosition) : null;
+		return Obj(
+			"state", locomotion.state.ToString(),
+			"occupied", occupied,
+			"entering", Xyz(locomotion.PositionEntering),
+			"index", iterator.CurrentIndex,
+			"known", nodes.Count,
+			"destination", (destination != null && destination.PathNode != null) ? Xyz(destination.Voxel) : null,
+			"nodes", steps);
+	}
+
+	private static object Xyz(XYZ v)
+	{
+		return new int[] { v.x, v.y, v.z };
 	}
 
 	private static object Objects(ApiRequest request)

@@ -85,9 +85,9 @@ internal static class PlaceEndpoints
 		});
 	}
 
-	private static void NeedGame()
+	private static void NeedGame(bool client = false)
 	{
-		if (!NetworkServer.active)
+		if (!NetworkServer.active && !(client && NetworkClient.active))
 		{
 			throw new ApiException(409, "Only on the host (single player or hosting a game)");
 		}
@@ -193,9 +193,14 @@ internal static class PlaceEndpoints
 		return footprint;
 	}
 
+	// On a client the blueprints are sent to the host as the player's placing does; they show up a moment later.
 	private static object Place(ApiRequest request)
 	{
-		NeedGame();
+		NeedGame(client: true);
+		if (!NetworkServer.active && (request.Bool("instant", false) || request.Bool("demolish", false)))
+		{
+			throw new ApiException(409, "instant and demolish only on the host");
+		}
 		string name = request.Required("key");
 		Factory.AssetKey key = Key(name);
 		if (key.Name == "RopeBridgePlacement" || key.Name == "RopeBridgeFrame" || key.Name == "RopeBridgePlank")

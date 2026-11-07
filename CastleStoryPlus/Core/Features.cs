@@ -519,6 +519,26 @@ internal static class Features
 
 	public const string HiddenDeliveriesInfo = "Unity 6 port, multiplayer: material delivered to a blueprint the other player's game does not have (an ally's blueprint, which only its own faction is sent) is hidden there, as it is in the blueprint, instead of lying in a heap that cannot be picked up.";
 
+	public const string AllyWorkerIcons = "AllyWorkerIcons";
+
+	public const string AllyWorkerIconsInfo = "Multiplayer: an ally's bricktron on a task shows no task icon in your game instead of an error on every refresh (its task's beacon is only sent to its own faction). The error broke off the network update of what the bricktron carried, so material delivered to the ally's buildings lay on the ground in your game.";
+
+	public const string SavedTeams = "SavedTeams";
+
+	public const string SavedTeamsInfo = "Multiplayer: a save remembers which players were on the same team; in the lobby of a loaded save every player is put in the team their faction had, so allies no longer start as enemies whose turrets and bricktrons fight (the game saves no teams and put each player in a new one). Host only.";
+
+	public const string MaxPlayers = "MaxPlayers";
+
+	public const string MaxPlayersInfo = "Unity 6 port, multiplayer: up to 8 players in a hosted game (the game: 4, and at 4 its lobby left the online list); [Multiplayer] MaxPlayers, the host's setting applies. The map still decides how many factions there are; extra players share them.";
+
+	public const string WorkSpotReserve = "WorkSpotReserve";
+
+	public const string WorkSpotReserveInfo = "Workshop blueprints (forge, workbench, lab, smithy, armoury, market, research station) also claim the spot their worker stands on, which the finished building claims: a blueprint placed there before was blocked for good once the workshop was done.";
+
+	public const string MenuTextFields = "MenuTextFields";
+
+	public const string MenuTextFieldsInfo = "Unity 6 port: text boxes in the game's menus (the lobby's player name, ...) take what was typed on Enter or when left; the port's menus had lost that link, so the name could not be changed.";
+
 	public const string DesyncProtection = "DesyncProtection";
 
 	public const string DesyncProtectionInfo = "Unity 6 port, multiplayer: the players' worlds (terrain and placed blocks) are compared every [Multiplayer] DesyncCheckSeconds. Where they differ twice in a row, the majority's world is taken (the host's when the vote is even) and the others are corrected; the chat says so. Each peer works out by itself what falls when a structure loses its support, so the worlds could drift apart and stay apart.";

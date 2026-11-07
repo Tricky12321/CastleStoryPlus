@@ -466,14 +466,67 @@ internal static class TaskPrediction
 		}
 	}
 
-	// A worker of the area's crew keeps to it. A free worker only while the game's own search chose this area for it
-	// a short while ago.
+	// A worker of the area's crew keeps to it, unless it only helps out there (HelpOtherGroups): its own task group
+	// comes first again as soon as that has work, and only the game's search asks it first. Kept to the helped area,
+	// a worker the player had put on a task went on working in the area it had gone to help, for good (issue #42).
+	// A free worker keeps to the area only while the game's own search chose it a short while ago, and no other area
+	// that has work for it now weighs more by the game's own priority (level, crew, distance): the search ran once,
+	// before the other free workers had joined, so every worker that searched at the same time chose the same area,
+	// and with each next task given here the workers stayed bunched in one or two of several tasks of the same level.
 	private static bool KeepsToArea(Labor labor, Project project)
 	{
 		if (labor.Autonomy != AutonomyStatus.FreeAgent)
 		{
-			return true;
+			return !HelpOtherGroupsPatch.HomeProjects.TryGetValue(labor, out Project home) || home == null || home == project;
 		}
-		return SearchChose.TryGetValue(labor, out KeyValuePair<Project, float> chose) && chose.Key == project && Time.time - chose.Value <= RecheckSeconds;
+		if (!SearchChose.TryGetValue(labor, out KeyValuePair<Project, float> chose) || chose.Key != project || Time.time - chose.Value > RecheckSeconds)
+		{
+			return false;
+		}
+		return !BetterElsewhere(labor, project);
+	}
+
+	private static readonly List<IOperable<Labor>> Others = new List<IOperable<Labor>>();
+
+	// Whether another area the worker may work in weighs more by the game's priority (as Labor.RefreshAvailableProjects
+	// sorts them; the worker's own area counts its "current" bonus, so it only moves when the game's search would) and
+	// has work for it.
+	private static bool BetterElsewhere(Labor labor, Project project)
+	{
+		if (labor.faction == null)
+		{
+			return false;
+		}
+		Others.Clear();
+		try
+		{
+			ProjectDatabase.For(labor.faction).AvailableProjects(Others, labor);
+			float own = project.PriorityInput(labor) * project.PriorityWeights;
+			foreach (IOperable<Labor> other in Others)
+			{
+				if (other == null || other == (IOperable<Labor>)project || other is IdleProject || other is RaidProject2 || !other.IsStillAlive)
+				{
+					continue;
+				}
+				if (other.PriorityInput(labor) * other.PriorityWeights <= own)
+				{
+					continue;
+				}
+				// An area the job board knows has nothing for the worker would only send it back here after a search.
+				if (JobBoard.IsOn && JobBoard.WouldSkip(labor, other))
+				{
+					continue;
+				}
+				if (other.HasWorkFor(labor))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		finally
+		{
+			Others.Clear();
+		}
 	}
 }

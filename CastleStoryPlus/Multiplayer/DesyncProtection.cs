@@ -105,6 +105,9 @@ internal sealed class DesyncProtection : MonoBehaviour
 
 	private float _nextCheck;
 
+	// A correction has been told in the chat in this game (see Chat).
+	private bool _chatted;
+
 	// Chunks out of sync in the last round, with every voter's hash then.
 	private Dictionary<int, Dictionary<int, ulong>> _suspects = new Dictionary<int, Dictionary<int, ulong>>();
 
@@ -191,6 +194,7 @@ internal sealed class DesyncProtection : MonoBehaviour
 		_round = null;
 		_suspects.Clear();
 		_waitingFor.Clear();
+		_chatted = false;
 	}
 
 	private void Changed(XYZ p)
@@ -632,9 +636,17 @@ internal sealed class DesyncProtection : MonoBehaviour
 		return list;
 	}
 
-	private static void Chat(string text)
+	// Only the first correction of a game goes to the chat; the rest are in the log (and DevTools). Every line
+	// posted to the game's chat box stays on screen and plays the chat sound, and a chunk that keeps differing posted
+	// a line every comparison (10 s), so the chat box never went away.
+	private void Chat(string text)
 	{
-		GameSignals.Invoke(UNetManager.LobbyNewChatMessage, "Castle Story Plus: " + text);
+		if (_chatted)
+		{
+			return;
+		}
+		_chatted = true;
+		GameSignals.Invoke(UNetManager.LobbyNewChatMessage, "Castle Story Plus: " + text + " Further corrections are only written to the log.");
 	}
 }
 #endif

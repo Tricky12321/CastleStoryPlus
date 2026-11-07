@@ -37,7 +37,7 @@ internal static class LargeStockpile
 
 	internal const string Name = "LargePalette";
 
-	private const int Size = 3;
+	internal const int Size = 3;
 
 	private const int CapacityMultiplier = 3;
 
@@ -449,6 +449,35 @@ internal static class LargeStockpileGhostPatch
 			return;
 		}
 		LargeStockpile.ScaleHorizontal(__instance.transform, LargeStockpile.ModelScale);
+	}
+}
+
+// Dragging a row of stockpiles: the game keeps every drag point that is not inside the model's size measured from
+// the middle of the previous one, and the edge counts as inside. That gives a step of 2 for the 2 x 2 pallet, but
+// also 2 for the 3 x 3 one (2 is outside half of 3), so the large stockpiles came every 2 voxels and overlapped by one.
+// Ours step by their own width, 3: each one right beside the previous.
+[Feature(Features.LargeStockpile, Features.LargeStockpileInfo)]
+[HarmonyPatch(typeof(DefaultDragger), "FilterDragPoints")]
+internal static class LargeStockpileDragPatch
+{
+	private static void Postfix(DefaultDragger __instance, List<Vector3> drags, ref List<Vector3> __result)
+	{
+		Blueprint blueprint = __instance.GetComponent<Blueprint>();
+		if (drags == null || drags.Count < 2 || blueprint == null || blueprint.AssetKey != LargeStockpile.BlueprintKey)
+		{
+			return;
+		}
+		HashSet<XYZ> body = new HashSet<XYZ>(__instance.GetComponent<IVolume>().GetCases(VProperty.fantome));
+		List<Vector3> result = new List<Vector3>();
+		for (int i = 0; i < drags.Count; i += LargeStockpile.Size)
+		{
+			// The first point is the held stockpile itself.
+			if (!body.Contains(XYZ.FromVector3(drags[i])))
+			{
+				result.Add(drags[i]);
+			}
+		}
+		__result = result;
 	}
 }
 
