@@ -3,7 +3,7 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
-## Unreleased
+## 0.8.7 — 2026-11-07
 
 - [FIX] **Unity 6 port, lobby player name:** the name typed in the multiplayer lobby was never set: Enter or leaving the box did nothing. The port's menus had lost the link from a text box to its menu; text boxes in the game's menus get it back (`[Features] MenuTextFields`).
 - [FIX] **Unity 6 port, bricktrons frozen in place:** a bricktron could stand still for good, running on the spot, and ignore every order, also "face towards" (seen on slopes and terrain edges, in single player and multiplayer). Where the first corners of a route over the navigation mesh lay in the voxel next to the one it stood in, the route went there and straight back; the walk aims at the edge between the two and never got past it, and every new route from that edge was the same. A route no longer comes back to a voxel it has passed (`[Features] Pathfinding`).
