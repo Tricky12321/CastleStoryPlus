@@ -277,7 +277,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 			float exact = layers * ratio;
 			fill *= exact / Mathf.CeilToInt(exact - 0.001f);
 		}
-		AddPieces(transform, source, LargePieces(layout, source, ratio), Vector2.zero, fill);
+		AddPieces(transform, source, LargePieces(layout, source, ratio), Vector2.zero, fill, recepteur.ContentDescription.Value(resource));
 	}
 
 	private void BuildMixed(Recepteur recepteur, List<Ressource> types)
@@ -299,7 +299,7 @@ internal class LargeStockpileVisual : MonoBehaviour
 				else if (TryGetSource(recepteur, resource, layout, out Source source))
 				{
 					List<Placement> pieces = (layout != null) ? ColumnPieces(layout, source) : RepresentativeColumn(source);
-					AddPieces(transform, source, pieces, Centres[column], fill);
+					AddPieces(transform, source, pieces, Centres[column], fill, inColumn);
 				}
 				left -= inColumn;
 				column++;
@@ -441,10 +441,12 @@ internal class LargeStockpileVisual : MonoBehaviour
 		}
 	}
 
-	// Shows the first part of the pieces (bottom first), as many as the fill asks for.
-	private static void AddPieces(Transform parent, Source source, List<Placement> pieces, Vector2 offset, float fill)
+	// Shows the first part of the pieces (bottom first), as many as the fill asks for, but never more pieces than items:
+	// a layout can have more places than the stockpile has room (cogs, a mixed column), and rounding the fill up then
+	// showed more goods than it held.
+	private static void AddPieces(Transform parent, Source source, List<Placement> pieces, Vector2 offset, float fill, int items)
 	{
-		int count = (fill <= 0f) ? 0 : Mathf.Max(1, Mathf.CeilToInt(fill * pieces.Count));
+		int count = (fill <= 0f) ? 0 : Mathf.Min(items, Mathf.Max(1, Mathf.CeilToInt(fill * pieces.Count)));
 		for (int i = 0; i < count && i < pieces.Count; i++)
 		{
 			Placement piece = pieces[i];
@@ -765,14 +767,20 @@ internal static class LargeStockpileDisplayPatch
 	}
 }
 
-// The pallet's animator shows the stretched crate and heap; on a large stockpile drawn by LargeStockpileVisual it stays off.
+// The pallet's animator shows the stretched crate and heap; on a stockpile drawn by LargeStockpileVisual it stays off.
+// That is every large one it handles and the 2 x 2 pallets holding coal or dark crystal: there the animator, playing
+// for a second after each change, switched the pallet's own crate and heap back on over the drawn crate, at the level
+// it had blended to, whatever the count.
 [Feature(Features.LargeStockpile, Features.LargeStockpileInfo)]
 [HarmonyPatch(typeof(AnimatedProgression), "Update")]
 internal static class LargeStockpileAnimatorPatch
 {
 	private static bool Prefix(AnimatedProgression __instance)
 	{
-		if (!LargeStockpile.IsLarge(__instance) || !LargeStockpileVisual.Handles(__instance.recepteur))
+		bool handled = LargeStockpile.IsLarge(__instance)
+			? LargeStockpileVisual.Handles(__instance.recepteur)
+			: MixedStockpiles.IsPallet(__instance.recepteur) && LargeStockpileVisual.HandlesSmall(__instance.recepteur);
+		if (!handled)
 		{
 			return true;
 		}

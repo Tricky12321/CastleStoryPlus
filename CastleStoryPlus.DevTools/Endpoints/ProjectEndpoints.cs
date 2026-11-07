@@ -62,6 +62,12 @@ internal static class ProjectEndpoints
 		{
 			throw new ApiException(409, "Only on the host (single player or hosting a game)");
 		}
+		NeedGame();
+	}
+
+	// Host or client: the game's commands go to the host as the player's clicks do.
+	private static void NeedGame()
+	{
 		if (User.LocalUser == null || User.LocalUser.faction == null || !Architecte.commence)
 		{
 			throw new ApiException(409, "No game in progress (or still loading)");
@@ -249,7 +255,7 @@ internal static class ProjectEndpoints
 
 	private static object Projects(ApiRequest request)
 	{
-		NeedHost();
+		NeedGame();
 		List<object> projects = List(User.LocalUser.faction, request.String("q", string.Empty));
 		return Obj("count", projects.Count, "projects", projects);
 	}
@@ -294,8 +300,12 @@ internal static class ProjectEndpoints
 			}
 			if (project == null)
 			{
-				project = Spawn(() => User.LocalUser.GetComponent<UNetGroupe>().CmdSpawnGoupe("Groupes", "Construction", HomePosition(), Quaternion.identity, false));
+				project = Spawn(() => User.LocalUser.GetComponent<UNetGroupe>().CallCmdSpawnGoupe("Groupes", "Construction", HomePosition(), Quaternion.identity, false));
 				created = true;
+			}
+			if (project == null)
+			{
+				throw new ApiException(409, "A client: make the build project first (POST /api/projects/create?type=build) and pass its id as 'project' once GET /api/projects lists it");
 			}
 		}
 		_lastBuildProject = project.gameObject.InstanceId();
@@ -332,6 +342,11 @@ internal static class ProjectEndpoints
 			before.Add(project.gameObject.InstanceId());
 		}
 		command();
+		if (!NetworkServer.active)
+		{
+			// A client: the host makes the project, and it arrives a moment later (GET /api/projects).
+			return null;
+		}
 		foreach (Project project in Object.FindObjectsOfType<Project>())
 		{
 			if (!before.Contains(project.gameObject.InstanceId()) && project.faction == User.LocalUser.faction)
@@ -344,7 +359,7 @@ internal static class ProjectEndpoints
 
 	private static object Create(ApiRequest request)
 	{
-		NeedHost();
+		NeedGame();
 		string type = request.Required("type").ToLowerInvariant();
 		Vector3 at = (request.Get("at") != null) ? request.Vector("at") : HomePosition();
 		UNetGroupe groupe = User.LocalUser.GetComponent<UNetGroupe>();
@@ -353,12 +368,16 @@ internal static class ProjectEndpoints
 		switch (type)
 		{
 			case "build":
-				project = Spawn(() => groupe.CmdSpawnGoupe("Groupes", "Construction", at, Quaternion.identity, false));
-				_lastBuildProject = project.gameObject.InstanceId();
+				project = Spawn(() => groupe.CallCmdSpawnGoupe("Groupes", "Construction", at, Quaternion.identity, false));
+				if (project != null)
+				{
+					_lastBuildProject = project.gameObject.InstanceId();
+				}
 				break;
 			case "quarry":
 			case "mine":
 				{
+					NeedHost();
 					Vector3 from = request.Vector("from");
 					Vector3 to = request.Vector("to");
 					Vector3 min = Vector3.Min(from, to);
@@ -390,20 +409,20 @@ internal static class ProjectEndpoints
 					if (trees.Count > 0)
 					{
 						Vector3 middle = new Vector3((min.x + max.x) / 2f, max.y + 1f, (min.z + max.z) / 2f);
-						clearing = Spawn(() => groupe.CmdSpawnHarvestProject(middle, Quaternion.identity, false, (int)NatureType.tree));
+						clearing = Spawn(() => groupe.CallCmdSpawnHarvestProject(middle, Quaternion.identity, false, (int)NatureType.tree));
 						Commit(clearing);
 					}
-					project = Spawn(() => groupe.CmdSpawnMineProject(at, Quaternion.identity, false));
+					project = Spawn(() => groupe.CallCmdSpawnMineProject(at, Quaternion.identity, false));
 					// As the quarry tool does: first uncommitted, so the game works out valid stairs (with 'commited' it keeps
 					// the stairs it has, none yet, and every dig goal stays invalid), then committed with those stairs.
 					StairOrientation stairs = StairOrientation.Default;
-					groupe.CmdSetMine(project.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), false);
+					groupe.CallCmdSetMine(project.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), false);
 					QuarryData quarry = project.GetComponent<QuarryData>();
 					if (quarry != null)
 					{
 						VoxelBounds bounds = quarry.Bounds;
 						stairs = quarry.StairOrientation;
-						groupe.CmdSetMine(project.gameObject, bounds.min.ToVector3(), bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
+						groupe.CallCmdSetMine(project.gameObject, bounds.min.ToVector3(), bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
 					}
 					Commit(project);
 					break;
@@ -426,35 +445,45 @@ internal static class ProjectEndpoints
 					{
 						throw new ApiException(400, "'what' is empty");
 					}
-					project = Spawn(() => groupe.CmdSpawnHarvestProject(at, Quaternion.identity, false, accepted));
+					project = Spawn(() => groupe.CallCmdSpawnHarvestProject(at, Quaternion.identity, false, accepted));
 					// The game commits a project when the player clicks away from it; until then nobody works on it.
-					Commit(project);
+					if (project != null)
+					{
+						Commit(project);
+					}
 					break;
 				}
 			case "treefarm":
 				// As the "Tree farm" button places it: a landscape task with the farm's rotation (TreeFarm.FarmRotation).
-				project = Spawn(() => groupe.CmdSpawnLandscapeProject(at, new Quaternion(0f, 0f, 1f, 0f), false));
-				Commit(project);
+				project = Spawn(() => groupe.CallCmdSpawnLandscapeProject(at, new Quaternion(0f, 0f, 1f, 0f), false));
+				if (project != null)
+				{
+					Commit(project);
+				}
 				break;
 			default:
 				throw new ApiException(400, "'type' must be build, quarry, harvest or treefarm, was " + type);
+		}
+		if (project == null)
+		{
+			return Obj("sent", true, "note", "A client: the host makes the project; commit it with POST /api/projects/commit once GET /api/projects lists it");
 		}
 		return Obj("created", true, "project", Describe(project), "clearingTrees", (clearing != null) ? Describe(clearing) : null);
 	}
 
 	private static object Delete(ApiRequest request)
 	{
-		NeedHost();
+		NeedGame();
 		Project project = Find(request.Int("id", 0));
 		string type = project.GetType().Name;
 		int id = project.gameObject.InstanceId();
-		User.LocalUser.GetComponent<UNetGroupe>().CmdDelete(project.gameObject);
+		User.LocalUser.GetComponent<UNetGroupe>().CallCmdDelete(project.gameObject);
 		return Obj("deleted", id, "type", type);
 	}
 
 	private static object CommitRoute(ApiRequest request)
 	{
-		NeedHost();
+		NeedGame();
 		Project project = Find(request.Int("id", 0));
 		Commit(project);
 		return Obj("project", Describe(project));
@@ -462,7 +491,7 @@ internal static class ProjectEndpoints
 
 	private static object Hire(ApiRequest request)
 	{
-		NeedHost();
+		NeedGame();
 		Project project = Find(request.Int("id", 0));
 		List<Labor> labors = new List<Labor>();
 		string units = request.String("units", string.Empty);
@@ -507,7 +536,7 @@ internal static class ProjectEndpoints
 		List<object> hired = new List<object>();
 		foreach (Labor labor in labors)
 		{
-			command.CmdChangeProject(labor.gameObject, project.gameObject);
+			command.CallCmdChangeProject(labor.gameObject, project.gameObject);
 			hired.Add(Obj("id", labor.gameObject.InstanceId(), "name", labor.name, "onProject", labor.Project == project));
 		}
 		return Obj("hired", hired, "project", Describe(project));
@@ -533,11 +562,11 @@ internal static class ProjectEndpoints
 		{
 			if (Rank(project.PriorityBias) < Rank(wanted))
 			{
-				groupe.CmdRaisePriority(project.gameObject);
+				groupe.CallCmdRaisePriority(project.gameObject);
 			}
 			else
 			{
-				groupe.CmdLowerPriority(project.gameObject);
+				groupe.CallCmdLowerPriority(project.gameObject);
 			}
 		}
 		return Obj("project", Describe(project));
@@ -572,11 +601,11 @@ internal static class ProjectEndpoints
 		{
 			if (project.MaximumCrewSize < size)
 			{
-				groupe.CmdAddProjectCapacity(project.gameObject);
+				groupe.CallCmdAddProjectCapacity(project.gameObject);
 			}
 			else
 			{
-				groupe.CmdRemoveProjectCapacity(project.gameObject);
+				groupe.CallCmdRemoveProjectCapacity(project.gameObject);
 			}
 		}
 		return Obj("project", Describe(project));
@@ -585,6 +614,6 @@ internal static class ProjectEndpoints
 	// Commits a build project's new blueprints, as unselecting it in the game does (SelectableProjectBehaviour).
 	internal static void Commit(Project project)
 	{
-		User.LocalUser.GetComponent<UNetGroupe>().CmdCommit(project.gameObject);
+		User.LocalUser.GetComponent<UNetGroupe>().CallCmdCommit(project.gameObject);
 	}
 }

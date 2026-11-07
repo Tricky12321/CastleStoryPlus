@@ -7,6 +7,7 @@ using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.Game.Components.Volumes;
 using Brix.Game.Network;
+using UnityEngine.Networking;
 using Brix.Input;
 using Brix.Lifecycle.Pooling;
 using UnityEngine;
@@ -160,6 +161,14 @@ internal static class BlueprintPlacer
 			return result;
 		}
 		UNetBlueprint net = User.LocalUser.GetComponent<UNetBlueprint>();
+		if (!NetworkServer.active)
+		{
+			// A client: the host spawns it (and checks it again), as when the player places it.
+			net.CallCmdSpawnPlacedBlueprint(key.Factory, key.Name, fit.Position, fit.Rotation, false, project.gameObject, false);
+			result.Placed = true;
+			result.Outcome = "sent to the host";
+			return result;
+		}
 		Blueprint blueprint = net._PrepareSpawnBlueprint(key, fit.Position, fit.Rotation, false);
 		if (blueprint == null)
 		{

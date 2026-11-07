@@ -70,6 +70,9 @@ internal static class NavMeshRoutes
 	// Steep steps of a route traded for a cheaper way round them over the graph.
 	internal static int Eased;
 
+	// Routes that went back to a voxel they had already passed, cut short there.
+	internal static int Loops;
+
 	// The mesh's links routes took: climbs, steps down, ladders.
 	internal static int Climbs;
 
@@ -129,6 +132,7 @@ internal static class NavMeshRoutes
 		RouteVoxels = 0;
 		Mended = 0;
 		Eased = 0;
+		Loops = 0;
 		Climbs = 0;
 		StepDowns = 0;
 		LadderRuns = 0;
@@ -290,6 +294,7 @@ internal static class NavMeshRoutes
 				continue;
 			}
 			Ease(request.Evaluator);
+			CutLoops();
 			// Up to the first voxel that reaches the target, as the game's search stops there.
 			int end = -1;
 			for (int i = 1; i < Route.Count; i++)
@@ -847,6 +852,38 @@ internal static class NavMeshRoutes
 			Route.InsertRange(i, EaseRun);
 			Eased++;
 		}
+	}
+
+	// A route must not come back to a voxel it has passed. Where the first corners of the mesh's route lie in the
+	// voxel next to the origin (the unit standing on the edge between two voxels), the line went there and straight
+	// back: origin, next voxel, origin again. The walk aims at the edge between the voxel it is entering and the one
+	// after; with both on the same edge it runs onto that edge, never gets into the next voxel, and every new route
+	// from there was the same, so the unit stood frozen, also for the player's orders. Each place is kept once: from
+	// its first visit the route goes on with the branch that left its last visit (a branch from that same place).
+	private static readonly Dictionary<PathNode, int> LastVisit = new Dictionary<PathNode, int>();
+
+	private static readonly List<PathBranch> Unlooped = new List<PathBranch>();
+
+	private static void CutLoops()
+	{
+		LastVisit.Clear();
+		for (int i = 0; i < Route.Count; i++)
+		{
+			LastVisit[Route[i].Node] = i;
+		}
+		if (LastVisit.Count == Route.Count)
+		{
+			return;
+		}
+		Unlooped.Clear();
+		for (int i = 0; i < Route.Count; i++)
+		{
+			Unlooped.Add(Route[i]);
+			i = LastVisit[Route[i].Node];
+		}
+		Route.Clear();
+		Route.AddRange(Unlooped);
+		Loops++;
 	}
 
 	// A branch a walk on the mesh's ground may take: not a climb, a ladder or breaking in.

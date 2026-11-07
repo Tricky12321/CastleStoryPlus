@@ -26,8 +26,11 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.WorkerAI;
 
-// Idle chore: pick up loose items lying on the ground near the base (home crystal and stockpiles) or near the
-// worker, and store them, without a cleanup zone. Only offered by IdleProject, so any real work comes first. An item
+// Idle chore: pick up loose items lying on the ground near the base (home crystal and stockpiles) and store them,
+// without a cleanup zone. Items round the worker itself no longer count: a worker that had gone out (or had walked
+// out to an item) found the next loose item round it, then the next, and so walked across the map for logs from
+// trees that enemies or other players had felled (issue #43). Items of another player's faction (logs they felled)
+// are theirs and left alone. Only offered by IdleProject, so any real work comes first. An item
 // the worker cannot get to (on top of a building or a stockpile, or pushed partly into a wall) is picked up from the
 // foot of it instead, from a place beside it, level with it or up to 12 blocks lower (the ground beside a building
 // for an item on its roof), that the worker can stand on.
@@ -87,7 +90,7 @@ internal static class AutoCleanup
 
 	private static void Enable()
 	{
-		Radius = Plugin.Cfg.Bind("AutoCleanup", "Radius", 15, "Idle workers pick up loose items within this many blocks of the home crystal, a stockpile or themselves (" + BaseRanges.Min + " to " + BaseRanges.Max + "; also set on the home crystal's task).");
+		Radius = Plugin.Cfg.Bind("AutoCleanup", "Radius", 15, "Idle workers pick up loose items within this many blocks of the home crystal or a stockpile (" + BaseRanges.Min + " to " + BaseRanges.Max + "; also set on the home crystal's task).");
 		BaseRanges.Register(Features.AutoCleanup, Radius, "Auto cleanup range (blocks)", "PickUp", new Color(0.3f, 0.65f, 1f, 1f), false);
 		// A changed range applies at once, not after the cached item lists expire.
 		Radius.SettingChanged += (object sender, System.EventArgs args) => RefreshedAt.Clear();
@@ -123,7 +126,6 @@ internal static class AutoCleanup
 				items.Add(candidate);
 			}
 		}
-		Collect(labor.transform.position, items, PlanSeen);
 		PlanSeen.Clear();
 		SortFrom = labor.transform.position;
 		items.Sort(NearestFirst);
@@ -139,7 +141,7 @@ internal static class AutoCleanup
 				continue;
 			}
 			GameComponent component = item.GetComponent<GameComponent>();
-			if (component == null || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null)
+			if (component == null || OtherPlayers(component, labor.faction) || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null)
 			{
 				continue;
 			}
@@ -178,7 +180,6 @@ internal static class AutoCleanup
 	{
 		List<KeyValuePair<GameObject, string>> result = new List<KeyValuePair<GameObject, string>>();
 		List<GameObject> items = new List<GameObject>(BaseCandidates(labor.faction));
-		Collect(labor.transform.position, items, null);
 		Vector3 position = labor.transform.position;
 		items.Sort((GameObject a, GameObject b) => (a.transform.position - position).sqrMagnitude.CompareTo((b.transform.position - position).sqrMagnitude));
 		foreach (GameObject item in items)
@@ -213,6 +214,10 @@ internal static class AutoCleanup
 			{
 				why = "no game component";
 			}
+			else if (OtherPlayers(component, labor.faction))
+			{
+				why = "belongs to another player";
+			}
 			else if (!labor.recepteur.IsEmpty() || !labor.recepteur.HasRoomFor(item))
 			{
 				why = "the worker's hands are not free";
@@ -243,6 +248,14 @@ internal static class AutoCleanup
 			result.Add(new KeyValuePair<GameObject, string>(item, why));
 		}
 		return result;
+	}
+
+	// An item of another player's faction (logs from trees that player felled, what its bricktrons dropped). The
+	// enemy waves' items (logs from trees they felled on their way) and neutral ones may be taken.
+	private static bool OtherPlayers(GameComponent component, Faction own)
+	{
+		Faction faction = component.faction;
+		return faction != null && faction != own && faction != Faction.DefaultNeutral && !faction.isAI;
 	}
 
 	// The workers' knowledge only tracks some kinds of items (logs, planks, bricks, ...); for those its regions
