@@ -3,6 +3,11 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## 0.8.9 — 2026-11-08
+
+- [ADD] **Workshop queues of 20:** every workshop (chopping block, workbench, forge, furnace, loom, market, ...) queues up to 20 orders instead of the game's 8. The game keeps a queue in one number that holds 8 orders; the orders after the 8th are kept beside it, synced to the other players and saved with the workshop (a save opened without the mod keeps the first 8). The market, which queued 12 its own way, now queues 20 like the rest; its old saves load their extra trades.
+- [CHANGE] **DevTools:** a game test checks a queue of 20 orders, a removal in it and its network copy.
+
 ## 0.8.8 — 2026-11-08
 
 - [FIX] **Linux, "Update" did nothing:** the update button closed the game, but under Steam the installer it started was ended together with the game before it did anything, so the game started again on the old version (seen updating 0.8.6 to 0.8.7). The launcher Steam starts now runs the installer once the game is closed and starts the new version itself. This works from the release after the one that brings it (the launcher installed with it does the update); until then the game waits for the installer to be running before it closes (`[Features] UpdateCheck`).

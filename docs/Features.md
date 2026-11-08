@@ -116,6 +116,7 @@ New blocks, new buildings and faster ways to build.
 
 | Feature | Switch |
 |---|---|
+| Workshop queues hold up to 20 orders instead of the game's 8 (forge, workbench, smithy, market, ...); the orders after the 8th are synced to other players and saved with the workshop. | always on |
 | Workshops can loop their queue until a stock limit per product (e.g. 20 fabric and 5 rope), each recipe waiting while there is enough. Turning on a recipe's limit also puts the recipe in the queue. | `CraftLoopLimit` |
 | A looping workshop queue with several recipes takes turns: a recipe that has waited 20 seconds for an ingredient no stockpile holds goes to the back, and one whose ingredients are in stock starts instead. | `CraftRoundRobin` |
 | Task areas can be dragged 50% larger than the game allows: harvest and base circles and quarries (`[LargerTasks] AreaScale`), and flatten tasks twice as large (`[LargerTasks] FlattenScale`). | `LargerTasks` |
@@ -126,7 +127,7 @@ New blocks, new buildings and faster ways to build.
 | A finished order always leaves the workshop's queue (the game removed it by object, so a re-read queue entry could stay and a queue that did not loop made the same order again and again); it is matched by recipe id. | `CraftFinishFix` |
 | **New:** "Copy setup" and "Paste setup" in a workshop's menu copy its queue, looping and stock limits to another workshop of the same kind (only the recipes it can make). | `WorkshopSetup` |
 | A workshop's priority (e.g. the research station) can be set like a task's: locked, low, medium or high. | `WorkshopPriority` |
-| Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other; it queues 12 trades instead of 8, details below. | `Market` |
+| Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other; it queues up to 20 trades like every workshop, details below. | `Market` |
 | Smithy, armoury and research station in the build menu (crafting group) for weapon, armour and colony upgrades, details below. | `Upgrades` |
 
 **Market** (`[Market]`): a 15% fee; prices rise with trading and recover over time (a trade then asks more for the same lot, never refused), so trading never makes resources. Coal and steel trade too (steel can only be given). In the C# menu you pick what to give and what to get, see the price right now, and queue how many trades to make; each queued trade is made once. The trades made before (the last 6) and favourites ("Fav", up to 8, kept at the top) are listed over the goods: a click chooses that trade, "x" takes it out of the list. Both lists are kept in the settings (`[Market] RecentTrades`, `FavouriteTrades`), the same at every market and in every save. Several workers fetch for the same trade, and workers walk inside.

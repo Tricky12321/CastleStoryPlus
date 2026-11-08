@@ -423,7 +423,7 @@ internal static class GamePopupBuilder
 
 	private const int RecipeSlots = 8;
 
-	private const int QueueSlots = 8;
+	private const int QueueSlots = 20;
 
 	// The workshop's popup, top to bottom: its name and worker, what it is making now (the needs it holds, a bar for
 	// the work done) and the rest of the queue, the recipes as rows (their cost green while the stockpiles hold
