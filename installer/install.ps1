@@ -231,6 +231,17 @@ try {
         if (Test-Path $keptConfig) {
             Copy-Item -Recurse -Force -ErrorAction Stop $keptConfig (Join-Path $staged "BepInEx")
         }
+        # Plugin folders the release does not have (DevTools, other mods) are kept too.
+        $plugins = Join-Path $target "BepInEx\plugins"
+        if (Test-Path $plugins) {
+            foreach ($plugin in Get-ChildItem -Directory $plugins) {
+                $stagedPlugin = Join-Path $staged "BepInEx\plugins\$($plugin.Name)"
+                if (-not (Test-Path $stagedPlugin)) {
+                    Copy-Item -Recurse -Force -ErrorAction Stop $plugin.FullName $stagedPlugin
+                    Log "keeping the plugin $($plugin.Name)"
+                }
+            }
+        }
         Retry "moving the installed version aside" {
             if (Test-Path $target) { Move-Item -ErrorAction Stop $target $old }
         }

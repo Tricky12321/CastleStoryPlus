@@ -184,11 +184,24 @@ if [ -n "$SOURCE" ]; then
     if [ -d "$GAME_DIR/$PORT_DIR/BepInEx/config" ]; then
         cp -r "$GAME_DIR/$PORT_DIR/BepInEx/config" "$TMP/config"
     fi
+    # Plugin folders the release does not have (DevTools, other mods) are kept too.
+    mkdir -p "$TMP/plugins"
+    if [ -d "$GAME_DIR/$PORT_DIR/BepInEx/plugins" ]; then
+        for plugin in "$GAME_DIR/$PORT_DIR/BepInEx/plugins"/*/; do
+            [ -d "$plugin" ] || continue
+            plugin="$(basename "$plugin")"
+            if [ ! -e "$SOURCE/$PORT_DIR/BepInEx/plugins/$plugin" ]; then
+                cp -r "$GAME_DIR/$PORT_DIR/BepInEx/plugins/$plugin" "$TMP/plugins/"
+                log "keeping the plugin $plugin"
+            fi
+        done
+    fi
     rm -rf "$GAME_DIR/$PORT_DIR"
     cp -r "$SOURCE/$PORT_DIR" "$GAME_DIR/"
     if [ -d "$TMP/config" ]; then
         cp -r "$TMP/config" "$GAME_DIR/$PORT_DIR/BepInEx/"
     fi
+    cp -r "$TMP/plugins/." "$GAME_DIR/$PORT_DIR/BepInEx/plugins/"
     chmod +x "$GAME_DIR/$PORT_DIR/run_bepinex.sh" "$GAME_DIR/$PORT_DIR/CastleStoryPlus.x86_64"
     echo "$VERSION" > "$GAME_DIR/$PORT_VERSION"
     # Replaced by a rename: the original game may still have the old one loaded (cp over a loaded file corrupts it).
