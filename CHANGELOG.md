@@ -6,6 +6,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 ## Unreleased
 
 - [FIX] **Windows installer, slow download:** the installer downloaded the release (about 50 MB) many times slower than the connection allows: Windows PowerShell redraws its progress bar for every block `Invoke-WebRequest` reads. It now downloads with `curl.exe` (part of Windows 10 and later, with its own progress bar) or, without it, .NET's `WebClient`, and PowerShell's own progress bar is off (also for unpacking the zip, which it slowed down the same way).
+- [FIX] **Workshops fetching across the map:** a workshop's workers took the nearest ingredient anywhere on the map; with no logs in the stockpiles, the workers of a chopping block on loop ran hundreds of blocks out to logs lying among enemies. They now fetch only from stockpiles and loose items within the workshop's range, counted from the workshop; with nothing in range the workshop waits. The range is set per workshop under its recipes ("Fetch within", "-" and "+", Shift 25 at a time, past 250 no limit), saved with the workshop and synced in multiplayer; workshops not set use `[WorkshopFetchRange] Default`, 40 blocks. While a workshop is selected, an orange ring on the ground around it shows its range (`[Features] WorkshopFetchRange`).
 
 ## 0.8.9 — 2026-11-08
 

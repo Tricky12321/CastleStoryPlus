@@ -127,6 +127,7 @@ New blocks, new buildings and faster ways to build.
 | A finished order always leaves the workshop's queue (the game removed it by object, so a re-read queue entry could stay and a queue that did not loop made the same order again and again); it is matched by recipe id. | `CraftFinishFix` |
 | **New:** "Copy setup" and "Paste setup" in a workshop's menu copy its queue, looping and stock limits to another workshop of the same kind (only the recipes it can make). | `WorkshopSetup` |
 | A workshop's priority (e.g. the research station) can be set like a task's: locked, low, medium or high. | `WorkshopPriority` |
+| **New:** a workshop's workers fetch its ingredients only within its range (stockpiles and loose items, counted from the workshop), set per workshop under its recipes; the default is 40 blocks (`[WorkshopFetchRange] Default`); a ring around the selected workshop shows the range. | `WorkshopFetchRange` |
 | Market: a market hall in the build menu (crafting group, 8 planks, 6 bricks, 2 fabric) where workers trade any resource for any other; it queues up to 20 trades like every workshop, details below. | `Market` |
 | Smithy, armoury and research station in the build menu (crafting group) for weapon, armour and colony upgrades, details below. | `Upgrades` |
 

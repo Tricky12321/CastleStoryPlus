@@ -351,7 +351,7 @@ internal class BaseRangeRings : MonoBehaviour
 	}
 
 	// About one point per block of the circle, each on the ground under it; the last point closes the ring.
-	private static void Draw(LineRenderer line, Vector3 center, int radius)
+	internal static void Draw(LineRenderer line, Vector3 center, int radius)
 	{
 		int segments = Mathf.Clamp(Mathf.CeilToInt(2f * Mathf.PI * radius), 24, 256);
 		line.positionCount = segments + 1;
