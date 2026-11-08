@@ -124,6 +124,37 @@ internal static class CraftingTests
 		yield return t.UntilGame(() => Planks >= planksBefore + CookBook.Planks.QtyCreated, 240f, "the idle builder to make the planks", 30f, () => t.Log(idle.name + ": " + idle.Activity + ", operator " + ((shop.Station.Operator != null) ? shop.Station.Operator.name : "none")));
 	}
 
+	[GameTest("Crafting", "A workshop queues up to 20 orders (the game: 8); the orders after the 8th survive a removal before them and the network copy of the queue", TimeoutSeconds = 120f)]
+	private static IEnumerator QueueHoldsTwentyOrders(TestContext t)
+	{
+		Scenario.SidelineOthers(t);
+		Shop shop = null;
+		yield return ChoppingBlock(t, 0, false, made => shop = made);
+		// A new workshop sets its default order (a looping Planks) when it starts, the frame after it is built.
+		yield return t.Frames(3);
+		Scenario.ProjectCommands.CmdcraftingDoNothing(shop.Station.gameObject);
+		yield return t.Frames(2);
+		Queue(shop, 25);
+		yield return t.Frames(2);
+		t.Equal(20, shop.Station.QueueCount, "Orders in the queue after queuing 25");
+		Scenario.ProjectCommands.CmdcraftingRemoveAt(shop.Station.gameObject, 3);
+		yield return t.Frames(2);
+		t.Equal(19, shop.Station.QueueCount, "Orders after taking out the 4th");
+		// What a joining player gets: the state written in full and read into a list again.
+		UnityEngine.Networking.NetworkWriter writer = new UnityEngine.Networking.NetworkWriter();
+		shop.Station.state.OnSerialize(writer, true);
+		System.Collections.Generic.List<RecipeInfo> before = new System.Collections.Generic.List<RecipeInfo>();
+		shop.Station.state.GetRecipe(before);
+		shop.Station.state.OnDeserialize(new UnityEngine.Networking.NetworkReader(writer.ToArray()), true);
+		System.Collections.Generic.List<RecipeInfo> after = new System.Collections.Generic.List<RecipeInfo>();
+		shop.Station.state.GetRecipe(after);
+		t.Record("queued", before.Count + " before, " + after.Count + " after");
+		t.Equal(19, after.Count, "Orders read back from the network copy");
+		Scenario.ProjectCommands.CmdcraftingDoNothing(shop.Station.gameObject);
+		yield return t.Frames(2);
+		t.Equal(0, shop.Station.QueueCount, "Orders after clearing the queue");
+	}
+
 	// ---- helpers
 
 	// A stockpile with logs logs in it and a chopping block next to it, with a worker when withWorker. The planks

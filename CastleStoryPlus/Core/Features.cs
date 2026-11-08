@@ -233,7 +233,7 @@ internal static class Features
 
 	public const string Market = "Market";
 
-	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: up to 12 standing trades (other workshops queue 8), each with how many to keep and what to pay with. The window lists the trades made before and favourites to choose again with one click. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
+	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: up to 20 standing trades (as many as any workshop queues), each with how many to keep and what to pay with. The window lists the trades made before and favourites to choose again with one click. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
 
 	public const string Retreat = "Retreat";
 
