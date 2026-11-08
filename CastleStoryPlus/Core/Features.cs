@@ -247,6 +247,10 @@ internal static class Features
 
 	public const string MixedRacksInfo = "A weapon stand holds the weapons and armour of all soldier classes at once (as many weapons, props and hats as before, any classes mixed); equipping takes one whole kit of a single class (see [MixedRacks]).";
 
+	public const string RackFilter = "RackFilter";
+
+	public const string RackFilterInfo = "A weapon stand can be limited to some soldier classes: select the stand and pick the classes whose gear may be put on it (knight, archer, arbalist, alchemist, artificer, halberdier). Gear of the other classes is no longer brought there; what is already on it stays. Saved with the stand and synced to the other players.";
+
 	public const string KitBundles = "KitBundles";
 
 	public const string KitBundlesInfo = "Every soldier kit is one item (Knight kit, Archer kit, ...): the kit recipes make one bundle with the summed cost and work instead of separate pieces, a soldier that equips a bundle unpacks it, one that hands in a whole kit packs it again, and loose whole kits on a weapon stand are packed into a bundle. Saves with kit bundles need the mod (bundles already made are still unpacked with this switched off).";

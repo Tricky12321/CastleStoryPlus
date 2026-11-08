@@ -111,6 +111,7 @@ internal class GameMenuRoot : MonoBehaviour
 		CsUpgradeWindow.Create(parent, Upgrades.UpgradeHall.Smithy);
 		CsUpgradeWindow.Create(parent, Upgrades.UpgradeHall.Armoury);
 		CsMarketWindow.Create(parent);
+		CsRackFilterWindow.Create(parent);
 		CsPausedView.Create(parent);
 		foreach (UiPanel panel in Model.ExtraPanels)
 		{
