@@ -198,14 +198,20 @@ public static class Entrypoint
 	// (not the port's folder, which the installer replaces).
 	private static bool RunInstaller(string gameDir, string tag, string installer)
 	{
-		string log = Path.Combine(Path.Combine(gameDir, "BepInEx"), "CastleStoryPlus.Update.log");
-		string command = "bash " + Quote(installer) + " --tag " + Quote(tag) + " --game-dir " + Quote(gameDir) + " > " + Quote(log) + " 2>&1 < /dev/null";
-		ProcessStartInfo start = new ProcessStartInfo("/bin/bash", "-c " + Quote(command));
-		start.UseShellExecute = false;
-		start.WorkingDirectory = gameDir;
+		string folder = Path.Combine(gameDir, "BepInEx");
+		string log = Path.Combine(folder, "CastleStoryPlus.Update.log");
+		// The command goes in a script of its own, started as "/bin/bash '<script>'" (as the port is): the game's Mono 2.6
+		// splits a "-c '...'" argument with quotes nested in it ('\'') at the first closing quote, so bash got only
+		// "bash " and the installer never ran.
+		string script = Path.Combine(folder, "CastleStoryPlus.Update.run.sh");
+		string command = "exec bash " + Quote(installer) + " --tag " + Quote(tag) + " --game-dir " + Quote(gameDir) + " > " + Quote(log) + " 2>&1 < /dev/null\n";
 		Log(gameDir, "updating to " + tag + " with " + installer);
 		try
 		{
+			File.WriteAllText(script, command);
+			ProcessStartInfo start = new ProcessStartInfo("/bin/bash", Quote(script));
+			start.UseShellExecute = false;
+			start.WorkingDirectory = gameDir;
 			Process process = Process.Start(start);
 			process.WaitForExit();
 			Log(gameDir, "the installer ended (" + process.ExitCode + "), see " + log);

@@ -6,6 +6,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 ## Unreleased
 
 - [FIX] **Windows installer, slow download:** the installer downloaded the release (about 50 MB) many times slower than the connection allows: Windows PowerShell redraws its progress bar for every block `Invoke-WebRequest` reads. It now downloads with `curl.exe` (part of Windows 10 and later, with its own progress bar) or, without it, .NET's `WebClient`, and PowerShell's own progress bar is off (also for unpacking the zip, which it slowed down the same way).
+- [FIX] **Linux, "Update and restart" only restarted the game:** the launcher started the installer as `bash -c '...'` with quoted paths inside, and the original game's Mono 2.6 cut that argument at the first closing quote, so bash ran only `bash ` and ended at once; the installer never ran (no `BepInEx/CastleStoryPlus.Update.log`) and the old version started again. The launcher now writes the command to `BepInEx/CastleStoryPlus.Update.run.sh` and starts that script. The launcher is replaced by an install, so the first update to this release is done by hand (`bash "<Castle Story>/BepInEx/CastleStoryPlus.Updater.sh"` with the game closed); later updates work from the game.
 
 ## 0.8.9 — 2026-11-08
 
