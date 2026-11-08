@@ -328,6 +328,12 @@ end
 			AddIntStepper("Pick up loose items within (blocks)", AutoCleanup.Radius, 5, BaseRanges.Min, BaseRanges.Max);
 		}
 
+		if (Economy.WorkshopFetchRange.Default != null)
+		{
+			AddSection("WORKSHOPS");
+			AddIntStepper("Fetch ingredients within (blocks, 0 no limit)", Economy.WorkshopFetchRange.Default, 5, 0, 1000);
+		}
+
 		if (AutoRepair.Radius != null)
 		{
 			AddSection("AUTO REPAIR");

@@ -451,6 +451,10 @@ internal static class Features
 
 	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes (the game keeps every workshop at high).";
 
+	public const string WorkshopFetchRange = "WorkshopFetchRange";
+
+	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range.";
+
 	public const string DropGearOnDeath = "DropGearOnDeath";
 
 	public const string DropGearOnDeathInfo = "A dying bricktron drops its gear (weapons, shields, hats, bags) on the ground instead of losing it with the corpse.";
