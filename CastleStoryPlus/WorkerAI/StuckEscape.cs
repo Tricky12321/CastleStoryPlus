@@ -52,6 +52,8 @@ internal class StuckEscape : MonoBehaviour
 	{
 		public Labor Labor;
 
+		public XYZ Start;
+
 		public readonly List<XYZ> Blocks = new List<XYZ>();
 
 		public int Next;
@@ -62,6 +64,11 @@ internal class StuckEscape : MonoBehaviour
 	}
 
 	private readonly Dictionary<Labor, Escape> _escapes = new Dictionary<Labor, Escape>();
+
+	// Where each worker's last escape started. A worker still shut in at the same place after digging is shut in by
+	// something digging does not open (stockpiles all round): it is not sent to dig again there, or it would eat away
+	// the terrain round it for ever.
+	private readonly Dictionary<Labor, XYZ> _triedFrom = new Dictionary<Labor, XYZ>();
 
 	private float _nextCheck;
 
@@ -80,6 +87,7 @@ internal class StuckEscape : MonoBehaviour
 			{
 				_escapes.Clear();
 			}
+			_triedFrom.Clear();
 			return;
 		}
 		Advance();
@@ -132,12 +140,21 @@ internal class StuckEscape : MonoBehaviour
 			return;
 		}
 		XYZ start = node.RepresentativePosition;
-		List<XYZ> blocks = WayOut(labor.faction, start, pocket, out XYZ exit);
-		if (blocks == null)
+		if (_triedFrom.TryGetValue(labor, out XYZ tried))
 		{
+			if (tried == start)
+			{
+				return;
+			}
+			_triedFrom.Remove(labor);
+		}
+		List<XYZ> blocks = WayOut(labor.gameObject, labor.faction, start, pocket, out XYZ exit);
+		if (blocks == null || blocks.Count == 0)
+		{
+			// Nothing to dig: an open way the route graph does not have is no way out by digging.
 			return;
 		}
-		Escape escape = new Escape { Labor = labor, Until = Time.time + EscapeSeconds };
+		Escape escape = new Escape { Labor = labor, Start = start, Until = Time.time + EscapeSeconds };
 		escape.Blocks.AddRange(blocks);
 		_escapes[labor] = escape;
 		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " is shut in at " + start + " (" + pocket.Count + " places), digging " + blocks.Count + " blocks out to " + exit);
@@ -211,8 +228,9 @@ internal class StuckEscape : MonoBehaviour
 
 	// The blocks to dig, in order, for the cheapest walk from start to a place on the faction's routes outside the
 	// pocket: steps one block up or down at most, always on solid ground, through terrain only (not buildings or
-	// what cannot be broken).
-	private static List<XYZ> WayOut(Faction faction, XYZ start, HashSet<XYZ> pocket, out XYZ exit)
+	// what cannot be broken), and never through an obstacle such as a stockpile (a worker walled in by stockpiles
+	// digs round them).
+	private static List<XYZ> WayOut(GameObject self, Faction faction, XYZ start, HashSet<XYZ> pocket, out XYZ exit)
 	{
 		exit = start;
 		Dictionary<XYZ, int> cost = new Dictionary<XYZ, int> { [start] = 0 };
@@ -246,7 +264,7 @@ internal class StuckEscape : MonoBehaviour
 					{
 						continue;
 					}
-					int step = StepCost(cell, next, dy);
+					int step = StepCost(self, cell, next, dy);
 					if (step < 0)
 					{
 						continue;
@@ -270,7 +288,7 @@ internal class StuckEscape : MonoBehaviour
 	}
 
 	// Blocks to dig for the step from cell to next (dy up or down), or -1 when it cannot be made.
-	private static int StepCost(XYZ cell, XYZ next, int dy)
+	private static int StepCost(GameObject self, XYZ cell, XYZ next, int dy)
 	{
 		if (!Solid(next - XYZ.up))
 		{
@@ -279,6 +297,12 @@ internal class StuckEscape : MonoBehaviour
 		int blocks = 0;
 		foreach (XYZ room in StepRoom(cell, next, dy))
 		{
+			// The whole body and the head room, not only the feet: a worker dug in under a stockpile could not
+			// climb out where the stockpile hung over its head.
+			if (SearchPathRequest.HasBlockerAt(self, room))
+			{
+				return -1;
+			}
 			if (Voxel.IsEmpty(room))
 			{
 				continue;
@@ -365,8 +389,28 @@ internal class StuckEscape : MonoBehaviour
 		}
 		foreach (Labor labor in done)
 		{
-			Finish(_escapes[labor]);
+			Escape escape = _escapes[labor];
+			Finish(escape);
 			_escapes.Remove(labor);
+			if (!labor.IsNullOrReleased())
+			{
+				_triedFrom[labor] = escape.Start;
+			}
+		}
+		List<Labor> gone = null;
+		foreach (Labor labor in _triedFrom.Keys)
+		{
+			if (labor.IsNullOrReleased())
+			{
+				(gone ?? (gone = new List<Labor>())).Add(labor);
+			}
+		}
+		if (gone != null)
+		{
+			foreach (Labor labor in gone)
+			{
+				_triedFrom.Remove(labor);
+			}
 		}
 	}
 
