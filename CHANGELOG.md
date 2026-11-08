@@ -3,6 +3,10 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [FIX] **Windows installer, slow download:** the installer downloaded the release (about 50 MB) many times slower than the connection allows: Windows PowerShell redraws its progress bar for every block `Invoke-WebRequest` reads. It now downloads with `curl.exe` (part of Windows 10 and later, with its own progress bar) or, without it, .NET's `WebClient`, and PowerShell's own progress bar is off (also for unpacking the zip, which it slowed down the same way).
+
 ## 0.8.9 — 2026-11-08
 
 - [ADD] **Workshop queues of 20:** every workshop (chopping block, workbench, forge, furnace, loom, market, ...) queues up to 20 orders instead of the game's 8. The game keeps a queue in one number that holds 8 orders; the orders after the 8th are kept beside it, synced to the other players and saved with the workshop (a save opened without the mod keeps the first 8). The market, which queued 12 its own way, now queues 20 like the rest; its old saves load their extra trades.
