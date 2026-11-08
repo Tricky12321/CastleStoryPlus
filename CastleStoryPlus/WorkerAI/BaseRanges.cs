@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using BepInEx.Configuration;
@@ -79,33 +80,25 @@ internal static class BaseRanges
 		}
 	}
 
-	// The C# in-game menu: among the idle group's actions, the first right after the spawn button.
+	// The C# in-game menu: a row under the idle group's actions, "Auto cleanup range (blocks)  -  33  +" (Shift: 5 at
+	// a time). Not a button with its own - and + like the Lua menu's: in the C# popup those sit above the button,
+	// over the row before it (the "Auto spawn bricktrons" toggle).
 	private static void AddToMenu(GameUi.GameMenuModel menu, string key, string label, string icon, Color color, bool first)
 	{
-		Brix.UI.Icons.IconKey iconKey = GameUi.GameUiState.IconNamed(icon);
-		GameUi.UiButton button = new GameUi.UiButton
+		GameUi.UiStepper stepper = new GameUi.UiStepper
 		{
 			Id = "idleTaskActions" + key + "Range",
 			Visible = () => NetworkServer.active,
 			Label = () => label,
-			Icon = () => GameUi.GameUiState.Icon(iconKey),
-			IconColor = () => color,
-			Count = () =>
+			Value = () =>
 			{
 				Range range = Find(key);
 				return (range != null) ? range.Radius.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
 			},
-			Step = (int direction) => Step(Find(key), direction)
+			// -1 / +1, or -10 / +10 with Shift; Step reads Shift itself.
+			Step = (int delta) => Step(Find(key), Math.Sign(delta))
 		};
-		GameUi.UiSection actions = menu.Popup.Find("idleTaskActions");
-		if (first)
-		{
-			actions.Insert("idleTaskActionsSpawnUnit", button);
-		}
-		else
-		{
-			actions.Add(button);
-		}
+		menu.Popup.Find("idleTaskActions").Add(stepper);
 	}
 
 	private static string Handle(string key, string label, string icon, Color color)
