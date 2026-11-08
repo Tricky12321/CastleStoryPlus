@@ -3,6 +3,11 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [CHANGE] **Installer keeps other plugins:** an install or update replaced the port's whole folder, so plugin folders that are not part of the release (the DevTools plugin, other BepInEx mods) were deleted. The installers (Linux and Windows) now keep every plugin folder the release does not have, as they already kept the mod settings.
+- [ADD] **`tools/install-devtools.sh`:** builds the DevTools plugin for the port and puts it in the installed Steam game, which releases do not ship it in.
+
 ## 0.8.10 — 2026-11-08
 
 - [FIX] **Windows installer, slow download:** the installer downloaded the release (about 50 MB) many times slower than the connection allows: Windows PowerShell redraws its progress bar for every block `Invoke-WebRequest` reads. It now downloads with `curl.exe` (part of Windows 10 and later, with its own progress bar) or, without it, .NET's `WebClient`, and PowerShell's own progress bar is off (also for unpacking the zip, which it slowed down the same way).
