@@ -22,6 +22,9 @@ param(
     [switch]$Restart
 )
 $ErrorActionPreference = "Stop"
+# Windows PowerShell redraws its progress bar for every block Invoke-WebRequest and Expand-Archive handle, which makes
+# a 50 MB download many times slower; downloads show curl's own progress instead.
+$ProgressPreference = "SilentlyContinue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $Repo = "Tricky12321/CastleStoryPlus"
@@ -70,8 +73,21 @@ function Get-GameArch($exe) {
     return "x86"
 }
 
+# curl.exe (Windows 10 1803 and later) with its progress bar, otherwise .NET's WebClient; both stream to the file.
 function Download($url, $file) {
-    Invoke-WebRequest -Uri $url -OutFile $file -UseBasicParsing
+    $curl = Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($curl) {
+        & $curl.Source -L --fail --progress-bar -o $file $url
+        if ($LASTEXITCODE -eq 0) { return }
+        Log "curl could not download $url (exit $LASTEXITCODE); trying again without it"
+    }
+    $client = New-Object Net.WebClient
+    try {
+        $client.Headers.Add("User-Agent", "CastleStoryPlus-Installer")
+        $client.DownloadFile($url, $file)
+    } finally {
+        $client.Dispose()
+    }
 }
 
 # Empty when run straight from the web (irm ... | iex).
