@@ -3,6 +3,13 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## 0.8.8 — 2026-11-08
+
+- [FIX] **Linux, "Update" did nothing:** the update button closed the game, but under Steam the installer it started was ended together with the game before it did anything, so the game started again on the old version (seen updating 0.8.6 to 0.8.7). The launcher Steam starts now runs the installer once the game is closed and starts the new version itself. This works from the release after the one that brings it (the launcher installed with it does the update); until then the game waits for the installer to be running before it closes (`[Features] UpdateCheck`).
+
+- [FIX] **Dark crystal mixed with other items:** a pallet of dark crystal also took rope and other items; dark crystal (the game's `PurifiedBlueCrystal`) was missing from the resources that are never mixed. It always gets a pallet of its own now, and a pallet that already holds both is sorted out (`[Features] MixedStockpiles`).
+- [FIX] **A bricktron walled in by stockpiles:** a bricktron shut in between stockpiles and a cliff was sent to dig its way out every 5 seconds without digging anything: the way out went straight through the stockpiles. The way out now goes round stockpiles and other obstacles, also over the bricktron's head, and a bricktron still shut in at the same place after digging is not sent to dig there again (pick it up and put it down elsewhere) (`[Features] StuckEscape`).
+
 ## 0.8.7 — 2026-11-07
 
 - [FIX] **Unity 6 port, lobby player name:** the name typed in the multiplayer lobby was never set: Enter or leaving the box did nothing. The port's menus had lost the link from a text box to its menu; text boxes in the game's menus get it back (`[Features] MenuTextFields`).

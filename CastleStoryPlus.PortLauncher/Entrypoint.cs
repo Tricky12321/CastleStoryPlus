@@ -14,9 +14,17 @@ namespace Doorstop;
 // The port gets the environment the game was started with, less doorstop's own variables (the port's own doorstop
 // would take them for its own and skip BepInEx), and is told where the game's data is (CSP_GAME_DATA), so its first
 // start installs from this game without asking (CSP_AUTO_INSTALL). Without the port the game starts as it is.
+//
+// On Linux the port's "Update" is done here: the port leaves an update request (CSP_LAUNCHER_UPDATE tells it this
+// launcher takes one) and quits, and this runs the installer once the port is gone and starts the new port. An
+// installer started by the port itself did not outlive it under Steam (the game's container ends what the game leaves
+// behind), so the update never happened; this process is the one Steam waits for, so the installer runs to the end.
 public static class Entrypoint
 {
 	internal const string PortFolder = "CastleStoryPlus-Unity6";
+
+	// Written by the port: the release tag on the first line, the installer (in the game's BepInEx folder) on the second.
+	private const string UpdateRequest = "CastleStoryPlus.Update.request";
 
 	// Doorstop 3 calls Main, doorstop 4 calls Start.
 	public static void Main()
@@ -30,27 +38,44 @@ public static class Entrypoint
 		string portDir = Path.Combine(gameDir, PortFolder);
 		try
 		{
-			ProcessStartInfo start = PortStart(gameDir, portDir);
-			if (start == null)
+			// A request left from before (the port crashed after writing it) is not acted on.
+			TakeUpdateRequest(gameDir);
+			bool first = true;
+			while (true)
 			{
-				Log(gameDir, "no Unity 6 port in " + portDir + "; the original game starts");
-				return;
+				ProcessStartInfo start = PortStart(gameDir, portDir);
+				if (start == null)
+				{
+					if (first)
+					{
+						Log(gameDir, "no Unity 6 port in " + portDir + "; the original game starts");
+						return;
+					}
+					Log(gameDir, "no Unity 6 port in " + portDir + " after the update");
+					Environment.Exit(1);
+				}
+				first = false;
+				DateTime started = DateTime.Now;
+				Process port = Process.Start(start);
+				Log(gameDir, "started the Unity 6 port (" + start.FileName + ", process " + port.Id + ")");
+				port.WaitForExit();
+				int code = port.ExitCode;
+				Log(gameDir, "the Unity 6 port ended (" + code + ")");
+				// The first start after an install converts the game, then starts the player again: that one is waited for too.
+				int restarted = RestartedPid(portDir, started);
+				if (restarted > 0)
+				{
+					Log(gameDir, "the Unity 6 port started again after its install (process " + restarted + ")");
+					WaitForProcess(restarted);
+					Log(gameDir, "the Unity 6 port ended");
+				}
+				string[] request = TakeUpdateRequest(gameDir);
+				if (request == null || !RunInstaller(gameDir, request[0], request[1]))
+				{
+					Environment.Exit(code);
+				}
+				// Installed: the new port starts, as "Update and restart" promises.
 			}
-			DateTime started = DateTime.Now;
-			Process port = Process.Start(start);
-			Log(gameDir, "started the Unity 6 port (" + start.FileName + ", process " + port.Id + ")");
-			port.WaitForExit();
-			int code = port.ExitCode;
-			Log(gameDir, "the Unity 6 port ended (" + code + ")");
-			// The first start after an install converts the game, then starts the player again: that one is waited for too.
-			int restarted = RestartedPid(portDir, started);
-			if (restarted > 0)
-			{
-				Log(gameDir, "the Unity 6 port started again after its install (process " + restarted + ")");
-				WaitForProcess(restarted);
-				Log(gameDir, "the Unity 6 port ended");
-			}
-			Environment.Exit(code);
 		}
 		catch (Exception ex)
 		{
@@ -115,7 +140,82 @@ public static class Entrypoint
 		}
 		start.EnvironmentVariables["CSP_GAME_DATA"] = Path.Combine(gameDir, "Castle Story_Data");
 		start.EnvironmentVariables["CSP_AUTO_INSTALL"] = "1";
+		if (!IsWindows)
+		{
+			start.EnvironmentVariables["CSP_LAUNCHER_UPDATE"] = "1";
+		}
 		return start;
+	}
+
+	// The update request the port left, removed so it is acted on once; null when there is none or it is not valid.
+	private static string[] TakeUpdateRequest(string gameDir)
+	{
+		if (IsWindows)
+		{
+			return null;
+		}
+		string file = Path.Combine(Path.Combine(gameDir, "BepInEx"), UpdateRequest);
+		try
+		{
+			if (!File.Exists(file))
+			{
+				return null;
+			}
+			string[] lines = File.ReadAllText(file).Replace("\r", string.Empty).Split('\n');
+			File.Delete(file);
+			if (lines.Length < 2 || !IsTag(lines[0].Trim()) || !File.Exists(lines[1].Trim()))
+			{
+				Log(gameDir, "ignored an update request that is not valid");
+				return null;
+			}
+			return new string[] { lines[0].Trim(), lines[1].Trim() };
+		}
+		catch (Exception ex)
+		{
+			Log(gameDir, "could not read the update request: " + ex.Message);
+			return null;
+		}
+	}
+
+	// A release tag: v and digits and dots, nothing a shell would read.
+	private static bool IsTag(string tag)
+	{
+		if (tag.Length < 2 || tag.Length > 32 || tag[0] != 'v')
+		{
+			return false;
+		}
+		for (int i = 1; i < tag.Length; i++)
+		{
+			if (!char.IsDigit(tag[i]) && tag[i] != '.')
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Runs the installer for the tag and waits for it; its output goes to the game's BepInEx/CastleStoryPlus.Update.log
+	// (not the port's folder, which the installer replaces).
+	private static bool RunInstaller(string gameDir, string tag, string installer)
+	{
+		string log = Path.Combine(Path.Combine(gameDir, "BepInEx"), "CastleStoryPlus.Update.log");
+		string command = "bash " + Quote(installer) + " --tag " + Quote(tag) + " --game-dir " + Quote(gameDir) + " > " + Quote(log) + " 2>&1 < /dev/null";
+		ProcessStartInfo start = new ProcessStartInfo("/bin/bash", "-c " + Quote(command));
+		start.UseShellExecute = false;
+		start.WorkingDirectory = gameDir;
+		Log(gameDir, "updating to " + tag + " with " + installer);
+		try
+		{
+			Process process = Process.Start(start);
+			process.WaitForExit();
+			Log(gameDir, "the installer ended (" + process.ExitCode + "), see " + log);
+			return process.ExitCode == 0;
+		}
+		catch (Exception ex)
+		{
+			Log(gameDir, "could not run the installer: " + ex.Message);
+			return false;
+		}
 	}
 
 	private static int RestartedPid(string portDir, DateTime since)

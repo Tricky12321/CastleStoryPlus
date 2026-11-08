@@ -32,12 +32,12 @@ internal static class MixedStockpiles
 	private static readonly HashSet<string> NeverMix = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 	// Never mixed whatever the config says (added after configs with the old default were written): coal (the
-	// Metallurgy coal is the game's Clay resource) and plants (fibre).
-	private static readonly string[] AlwaysAlone = { "Clay", "Plant" };
+	// Metallurgy coal is the game's Clay resource), plants (fibre) and dark crystal (the game's PurifiedBlueCrystal).
+	private static readonly string[] AlwaysAlone = { "Clay", "Plant", "PurifiedBlueCrystal" };
 
 	private static void Enable()
 	{
-		string list = Plugin.Cfg.Bind("MixedStockpiles", "NeverMix", "Iron,RawIron,PurifiedBrimstone,OrangeCrystal,BlueCrystal,BlueCrystalChunck,Glass,Terracotta,Cog,Bomb,ExplosiveBarrel,StoneBlock,WoodBlock,PlankBlock,Clay,Plant", "Resources that always get a pallet of their own, comma separated (names as in the log line 'MixedStockpiles: pallet capacity').").Value;
+		string list = Plugin.Cfg.Bind("MixedStockpiles", "NeverMix", "Iron,RawIron,PurifiedBrimstone,OrangeCrystal,BlueCrystal,BlueCrystalChunck,PurifiedBlueCrystal,Glass,Terracotta,Cog,Bomb,ExplosiveBarrel,StoneBlock,WoodBlock,PlankBlock,Clay,Plant", "Resources that always get a pallet of their own, comma separated (names as in the log line 'MixedStockpiles: pallet capacity').").Value;
 		foreach (string name in list.Split(','))
 		{
 			if (name.Trim().Length > 0)

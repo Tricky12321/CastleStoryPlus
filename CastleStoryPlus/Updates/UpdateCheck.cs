@@ -352,6 +352,17 @@ internal class UpdateCheck : MonoBehaviour
 			_updating = false;
 			yield break;
 		}
+		if (!IsWindows && Environment.GetEnvironmentVariable("CSP_LAUNCHER_UPDATE") == "1")
+		{
+			// The launcher that started the port installs once the port is gone and starts the new one (an installer
+			// started from here did not outlive the game under Steam).
+			if (RequestLauncherUpdate(installer, gameDir))
+			{
+				Plugin.Log.LogInfo("Updating to " + _latest + ": the launcher installs it once the game is closed; closing the game");
+				Brix.Utils.ApplicationQuitter.Quit();
+				yield break;
+			}
+		}
 		int pid = Process.GetCurrentProcess().Id;
 		string log = Path.Combine(BepInEx.Paths.BepInExRootPath, "CastleStoryPlus.Update.log");
 		ProcessStartInfo start;
@@ -379,8 +390,52 @@ internal class UpdateCheck : MonoBehaviour
 			yield break;
 		}
 		Plugin.Log.LogInfo("Updating to " + _latest + " with " + installer + "; closing the game");
+		if (!IsWindows)
+		{
+			// The game ends at once on quit (FastQuit): give the installer the moment it needs to be running on its own
+			// (it writes its first line straight away).
+			float until = Time.realtimeSinceStartup + 5f;
+			while (Time.realtimeSinceStartup < until && !HasOutput(log))
+			{
+				yield return null;
+			}
+		}
 		// As the game's own quit: a save still being written finishes first.
 		Brix.Utils.ApplicationQuitter.Quit();
+	}
+
+	private static bool HasOutput(string file)
+	{
+		try
+		{
+			return File.Exists(file) && new FileInfo(file).Length > 0;
+		}
+		catch (Exception)
+		{
+			return false;
+		}
+	}
+
+	// Leaves the update for the launcher: the installer copied to the game's BepInEx folder (the port's folder is
+	// replaced by the install) and the request beside it. False when it could not be written.
+	private bool RequestLauncherUpdate(string installer, string gameDir)
+	{
+		try
+		{
+			string folder = Path.Combine(gameDir, "BepInEx");
+			string copy = Path.Combine(folder, "CastleStoryPlus.Updater" + Path.GetExtension(InstallerName));
+			if (!string.Equals(Path.GetFullPath(installer), Path.GetFullPath(copy), StringComparison.Ordinal))
+			{
+				File.Copy(installer, copy, true);
+			}
+			File.WriteAllText(Path.Combine(folder, "CastleStoryPlus.Update.request"), _latest + "\n" + copy + "\n");
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("Could not leave the update for the launcher (" + ex.Message + "); starting the installer");
+			return false;
+		}
 	}
 
 	private static string Quote(string value)
