@@ -45,7 +45,7 @@ internal static class Features
 
 	public const string EnemyTreeClearing = "EnemyTreeClearing";
 
-	public const string EnemyTreeClearingInfo = "Enemy waves are no longer shut out by trees (planted rows of them included): enemies that break their way may route through trees and fell the trees in their way.";
+	public const string EnemyTreeClearingInfo = "Enemy waves are no longer shut out by trees (planted rows of them included): enemies that break their way may route through trees and fell a tree only when it blocks their way (stuck on their route, the tree towards their next step); trees they walk past, fight or wait beside stay standing.";
 
 	public const string SaveAndLeave = "SaveAndLeave";
 

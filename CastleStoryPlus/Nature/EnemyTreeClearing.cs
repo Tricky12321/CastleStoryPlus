@@ -14,10 +14,11 @@ namespace CastleStoryPlus.Nature;
 // The enemy waves could not get through trees: a place beside a tree is a "forest" step of the route graph, which only
 // a unit already standing in a forest may take, and the enemies break blocks but trees are not blocks. Now that trees
 // can be planted, a row of them shut the enemies out of a base for good. Now an enemy that breaks its way (corruptron,
-// biftron, minitron, magitron) may plan its route through trees, and fells the trees in its way: a tree beside it
-// that lies ahead of it (or any tree beside it while it is stuck) is struck every StrikeSeconds for StrikeDamage, as
-// a bricktron's axe strikes it (a tree has 180), so it falls and drops its logs like any felled tree. Host only; the
-// tree's fall is the game's own and reaches every player.
+// biftron, minitron, magitron) may plan its route through trees, and fells a tree only when it is in its way: while
+// it follows a route and has not moved for StuckChecks checks in a row, the tree beside it that lies towards its next
+// route step is struck every StrikeSeconds for StrikeDamage, as a bricktron's axe strikes it (a tree has 180), so it
+// falls and drops its logs like any felled tree. An enemy walking past trees, fighting, breaking blocks or waiting
+// leaves them standing. Host only; the tree's fall is the game's own and reaches every player.
 [Feature(Features.EnemyTreeClearing, Features.EnemyTreeClearingInfo)]
 internal class EnemyTreeClearing : MonoBehaviour
 {
@@ -27,12 +28,20 @@ internal class EnemyTreeClearing : MonoBehaviour
 
 	private const int StrikeDamage = 60;
 
-	// Moved less than this in a check: stuck.
+	// Moved less than this in a check: not getting on.
 	private const float StuckDistance = 0.2f;
+
+	// Checks in a row without getting on before a tree in the way is struck (1 s).
+	private const int StuckChecks = 2;
+
+	// How nearly towards the next route step a tree must lie (cosine of the angle).
+	private const float AheadCosine = 0.5f;
 
 	private sealed class Watch
 	{
 		internal Vector3 Last;
+
+		internal int Stuck;
 
 		internal float NextStrike;
 	}
@@ -81,10 +90,16 @@ internal class EnemyTreeClearing : MonoBehaviour
 				watch = new Watch { Last = position };
 				Watched[labor] = watch;
 			}
-			bool stuck = (position - watch.Last).sqrMagnitude < StuckDistance * StuckDistance;
-			Vector3 moved = position - watch.Last;
+			bool still = (position - watch.Last).sqrMagnitude < StuckDistance * StuckDistance;
 			watch.Last = position;
-			if (now < watch.NextStrike)
+			// Only on its way somewhere: not while it fights, breaks a block or waits.
+			if (!still || !NextStep(labor, position, out Vector3 heading))
+			{
+				watch.Stuck = 0;
+				continue;
+			}
+			watch.Stuck++;
+			if (watch.Stuck < StuckChecks || now < watch.NextStrike)
 			{
 				continue;
 			}
@@ -93,8 +108,7 @@ internal class EnemyTreeClearing : MonoBehaviour
 			{
 				continue;
 			}
-			Vector3 heading = stuck ? labor.transform.forward : moved.normalized;
-			if (!FindTree(registry, cell, position, heading, stuck, out XYZ tree))
+			if (!FindTree(registry, cell, position, heading, out XYZ tree))
 			{
 				continue;
 			}
@@ -115,11 +129,38 @@ internal class EnemyTreeClearing : MonoBehaviour
 		Gone.Clear();
 	}
 
-	// The tree beside the unit most nearly ahead of it; while it is stuck any tree beside it.
-	private static bool FindTree(TreeRegistry registry, XYZ cell, Vector3 position, Vector3 heading, bool stuck, out XYZ tree)
+	// The direction to the next step of the route the unit follows; false when it follows none.
+	private static bool NextStep(Labor labor, Vector3 position, out Vector3 heading)
+	{
+		heading = Vector3.zero;
+		DestinationIterator path = (labor.navigation != null && labor.navigation.Locomotion != null) ? labor.navigation.Locomotion.PathIterator : null;
+		if (path == null || !path.HasCurrent)
+		{
+			return false;
+		}
+		for (int i = 0; i < 3; i++)
+		{
+			WalkNode node = path.GetNth(path.CurrentIndex + i);
+			if (node == null)
+			{
+				break;
+			}
+			Vector3 to = node.Position - position;
+			to.y = 0f;
+			if (to.sqrMagnitude > 0.25f)
+			{
+				heading = to;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// The tree beside the unit most nearly towards its next route step.
+	private static bool FindTree(TreeRegistry registry, XYZ cell, Vector3 position, Vector3 heading, out XYZ tree)
 	{
 		tree = XYZ.zero;
-		float best = stuck ? -2f : 0.3f;
+		float best = AheadCosine;
 		bool found = false;
 		Vector3 flat = new Vector3(heading.x, 0f, heading.z);
 		if (flat.sqrMagnitude > 0.0001f)

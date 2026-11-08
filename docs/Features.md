@@ -157,7 +157,7 @@ New blocks, new buildings and faster ways to build.
 | Mixed weapon stands: one stand holds the weapons and armour of all soldier classes at once; equipping takes one whole kit of a single class, the one a call to arms asks for, otherwise the class with the most kits on the stand (`[MixedRacks] PerSlot`). | `MixedRacks` |
 | **New:** weapon stand filter: select a stand and pick the soldier classes whose gear may be put on it; gear of the other classes is no longer brought there. | `RackFilter` |
 | Every soldier kit is one item (Knight kit, Archer kit, ...): kit recipes make one bundle, a soldier unpacks it when equipping and packs a whole kit again when handing it in. Saves with kit bundles need the mod. | `KitBundles` |
-| Enemy waves are no longer shut out by trees (planted rows included): enemies that break their way may route through trees and fell them, and the trees drop their logs. | `EnemyTreeClearing` |
+| Enemy waves are no longer shut out by trees (planted rows included): enemies that break their way may route through trees and fell a tree only when it blocks their way (trees they walk past stay standing); felled trees drop their logs. | `EnemyTreeClearing` |
 | Healtron: a new enemy, a green corruptron that heals its allies with a pulse (8% health every 4 s within 6 voxels) and a beam on the most wounded (5% per second within 10 voxels), but hits for only 40%. Raids bring one now and then (15% per corruptron, at most 2 per raid, invasion from wave 3) (`[Healtron]`). | `Healtron` |
 
 ## Workers and experience
