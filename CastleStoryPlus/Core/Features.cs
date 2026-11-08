@@ -453,7 +453,7 @@ internal static class Features
 
 	public const string WorkshopFetchRange = "WorkshopFetchRange";
 
-	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range.";
+	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range. The range goes along with \"Copy setup\", with copied areas and blueprints (also the blueprint library), and a workshop built from such a blueprint starts with it.";
 
 	public const string DropGearOnDeath = "DropGearOnDeath";
 
@@ -505,7 +505,7 @@ internal static class Features
 
 	public const string WorkshopSetup = "WorkshopSetup";
 
-	public const string WorkshopSetupInfo = "\"Copy setup\" and \"Paste setup\" in a workshop's menu: copies its queue, looping and stock limits to another workshop of the same kind (only the recipes it can make).";
+	public const string WorkshopSetupInfo = "\"Copy setup\" and \"Paste setup\" in a workshop's menu: copies its queue, looping, stock limits and fetch range to another workshop of the same kind (only the recipes it can make).";
 
 	public const string Metallurgy = "Metallurgy";
 

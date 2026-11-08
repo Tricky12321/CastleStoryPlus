@@ -3,6 +3,10 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [ADD] **Workshop fetch range in copies and blueprints:** a workshop's fetch range now goes along with "Copy setup" / "Paste setup", with an area copied as blueprints (Ctrl+C / Ctrl+V), with the game's duplicate and move of blueprints and with blueprints saved in the blueprint library; the workshop built from such a blueprint starts with that range. A placed workshop blueprint holds its range (synced to the other players and saved with the blueprint); the library saves it per blueprint as an extra `fetchRange` (a game without the mod skips it). Only a range set on the workshop goes along; one on the default stays on the default (`[Features] WorkshopFetchRange`).
+
 ## 0.8.10 — 2026-11-08
 
 - [FIX] **Windows installer, slow download:** the installer downloaded the release (about 50 MB) many times slower than the connection allows: Windows PowerShell redraws its progress bar for every block `Invoke-WebRequest` reads. It now downloads with `curl.exe` (part of Windows 10 and later, with its own progress bar) or, without it, .NET's `WebClient`, and PowerShell's own progress bar is off (also for unpacking the zip, which it slowed down the same way).

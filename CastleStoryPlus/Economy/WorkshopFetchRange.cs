@@ -168,11 +168,22 @@ internal static class WorkshopFetchRange
 		{
 			return false;
 		}
+		Change(state, range);
+		return true;
+	}
+
+	// Sets a workshop's range (-1: the default) here and, on a client, on the host (WorkshopSetup's paste).
+	internal static void Change(CraftingState state, int range)
+	{
+		if (state == null)
+		{
+			return;
+		}
 		Set(state, range);
 		UNetProjectCmd cmd = (User.LocalUser != null) ? User.LocalUser.GetComponent<UNetProjectCmd>() : null;
 		if (cmd == null || cmd.isServer)
 		{
-			return true;
+			return;
 		}
 		NetworkWriter writer = new NetworkWriter();
 		writer.Write((short)0);
@@ -182,7 +193,6 @@ internal static class WorkshopFetchRange
 		writer.Write(state.gameObject);
 		writer.WritePackedUInt32((uint)range);
 		cmd.SendCommandInternal(writer, 0, "CmdSetWorkshopFetchRange");
-		return true;
 	}
 
 	private static void InvokeSetRange(NetworkBehaviour obj, NetworkReader reader)
@@ -313,18 +323,29 @@ internal static class WorkshopFetchRangeSave
 	{
 		public object GetValue(object target)
 		{
+			if (target is Blueprint blueprint)
+			{
+				return WorkshopFetchRangeBlueprints.Raw(blueprint);
+			}
 			return WorkshopFetchRange.Raw(target as CraftingState);
 		}
 
 		public void SetValue(object target, object value)
 		{
-			WorkshopFetchRange.Set(target as CraftingState, WorkshopFetchRange.FromRaw(Convert.ToInt32(value)));
+			int raw = WorkshopFetchRange.FromRaw(Convert.ToInt32(value));
+			if (target is Blueprint blueprint)
+			{
+				WorkshopFetchRangeBlueprints.Set(blueprint, raw);
+				return;
+			}
+			WorkshopFetchRange.Set(target as CraftingState, raw);
 		}
 	}
 
+	// The workshop, and a workshop's blueprint (WorkshopFetchRangeBlueprints).
 	private static void Postfix(Type objectType, JsonObjectContract __result)
 	{
-		if (objectType != typeof(CraftingState) || __result == null || __result.Properties.Contains(Property))
+		if ((objectType != typeof(CraftingState) && objectType != typeof(Blueprint)) || __result == null || __result.Properties.Contains(Property))
 		{
 			return;
 		}
@@ -333,7 +354,7 @@ internal static class WorkshopFetchRangeSave
 			PropertyName = Property,
 			UnderlyingName = Property,
 			PropertyType = typeof(int),
-			DeclaringType = typeof(CraftingState),
+			DeclaringType = objectType,
 			ValueProvider = new RangeProvider(),
 			Readable = true,
 			Writable = true
