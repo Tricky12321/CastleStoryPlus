@@ -449,7 +449,7 @@ internal static class Features
 
 	public const string WorkshopPriority = "WorkshopPriority";
 
-	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes (the game keeps every workshop at high).";
+	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes, and at the bottom of the market's, research station's, smithy's and armoury's windows (the game keeps every workshop at high).";
 
 	public const string WorkshopFetchRange = "WorkshopFetchRange";
 

@@ -8,6 +8,7 @@ using Brix.Game.Components;
 using Brix.Game.Network;
 using Brix.Game.Semantique;
 using Brix.IO.Serialization.Contracts;
+using Brix.Lifecycle.Pooling;
 using CastleStoryPlus.Core;
 using HarmonyLib;
 using Newtonsoft.Json.Serialization;
@@ -77,7 +78,7 @@ internal static class WorkshopFetchRange
 		});
 	}
 
-	private static string Shown(int range)
+	internal static string Shown(int range)
 	{
 		return (range == NoLimit) ? "No limit" : range.ToString();
 	}
@@ -154,10 +155,14 @@ internal static class WorkshopFetchRange
 		return Mathf.Max(Min, next);
 	}
 
-	// Shown at once; the host's value follows.
 	private static bool StepSelected(int direction, bool shift)
 	{
-		CraftingState state = Selected();
+		return StepFor(Selected(), direction, shift);
+	}
+
+	// Shown at once; the host's value follows.
+	internal static bool StepFor(CraftingState state, int direction, bool shift)
+	{
 		if (state == null || direction == 0)
 		{
 			return false;
@@ -233,7 +238,12 @@ internal static class WorkshopFetchRange
 	// The selected workshop and its range, for the ring; null when none is selected or it has no limit.
 	internal static CraftingStation SelectedWithRange(out int range)
 	{
-		CraftingStation station = CraftingStation.SelectedStation();
+		// The selected station of any kind (SelectedStation leaves out the market, which has a window of its own).
+		CraftingStation station = (UIGameObserver.crafting != null) ? UIGameObserver.crafting.CurrentSelected : null;
+		if (station.IsNullOrReleased())
+		{
+			station = null;
+		}
 		range = (station != null) ? Get(station.state) : NoLimit;
 		return (range == NoLimit) ? null : station;
 	}

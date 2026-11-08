@@ -28,6 +28,22 @@ internal static class WorkshopPriority
 
 	private static readonly ProjectPriority.Bias[] Steps = { ProjectPriority.Bias.Locked, ProjectPriority.Bias.Low, ProjectPriority.Bias.Medium, ProjectPriority.Bias.High };
 
+	// The steps in order and their names (the station windows' priority row).
+	internal static readonly string[] StepNames = { "Locked", "Low", "Medium", "High" };
+
+	internal static int StepOf(CraftingState state)
+	{
+		return Array.IndexOf(Steps, Get(state));
+	}
+
+	internal static void ChangeStep(CraftingState state, int step)
+	{
+		if (step >= 0 && step < Steps.Length)
+		{
+			Change(state, Steps[step]);
+		}
+	}
+
 	// Per workshop; a workshop not in here has the game's high.
 	private static readonly Dictionary<CraftingState, ProjectPriority.Bias> Biases = new Dictionary<CraftingState, ProjectPriority.Bias>();
 
@@ -157,7 +173,16 @@ end
 		{
 			return;
 		}
-		ProjectPriority.Bias bias = Steps[step];
+		Change(state, Steps[step]);
+	}
+
+	// Sets a workshop's priority here and, on a client, on the host.
+	internal static void Change(CraftingState state, ProjectPriority.Bias bias)
+	{
+		if (state == null)
+		{
+			return;
+		}
 		Set(state, bias);
 		UNetProjectCmd cmd = (User.LocalUser != null) ? User.LocalUser.GetComponent<UNetProjectCmd>() : null;
 		if (cmd == null || cmd.isServer)
