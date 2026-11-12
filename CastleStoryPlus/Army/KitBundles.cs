@@ -762,7 +762,13 @@ internal static class KitBundleGetKitPatch
 		{
 			return true;
 		}
-		List<Ressource> kit = MixedRacks.KitToTake(__instance);
+		List<Ressource> kit = MixedRacks.KitToTake(__instance, out bool strict);
+		if (kit == null && strict)
+		{
+			// The class asked for is gone from the stand: no other class instead.
+			__result = false;
+			return false;
+		}
 		List<GameObject> loose = new List<GameObject>();
 		if (kit != null && MixedRacks.Collect(__instance, kit, loose))
 		{
@@ -773,6 +779,11 @@ internal static class KitBundleGetKitPatch
 		KitBundles.Bundle bundle = (kit != null) ? KitBundles.ForKit(kit) : null;
 		if (bundle == null || __instance.recepteur.ContentDescription.Value(bundle.Resource) <= 0)
 		{
+			if (strict)
+			{
+				__result = false;
+				return false;
+			}
 			bundle = null;
 			foreach (KitBundles.Bundle candidate in KitBundles.All)
 			{

@@ -7,7 +7,7 @@ using Newtonsoft.Json.Serialization;
 namespace CastleStoryPlus.Workers;
 
 // Saves the stats as extra properties on the existing CharacterState component ("workXp", "combatXp",
-// "callToArmsRole", "tier", "variant"). The unmodded game ignores unknown properties, so saves stay loadable without the mod.
+// "callToArmsRole", "tier", "variant", "guard", "hasPost", "postX", "postY", "postZ"). The unmodded game ignores unknown properties, so saves stay loadable without the mod.
 [Feature]
 [HarmonyPatch(typeof(DefaultGameContractResolver), nameof(DefaultGameContractResolver.GenerateDefaultMonoBehaviourContract))]
 internal static class WorkerStatsSave
@@ -57,6 +57,11 @@ internal static class WorkerStatsSave
 		Add(__result, "callToArmsRole", (WorkerStats s) => s.CallToArmsRole, (WorkerStats s, int v) => s.CallToArmsRole = v);
 		Add(__result, "tier", (WorkerStats s) => s.Tier, (WorkerStats s, int v) => s.Tier = v);
 		Add(__result, "variant", (WorkerStats s) => s.Variant, (WorkerStats s, int v) => s.Variant = v, WorkerStats.RaiseVariantChanged);
+		Add(__result, "guard", (WorkerStats s) => s.Guard, (WorkerStats s, int v) => s.Guard = v);
+		Add(__result, "hasPost", (WorkerStats s) => s.HasPost, (WorkerStats s, int v) => s.HasPost = v);
+		Add(__result, "postX", (WorkerStats s) => s.PostX, (WorkerStats s, int v) => s.PostX = v);
+		Add(__result, "postY", (WorkerStats s) => s.PostY, (WorkerStats s, int v) => s.PostY = v);
+		Add(__result, "postZ", (WorkerStats s) => s.PostZ, (WorkerStats s, int v) => s.PostZ = v);
 	}
 
 	private static void Add(JsonObjectContract contract, string name, Func<WorkerStats, int> get, Action<WorkerStats, int> set, Action<CharacterState> loaded = null)

@@ -27,8 +27,9 @@ internal static class MixedRacks
 	// Kit a bricktron was sent for by a call to arms, by labor instance id, with the time it was asked.
 	private static readonly Dictionary<int, KeyValuePair<Occupation.Job, float>> Wanted = new Dictionary<int, KeyValuePair<Occupation.Job, float>>();
 
-	// A wish older than this is from an order that never reached the stand.
-	private const float WantedSeconds = 120f;
+	// A wish older than this is from an order that never reached the stand (a long walk to a far stand took more than
+	// the 2 minutes this was before, and the bricktron then took the stand's main class instead).
+	private const float WantedSeconds = 600f;
 
 	// The bricktron taking gear from a stand right now (set around ToolNode.EquipRackContent).
 	internal static Labor Equipping;
@@ -59,14 +60,23 @@ internal static class MixedRacks
 		}
 	}
 
-	// Takes the wished kit of a bricktron (once), or null.
-	private static List<Ressource> TakeWanted(Labor labor)
+	// A new order from the player ends the wish of an earlier call to arms (a later equip order is not held to it).
+	public static void Forget(Labor labor)
+	{
+		if (labor != null && Wanted.Count > 0)
+		{
+			Wanted.Remove(labor.InstanceId());
+		}
+	}
+
+	// The wished kit of a bricktron, or null. Read by every GetKit patch of the equip (KitBundles, MixedRacks): it is
+	// forgotten when the equip is done (MixedRackEquipPatch), not on the first read, or the second patch saw no wish.
+	private static List<Ressource> WantedKit(Labor labor)
 	{
 		if (labor == null || !Wanted.TryGetValue(labor.InstanceId(), out KeyValuePair<Occupation.Job, float> wish))
 		{
 			return null;
 		}
-		Wanted.Remove(labor.InstanceId());
 		if (Time.time - wish.Value > WantedSeconds)
 		{
 			return null;
@@ -76,6 +86,12 @@ internal static class MixedRacks
 
 	// Class with the most complete kits, then the most items; AllItems when the stand holds no gear.
 	public static List<Ressource> Dominant(Recepteur recepteur)
+	{
+		return Dominant(recepteur, null, null);
+	}
+
+	// As above, counting only the kits no one but this bricktron has reserved (KitReservation) when a stand is given.
+	private static List<Ressource> Dominant(Recepteur recepteur, GameObject rack, Labor except)
 	{
 		List<Ressource> best = ToolRack.AllItems;
 		int bestKits = 0;
@@ -94,6 +110,14 @@ internal static class MixedRacks
 			int bundles = KitBundles.CountFor(recepteur, kit);
 			kits += bundles;
 			items += bundles * kit.Count;
+			if (rack != null && KitReservation.Enabled)
+			{
+				Occupation.Job job = JobOf(kit);
+				if (job != Occupation.Job.Builder)
+				{
+					kits -= KitReservation.KitsReserved(rack, (int)job, except);
+				}
+			}
 			if (kits > bestKits || (kits == bestKits && items > bestItems))
 			{
 				best = kit;
@@ -115,16 +139,46 @@ internal static class MixedRacks
 		return kits + KitBundles.CountFor(recepteur, kit);
 	}
 
-	// Kit to hand out: the wished one when the stand holds it whole, otherwise the dominant class.
+	// Kit to hand out: the wished one (a call to arms sent the bricktron for it) or nothing when the stand no longer
+	// holds it whole (strict: it takes no other class, and looks for the kit on another stand); otherwise the kit of
+	// the bricktron's call to arms role when the stand holds one, otherwise the class with the most kits no one else
+	// has reserved (KitReservation). A bricktron sent for knight gear found its kit taken by one on its way to any
+	// kit, and took the stand's archer kit instead.
+	public static List<Ressource> KitToTake(ToolRack rack, out bool strict)
+	{
+		strict = false;
+		Labor labor = Equipping;
+		List<Ressource> wanted = WantedKit(labor);
+		if (wanted != null)
+		{
+			strict = true;
+			return (Complete(rack.recepteur, wanted) > 0) ? wanted : null;
+		}
+		Occupation.Job role = (labor != null) ? Kits.RoleJob(labor) : Occupation.Job.Builder;
+		if (role != Occupation.Job.Builder && Complete(rack.recepteur, Kits.KitFor(role)) > 0)
+		{
+			return Kits.KitFor(role);
+		}
+		List<Ressource> dominant = Dominant(rack.recepteur, rack.gameObject, labor);
+		return (dominant == ToolRack.AllItems) ? null : dominant;
+	}
+
 	public static List<Ressource> KitToTake(ToolRack rack)
 	{
-		List<Ressource> wanted = TakeWanted(Equipping);
-		if (wanted != null && Complete(rack.recepteur, wanted) > 0)
+		return KitToTake(rack, out _);
+	}
+
+	// The soldier class of a kit list, or Builder.
+	private static Occupation.Job JobOf(List<Ressource> kit)
+	{
+		foreach (Occupation.Job job in CallToArms.SoldierJobs)
 		{
-			return wanted;
+			if (Kits.KitFor(job) == kit)
+			{
+				return job;
+			}
 		}
-		List<Ressource> dominant = Dominant(rack.recepteur);
-		return (dominant == ToolRack.AllItems) ? null : dominant;
+		return Occupation.Job.Builder;
 	}
 
 	// One stored item of every type of the kit; true when the kit is whole.
@@ -403,8 +457,23 @@ internal static class MixedRackEquipPatch
 		MixedRacks.Equipping = labor;
 	}
 
-	private static void Finalizer()
+	private static void Finalizer(Labor labor)
 	{
+		MixedRacks.Forget(labor);
 		MixedRacks.Equipping = null;
+	}
+}
+
+// A new order from the player starts without the kit wish of an earlier call to arms (MixedRacks.Want).
+[Feature(Features.MixedRacks, Features.MixedRacksInfo)]
+[HarmonyPatch(typeof(Labor), nameof(Labor.SendOrder))]
+internal static class MixedRackForgetWishPatch
+{
+	private static void Prefix(Labor __instance, Labor.DecisionSource source)
+	{
+		if (source == Labor.DecisionSource.User)
+		{
+			MixedRacks.Forget(__instance);
+		}
 	}
 }

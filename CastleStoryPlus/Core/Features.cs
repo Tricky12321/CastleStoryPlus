@@ -247,6 +247,18 @@ internal static class Features
 
 	public const string MixedStockpilesInfo = "A stockpile holds several resources at once: each of its four columns holds one resource type.";
 
+	public const string KitReservation = "KitReservation";
+
+	public const string KitReservationInfo = "A bricktron reserves the kit (or the free place for its kit) on the weapon stand it sets out for, so others go to another stand instead of running to the same last kit or place.";
+
+	public const string RangedGuard = "RangedGuard";
+
+	public const string RangedGuardInfo = "\"Guard here\" in the action wheel of ranged soldiers: they stay on the place they stand on and shoot every enemy in range from there, never leaving it for an enemy or a better shot, and walk back to it when pushed off.";
+
+	public const string SoldierPosts = "SoldierPosts";
+
+	public const string SoldierPostsInfo = "A post of its own for each unit: \"Set post\" in the action wheel keeps the place each selected unit stands on, \"Back to post\" sends them there, and a call to arms sends units with a post there instead of to their class's rally point.";
+
 	public const string MixedRacks = "MixedRacks";
 
 	public const string MixedRacksInfo = "A weapon stand holds the weapons and armour of all soldier classes at once (as many weapons, props and hats as before, any classes mixed); equipping takes one whole kit of a single class (see [MixedRacks]).";
