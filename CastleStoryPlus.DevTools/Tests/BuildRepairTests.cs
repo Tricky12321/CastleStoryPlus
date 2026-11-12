@@ -10,6 +10,7 @@ using Brix.Input;
 using Brix.Legacy;
 using CastleStoryPlus.DevTools.Building;
 using CastleStoryPlus.DevTools.Endpoints;
+using CastleStoryPlus.DevTools.Pathing;
 using CastleStoryPlus.DevTools.Testing;
 using UnityEngine;
 using FactoryBlocks = Brix.External.Factories.Blocks;
@@ -133,7 +134,8 @@ internal static class BuildRepairTests
 		yield return t.UntilGame(() => Gaps(steps).Count > 0 || (provider.GoalCount() == 0 && BottomDug(provider, steps, data.Bounds, bottom)), 480f, "the quarry to be dug out", 60f, () =>
 		{
 			t.Record("quarry", ProjectEndpoints.Describe(quarry));
-			t.Log("lowest dug " + LowestDug(data.Bounds) + "; steps cut " + Cut(steps) + "/" + steps.Count);
+			t.Record("whyNotDug", TaskTests.WhyNotDug(a, quarry));
+			t.Log("lowest dug " + LowestDug(data.Bounds) + "; steps cut " + Cut(steps) + "/" + steps.Count + "; " + a.name + " " + a.Activity + " at " + Units.VoxelOf(a) + ", task " + ((a.CurrentTask != null) ? a.CurrentTask.GetType().Name : "none"));
 		});
 		t.Record("lowestDug", LowestDug(data.Bounds));
 		t.Record("bottom", bottom);

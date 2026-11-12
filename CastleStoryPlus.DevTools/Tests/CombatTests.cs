@@ -119,7 +119,7 @@ internal static class CombatTests
 			}
 		});
 		XYZ homeVoxel = Scenario.Home();
-		XYZ start = Scenario.Site(t, 6, 6, 4, 16);
+		XYZ start = Scenario.SiteNearHome(t, 6, 6, 4, 16);
 		t.Log("Raid from " + start + " to the crystal at " + homeVoxel + " (" + before + " hp)");
 		List<Labor> raiders = new List<Labor>();
 		for (int i = 0; i < 3; i++)

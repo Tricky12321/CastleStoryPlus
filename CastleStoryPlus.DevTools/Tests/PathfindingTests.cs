@@ -34,6 +34,8 @@ internal static class PathfindingTests
 	private static IEnumerator RandomRoutesNearShortest(TestContext t)
 	{
 		Labor labor = Builder(t);
+		// A unit spawned now has its route search set up a few frames later.
+		yield return t.Frames(10);
 		XYZ home = Units.VoxelOf(labor);
 		System.Random random = new System.Random(20261005);
 		int compared = 0;
@@ -83,6 +85,8 @@ internal static class PathfindingTests
 	private static IEnumerator DetourAroundWall(TestContext t)
 	{
 		Labor labor = Builder(t);
+		// A unit spawned now has its route search set up a few frames later.
+		yield return t.Frames(10);
 		if (!TestWorld.FindFlatArea(Units.VoxelOf(labor), 15, 11, 4, 40, out XYZ center))
 		{
 			t.Skip("No flat open area of 15 x 11 near the builder");
@@ -117,6 +121,8 @@ internal static class PathfindingTests
 	private static IEnumerator BuilderWalksToSpot(TestContext t)
 	{
 		Labor labor = Builder(t);
+		// A unit spawned now has its route search set up a few frames later.
+		yield return t.Frames(10);
 		XYZ start = Units.VoxelOf(labor);
 		if (!TestWorld.FindFlatArea(start + new XYZ(10, 0, 0), 3, 3, 2, 6, out XYZ goal))
 		{

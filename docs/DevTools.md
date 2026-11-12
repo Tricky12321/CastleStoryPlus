@@ -181,24 +181,31 @@ private static IEnumerator MyTest(TestContext t)
 - `t.UntilGame` waits like `t.Until`, but its limit counts game seconds, for gameplay that takes game time (a tree to fall, a fight).
 - `t.UntilGame(condition, seconds, what, noteSeconds, note)` also runs `note` every few game seconds, to log or record what the game was doing, so a failed run tells why.
 - `Scenario` sets up a test's own scene and takes it away again in the clean-up:
-  - `Site` finds flat open ground near the home crystal (from the terrain, without trees, boulders or ore), away from the bricktrons standing round it and from the ground earlier tests used;
+  - `Site` finds flat open ground (from the terrain, without trees, boulders or ore) on the test's own plot (see below); `SiteNearHome` near the home crystal, for a test that needs the crystal close (a raid on it);
+  - `PlantTrees` plants full-grown trees on the test's own ground (as a grown sapling becomes one), so tests that fell or harvest trees do not depend on the map's forests (`TaskTests.Grove`: one tree, or three close together for a harvest);
+  - `EnsureBuilder` and `EnsureEnemy` give the test a builder (waiting for orders) and a corruptron of its own, always on the same spot near the home crystal;
   - `Bricktron`, `Corruptron` and `Spawn` make units (any faction and job, with their gear) on the nearest voxel of the route graph (a unit off it cannot walk), `Items` loose items;
   - `NewProject`, `BuildProject` and `Hire` make projects and put bricktrons on them;
   - `Building` places a stockpile or workshop and finishes it at once;
   - `Count` and `Stored` count items of a kind (everywhere, or in storages), `Hp` and `Alive` read a unit's health.
-  - each test gets ground of its own while it runs; it is given back afterwards unless the test left something there (a unit that died leaves a corpse; `LeavesMess` for dug ground). After every test the runner waits a few physics steps, so blocks its clean-up took away are gone before the next test looks at the ground.
-- Before a run with `clearUnits` (the script's default) every unit the world has is taken away: the player's starting bricktrons and the map's roaming enemies and beasts, so the tests meet only their own units. The base's standing repair and cleanup tasks get no crew during the run (they would take the tests' workers and material). The runner adds one builder of its own for the older tests that use "the player's builder", and takes it away afterwards.
-- Parallel runs: the tests of a class marked `[ParallelTests]` may run next to others, each on ground of its own at least 10 voxels from the others'. Tests of one group never overlap: `[ParallelTests("Economy")]` (tasks and crafting: workers fetch from and store into any stockpile, so their counts would mix) and `[ParallelTests("Combat")]` (a fight draws in every enemy within sight). `[GameTest(..., Exclusive = true)]` and classes without the attribute run alone. A test that finds no free ground while others hold it (`TestNoRoom`) runs again once nothing else runs.
+  - each test gets ground of its own while it runs; it is given back afterwards unless the test left something there (a unit that died leaves a corpse; `LeavesMess` for dug ground, stumps). After every test the runner waits a few physics steps, so blocks its clean-up took away are gone before the next test looks at the ground.
+- Deterministic runs: the same build gives the same results run after run.
+  - Every test has a plot of its own, 48 x 48 voxels, on a grid round the home crystal: the grid cells 90 to 360 voxels from it; which one follows from a hash of the test's name (the next free cell when it is taken), not from the tests that ran before or next to it, nor from a filter. `Site` searches outward from the plot's middle and keeps the area 5 voxels inside it, so a test's areas are the same ground at the same height in every run, and tests running at the same time are a plot apart or more. Only when the plot has no such area (a map that is not flat there) does `Site` fall back to searching round the home crystal (logged), as before.
+  - The ground within 90 voxels of the home crystal belongs to no plot: the route search tests round their builder there and the raid on the crystal.
+  - Each test starts the game's random numbers (`UnityEngine.Random`) from a seed of its name. Tests running at the same time draw from it too, so it repeats for the same schedule.
+  - While tests run no wild plants seed themselves (`WildPlants` draws its columns at random), and Test Island gets no treasure chests (random places, ruins and guards).
+- Before a run with `clearUnits` (the script's default) every unit the world has is taken away: the player's starting bricktrons and the map's roaming enemies and beasts, so the tests meet only their own units. The base's standing repair and cleanup tasks get no crew during the run (they would take the tests' workers and material). The runner then keeps one builder of its own on open ground about 70 voxels from the crystal, waiting for orders (spawned again before a test when it was killed), and starts the tests once the mod's route map (`ReachMap`, flooded from where the player's workers stand) has been made from it: without a worker on open ground that map would hold only the pockets other tests' workers stand in (a pit, a walled ring), and an escape from a pit (`StuckEscape`) or an item's reachability (`UnreachableTasks`) would depend on what ran before.
+- Parallel runs: the tests of a class marked `[ParallelTests]` may run next to others, each on its own plot. Tests of one group never overlap: `[ParallelTests("Economy")]` (tasks and crafting: workers fetch from and store into any stockpile, so their counts would mix) and `[ParallelTests("Combat")]` (a fight draws in every enemy within sight). `[GameTest(..., Exclusive = true)]` and classes without the attribute run alone. A test that finds no free ground while others hold it (`TestNoRoom`) runs again once nothing else runs.
 - A test that expects something not to happen first shows that it could (a route to the spot before the wall is built), so it cannot pass for the wrong reason.
 - The tests change the game they run in. They walk bricktrons around and place blocks for a while, so run them in a test save, or with `tools/run-game-tests.py`:
 
 ```sh
-tools/run-game-tests.py                    # every test, 4x speed, a new sandbox on Tortuga
+tools/run-game-tests.py                    # every test, 4x speed, a new sandbox on Test Island
 tools/run-game-tests.py --filter Combat    # one category or test
 tools/run-game-tests.py --parallel 1       # one test after the other
 ```
 
-Options: `--parallel` (tests at the same time, default 4), `--keep-units` (leave the world's own units in it), `--speed` (default 4), `--map` (default Tortuga, which has trees), `--settle` (game seconds the new world gets before the tests, default 60), `--hold` (keep the player running for a look into it), `--trace` (the worker trace on, `BepInEx/workertrace.log` in the player).
+Options: `--parallel` (tests at the same time, default 4), `--keep-units` (leave the world's own units in it), `--speed` (default 4), `--map` (default `Test Island`, remade in the run's copy of the game root with `tools/make_test_island.py`, radius `--island-radius`, default 400, so every plot is on it; another map, e.g. `Tortuga`, runs too, but tests whose plot is not flat there search round the home crystal and the results can depend on the order), `--settle` (game seconds the new world gets before the tests, default 60), `--hold` (keep the player running for a look into it), `--trace` (the worker trace on, `BepInEx/workertrace.log` in the player).
 
 It starts a player of its own (default: the Unity 6 port's `CastleStoryPlus.Player/Build/Linux`) on a copy of a game root without saves (`--root-src`, default `~/.cache/csp-bench/root-src`), starts the sandbox, runs the tests, prints each outcome, saves and closes the player. The results go to `~/.cache/csp-tests/game-tests-<time>.json`, and the exit code is 0 when no test failed. No other game may answer on the API port while it runs.
 
@@ -209,8 +216,8 @@ It starts a player of its own (default: the Unity 6 port's `CastleStoryPlus.Play
 | `PathfindingTests.BuilderWalksToSpot` | A builder ordered to a spot 10 voxels away gets there |
 | `PathfindingTests.EnemyRoutesNearShortest` | The same check as the random routes, for an enemy unit, which uses its own heuristic weight and budget |
 | `ModTests.FeaturesStarted` | Every feature that is switched on started without errors |
-| `TaskTests.BuilderFellsTreeOnOrder` | A builder ordered to cut the nearest tree fells it: the tree leaves the tree registry and its logs lie there |
-| `TaskTests.HarvestProjectFellsTrees` | A tree harvest project with two builders fells a tree in its circle |
+| `TaskTests.BuilderFellsTreeOnOrder` | A builder ordered to cut a tree (planted by the test) fells it: the tree leaves the tree registry and its logs lie there |
+| `TaskTests.HarvestProjectFellsTrees` | A tree harvest project with two builders fells a tree in its circle (three planted by the test) |
 | `TaskTests.LooseItemsAreHauled` | A builder told to clean up carries 4 loose stones into an empty stockpile |
 | `TaskTests.QuarryIsDug` | A 3 x 3 quarry with two builders and a stockpile: at least 3 voxels of ground are dug out |
 | `TaskTests.WorkersBuildBlueprints` | Two builders build 3 stone brick blueprints with stone blocks (`Blocks.Stone_DoubleBrick`, what a stone brick takes; raw stone does not do) from a stockpile |

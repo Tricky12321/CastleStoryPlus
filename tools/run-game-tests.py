@@ -3,8 +3,12 @@
 a game root (never the real saves), a new sandbox world on a map, the tests through the DevTools API, then the player
 saves and closes and the copy is removed.
 
-    tools/run-game-tests.py [--filter Combat] [--map Tortuga] [--speed 4] [--parallel 4] [--keep-units] [--player DIR]
-                            [--root-src DIR] [--keep]
+    tools/run-game-tests.py [--filter Combat] [--map "Test Island"] [--speed 4] [--parallel 4] [--keep-units]
+                            [--player DIR] [--root-src DIR] [--keep]
+
+The default map is Test Island: round, perfectly flat and empty (tools/make_test_island.py makes it in the copy, never
+in the game's own folder), so every test finds the same ground on its own plot in every run and the results do not
+depend on what ran before or next to it. The tests that need trees plant their own.
 
 --player is a player folder with run_bepinex.sh and the mod (default: the Unity 6 port's
 CastleStoryPlus.Player/Build/Linux). --root-src is a folder holding the game's Info (maps, Lua), copied for the run
@@ -26,6 +30,7 @@ import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 API = "http://127.0.0.1:27860"
+TEST_ISLAND = "Test Island"
 
 
 def log(*parts):
@@ -58,6 +63,13 @@ def wait_for(what, check, timeout, player):
             pass
         time.sleep(1)
     raise RuntimeError("waited %d s for %s" % (timeout, what))
+
+
+def make_island(root, radius):
+    # Into the copy only: the map is remade for every run, so it always matches the plots the tests expect.
+    script = os.path.join(REPO, "tools", "make_test_island.py")
+    subprocess.run([sys.executable, script, "--game", root, "--radius", str(radius)], check=True, stdout=subprocess.DEVNULL)
+    log("made", TEST_ISLAND, "radius", radius, "in the copy")
 
 
 def start_world(args, player):
@@ -121,7 +133,8 @@ def run_tests(args, player):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--filter", default="", help="part of a test name or category (empty: all)")
-    parser.add_argument("--map", default="Tortuga", help="map of the sandbox world (trees, open ground)")
+    parser.add_argument("--map", default=TEST_ISLAND, help="map of the sandbox world (default: Test Island, made in the copy)")
+    parser.add_argument("--island-radius", type=int, default=400, help="radius of Test Island in voxels (room for every test's plot)")
     parser.add_argument("--speed", type=float, default=4.0, help="game speed during the tests (0.25-20)")
     parser.add_argument("--player", default=os.path.join(REPO, "CastleStoryPlus.Player", "Build", "Linux"))
     parser.add_argument("--root-src", default=os.path.expanduser("~/.cache/csp-bench/root-src"))
@@ -149,6 +162,8 @@ def main():
     # The copy starts without saves: the tests change the world they run in.
     shutil.rmtree(os.path.join(root, "Info", "Saves"), ignore_errors=True)
     os.makedirs(os.path.join(root, "Info", "Saves"), exist_ok=True)
+    if args.map == TEST_ISLAND:
+        make_island(root, args.island_radius)
     player_log = os.path.join(args.work, "game-tests-%s.log" % stamp)
     env = dict(os.environ, CSP_GAME_ROOT=root)
     command = ["./run_bepinex.sh", "-force-vulkan" if args.vulkan else "-force-glcore", "-logFile", player_log]

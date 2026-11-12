@@ -142,7 +142,7 @@ internal static class WorkerRouteTests
 				if (entry.Key == ingot)
 				{
 					considered = true;
-					t.Log("The iron ingot: " + (entry.Value ?? "would pick it up"));
+					t.Log("The iron ingot: " + (entry.Value ?? "would pick it up") + ClaimedBy(ingot));
 				}
 			}
 			if (!considered)
@@ -151,6 +151,25 @@ internal static class WorkerRouteTests
 			}
 		}
 		t.True(planned == ingot, "The idle cleanup did not choose the iron ingot");
+	}
+
+	// Which workers' idle cleanup has planned to take the item (AutoCleanup's plans), for the log.
+	private static string ClaimedBy(GameObject item)
+	{
+		Dictionary<Labor, GameObject> plans = HarmonyLib.AccessTools.Field(typeof(AutoCleanup), "Plans")?.GetValue(null) as Dictionary<Labor, GameObject>;
+		if (plans == null)
+		{
+			return string.Empty;
+		}
+		List<string> who = new List<string>();
+		foreach (KeyValuePair<Labor, GameObject> plan in plans)
+		{
+			if (plan.Value == item && plan.Key != null)
+			{
+				who.Add(plan.Key.name + " (" + plan.Key.Autonomy.Description + ", at " + Units.VoxelOf(plan.Key) + ")");
+			}
+		}
+		return (who.Count > 0) ? "; planned by " + string.Join(", ", who.ToArray()) : string.Empty;
 	}
 
 	[GameTest("Tasks", "A bricktron standing idle in a pit 4 deep digs its way out (#62)", TimeoutSeconds = 300f)]

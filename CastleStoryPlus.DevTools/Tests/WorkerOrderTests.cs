@@ -25,10 +25,11 @@ internal static class WorkerOrderTests
 	[GameTest("Tasks", "A quarry worker moved to a tree harvest with stone in its bag digs no more: it stores the stone, then goes to the trees", TimeoutSeconds = 420f)]
 	private static IEnumerator ReassignedWorkerStoresThenSwitches(TestContext t)
 	{
-		XYZ tree = TaskTests.NearestTree(t, Scenario.Home(), 45);
-		// The quarry on the tree's level and not far from it (a tree below a cliff may have no way to it).
-		XYZ site = Scenario.Site(t, 14, 8, accept: center => Mathf.Abs(center.y - tree.y) <= 2 && WorldEndpoints.FlatDistance(center, tree) <= 45 * 45);
+		XYZ site = Scenario.Site(t, 14, 8);
 		Scenario.LeavesMess(t);
+		// The trees of the harvest beside the quarry, on its level.
+		XYZ tree = XYZ.zero;
+		yield return TaskTests.Grove(t, 3, trees => tree = trees[0]);
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
 		MineProject quarry = Quarry(t, site);
@@ -125,9 +126,10 @@ internal static class WorkerOrderTests
 	// tree and then goes on in the harvest, never in the quarry.
 	private static IEnumerator StaysOnTask(TestContext t, bool rightClick)
 	{
-		XYZ tree = TreeWithNeighbour(t, Scenario.Home(), 45);
 		XYZ site = Scenario.Site(t, 14, 8);
 		Scenario.LeavesMess(t);
+		XYZ tree = XYZ.zero;
+		yield return TaskTests.Grove(t, 3, trees => tree = trees[0]);
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
 		MineProject quarry = Quarry(t, site);
@@ -213,43 +215,6 @@ internal static class WorkerOrderTests
 		Scenario.Groupe.CmdSetMine(quarry.gameObject, data.Bounds.min.ToVector3(), data.Bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
 		ProjectEndpoints.Commit(quarry);
 		return quarry;
-	}
-
-	// A tree with another tree within 3 voxels, so a harvest round it has two.
-	private static XYZ TreeWithNeighbour(TestContext t, XYZ near, int radius)
-	{
-		List<XYZ> all = new List<XYZ>();
-		foreach (XYZ tree in WorldEndpoints.TreesOver(near.x - radius, near.z - radius, near.x + radius, near.z + radius))
-		{
-			if (TreeRegistry.Instance.GetTree(tree) != 0 && DamagedTree.GetAt(tree) == null)
-			{
-				all.Add(tree);
-			}
-		}
-		XYZ best = XYZ.zero;
-		float bestDistance = float.MaxValue;
-		foreach (XYZ tree in all)
-		{
-			float distance = Mathf.Sqrt(WorldEndpoints.FlatDistance(tree, near));
-			if (distance < 6f || distance >= bestDistance)
-			{
-				continue;
-			}
-			foreach (XYZ other in all)
-			{
-				if (other != tree && WorldEndpoints.FlatDistance(tree, other) <= 9)
-				{
-					best = tree;
-					bestDistance = distance;
-					break;
-				}
-			}
-		}
-		if (bestDistance == float.MaxValue)
-		{
-			t.Skip("No two trees close together within " + radius + " voxels of " + near);
-		}
-		return best;
 	}
 
 	private static string DescribeTreeGoals(Project project, Labor labor)

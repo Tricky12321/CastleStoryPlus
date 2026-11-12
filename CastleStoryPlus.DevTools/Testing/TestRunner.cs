@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using Brix.Engine;
-using Brix.Transactions;
 using CastleStoryPlus.DevTools.Speed;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -93,6 +92,9 @@ internal class TestRunner : MonoBehaviour
 	// Take the world's own units away before the run (the player's bricktrons, roaming enemies), so the tests only
 	// meet their own.
 	private bool _clearUnits;
+
+	// The run keeps a builder of its own on open ground (Scenario.EnsureAnchor).
+	private bool _anchored;
 
 	private void Awake()
 	{
@@ -194,24 +196,29 @@ internal class TestRunner : MonoBehaviour
 			GameSpeed.Instance.Set(_speed, 0f);
 		}
 		bool quieted = false;
-		GameObject runBuilder = null;
 		if (_clearUnits && InHostGame())
 		{
 			ClearUnits();
 			Scenario.QuietWorld();
 			quieted = true;
-			// One builder of the run's own for the older tests that use "the player's builder" (Units.Find); the
-			// newer ones bring their own. Given a few seconds to settle into the world.
-			XYZ home = Scenario.Home();
-			runBuilder = Transactor.SpawnUNet(Brix.External.Factories.Test.Bricktron, Scenario.Player, Scenario.Walkable(Scenario.Ground(home.x + 4, home.z + 2)).ToVector3(), Quaternion.identity);
-			if (runBuilder != null)
-			{
-				runBuilder.GetComponent<Brix.Game.AI.Occupation>().SetOccupation(Brix.Game.AI.Occupation.Type.Builder, true);
-				// Only what a test orders it to do: an idle builder takes a free workshop or a chore on its own.
-				runBuilder.GetComponent<Brix.Game.AI.Labor>().Autonomy = Brix.Game.AI.AutonomyStatus.WaitForOrders;
-			}
+			// The world a few seconds without them before the first test.
 			yield return new WaitForSeconds(3f);
+			// A builder of the run's own on open ground far from the tests' ground, standing still: the mod's route map
+			// of where the player's workers can walk (ReachMap) is flooded from where its workers stand, and without
+			// one on open ground it would hold only the pockets other tests' workers stand in (a pit, a walled ring),
+			// so what a test finds reachable would depend on what ran before it. The tests then start once a map
+			// flooded from it is in use.
+			int generation = CastleStoryPlus.Pathfinding.ReachMap.Generation;
+			_anchored = true;
+			Scenario.EnsureAnchor();
+			float until = Time.realtimeSinceStartup + 60f;
+			while (CastleStoryPlus.Pathfinding.ReachMap.Generation <= generation + 1 && Time.realtimeSinceStartup < until)
+			{
+				yield return null;
+			}
 		}
+		// No new plants seed themselves on the tests' ground while they run (WildPlants draws its columns at random).
+		WildPlantsPause.Paused = true;
 		// Tests start in their order as soon as they may: no more than _parallel at once, a test that must run alone
 		// only when nothing else runs (and nothing starts next to it), never two of one group at once.
 		List<int> queue = new List<int>();
@@ -290,10 +297,12 @@ internal class TestRunner : MonoBehaviour
 		{
 			Scenario.UnquietWorld();
 		}
-		if (runBuilder != null)
+		if (_anchored)
 		{
-			Scenario.Release(runBuilder);
+			_anchored = false;
+			Scenario.ReleaseAnchor();
 		}
+		WildPlantsPause.Paused = false;
 		if (fast && GameSpeed.Instance.Active)
 		{
 			GameSpeed.Instance.Reset("the test run ended");
@@ -307,6 +316,11 @@ internal class TestRunner : MonoBehaviour
 	private IEnumerator RunTracked(TestInfo test, Result result, Action done)
 	{
 		result.Attempts++;
+		if (_anchored)
+		{
+			// Back if a test's enemies killed it.
+			Scenario.EnsureAnchor();
+		}
 		yield return StartCoroutine(RunOne(test, result));
 		done();
 	}
@@ -328,7 +342,10 @@ internal class TestRunner : MonoBehaviour
 
 	private IEnumerator RunOne(TestInfo test, Result result)
 	{
-		TestContext context = new TestContext();
+		TestContext context = new TestContext { Name = test.Name };
+		// The game's own dice (hits, misses, which way a unit turns, ...) start from the same seed for the same test in
+		// every run; tests running at the same time draw from it too, so it is the same only for the same schedule.
+		UnityEngine.Random.InitState((int)Scenario.StableHash(test.Name));
 		result.Outcome = Outcome.Running;
 		result.Log = context.Lines;
 		result.Data = context.Data;

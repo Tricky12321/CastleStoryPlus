@@ -21,7 +21,7 @@ namespace CastleStoryPlus.DevTools.Tests;
 
 // The workers' tasks, each set up from scratch with the test's own bricktrons: cutting a tree on an order and in a
 // harvest project, carrying loose items into a stockpile, digging in a quarry, and building blueprints with the
-// material from a stockpile. Run on a map with trees (tools/run-game-tests.py starts a sandbox on Tortuga).
+// material from a stockpile. The trees are planted by the tests themselves (Grove), so any map does.
 [ParallelTests("Economy")]
 internal static class TaskTests
 {
@@ -32,7 +32,8 @@ internal static class TaskTests
 	[GameTest("Tasks", "A builder ordered to cut a tree fells it: the tree is gone from the registry and logs lie there", TimeoutSeconds = 240f)]
 	private static IEnumerator BuilderFellsTreeOnOrder(TestContext t)
 	{
-		XYZ tree = NearestTree(t, Scenario.Home(), 45);
+		XYZ tree = XYZ.zero;
+		yield return Grove(t, 1, trees => tree = trees[0]);
 		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, StandNear(t, tree));
 		yield return t.Frames(5);
 		t.True(builder.Occupation.Profession.CanChopTrees(), builder.name + " cannot chop trees");
@@ -70,7 +71,8 @@ internal static class TaskTests
 	[GameTest("Tasks", "A tree harvest project with two builders fells a tree in its circle", TimeoutSeconds = 300f)]
 	private static IEnumerator HarvestProjectFellsTrees(TestContext t)
 	{
-		XYZ tree = NearestTree(t, Scenario.Home(), 45);
+		XYZ tree = XYZ.zero;
+		yield return Grove(t, 3, trees => tree = trees[0]);
 		HashSet<XYZ> inCircle = new HashSet<XYZ>(WorldEndpoints.TreesOver(tree.x - 3, tree.z - 3, tree.x + 3, tree.z + 3));
 		HarvestProject project = Scenario.NewProject<HarvestProject>(t, () => Scenario.Groupe.CmdSpawnHarvestProject(tree.ToVector3(), Quaternion.identity, false, (int)NatureType.tree));
 		ProjectEndpoints.Commit(project);
@@ -242,7 +244,8 @@ internal static class TaskTests
 	[GameTest("Tasks", "A felled tree drops its 3 logs on the ground next to it", TimeoutSeconds = 240f)]
 	private static IEnumerator FelledTreeDropsThreeLogs(TestContext t)
 	{
-		XYZ tree = NearestTree(t, Scenario.Home(), 45);
+		XYZ tree = XYZ.zero;
+		yield return Grove(t, 1, trees => tree = trees[0]);
 		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, StandNear(t, tree));
 		yield return t.Frames(5);
 		int logsBefore = LogsNear(tree);
@@ -332,27 +335,22 @@ internal static class TaskTests
 
 	// ---- helpers
 
-	// The tree nearest to the point with ground next to it a bricktron can stand on.
-	internal static XYZ NearestTree(TestContext t, XYZ near, int radius)
+	// Full-grown trees of the test's own on flat ground of its own (a 9 x 9 Site), so the test does not depend on the
+	// map's forests: one in the middle and, for count 3, two more within 3 of it (a harvest round the first takes them
+	// in). The first is the one to fell. Their stumps and logs stay on the ground (LeavesMess).
+	internal static IEnumerator Grove(TestContext t, int count, System.Action<List<XYZ>> planted)
 	{
-		XYZ best = XYZ.zero;
-		int bestDistance = int.MaxValue;
-		foreach (XYZ tree in WorldEndpoints.TreesOver(near.x - radius, near.z - radius, near.x + radius, near.z + radius))
+		XYZ site = Scenario.Site(t, 9, 9);
+		Scenario.LeavesMess(t);
+		XYZ[] offsets = { new XYZ(0, 0, 0), new XYZ(2, 0, 2), new XYZ(-2, 0, 2) };
+		List<XYZ> columns = new List<XYZ>();
+		for (int i = 0; i < count && i < offsets.Length; i++)
 		{
-			// FlatDistance is squared.
-			int distance = Mathf.RoundToInt(Mathf.Sqrt(WorldEndpoints.FlatDistance(tree, near)));
-			if (distance >= 6 && distance < bestDistance && TreeRegistry.Instance.GetTree(tree) != 0 && DamagedTree.GetAt(tree) == null)
-			{
-				best = tree;
-				bestDistance = distance;
-			}
+			columns.Add(site + offsets[i]);
 		}
-		if (bestDistance == int.MaxValue)
-		{
-			t.Skip("No tree within " + radius + " voxels of " + near + " (run on a map with trees)");
-		}
-		t.Log("Tree at " + best + ", " + bestDistance + " voxels away");
-		return best;
+		List<XYZ> trees = Scenario.PlantTrees(t, columns.ToArray());
+		yield return TestWorld.WaitForGraph(t);
+		planted(trees);
 	}
 
 	// Open ground 2-4 voxels from the point.
@@ -376,7 +374,7 @@ internal static class TaskTests
 
 	// For each dig goal of the quarry: whether the game would give it to the worker, and if not why
 	// (DigGoal.IsMatchFor's error, the reachability), as the worker's own search asks.
-	private static List<string> WhyNotDug(Labor labor, Project quarry)
+	internal static List<string> WhyNotDug(Labor labor, Project quarry)
 	{
 		List<string> result = new List<string>();
 		foreach (DigGoal goal in quarry.goalParent.GetComponentsInChildren<DigGoal>())
