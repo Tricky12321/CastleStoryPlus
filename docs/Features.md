@@ -17,7 +17,7 @@ Workers find, share and finish their work on their own.
 
 | Feature | Switch |
 |---|---|
-| Workers start work on their own, pick up their next task faster, help other task groups when theirs is done, and only dig, harvest or clean up what they can store all of; a quarry always keeps its stair steps. | `WorkerAI` |
+| Workers start work on their own, pick up their next task faster, help other task groups when theirs is done, and only dig, harvest or clean up what they can store all of; a quarry always keeps its stair steps. In a harvest or cleanup area (and the idle cleanup round the base) they go for the log, tree or loose item that is the shortest walk away, not the nearest as the crow flies (no more running down a hill and round it for a far log). | `WorkerAI` |
 | Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting (after digging also when none of the area's blocks fits in the bag any more). | `TaskFlow` |
 | A task can be paused instead of deleted: no bricktron works on it until it is resumed. | `PauseTasks` |
 | Limit how many bricktrons work on a task at a time, e.g. a quarry with 4. | `WorkLimit` |
@@ -25,7 +25,7 @@ Workers find, share and finish their work on their own.
 | Cleanup and repair round the base are two fixed tasks with their own priority and crew, instead of chores for every idle worker. | `BaseJobs` |
 | Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |
 | "Can't reach my destination" says what the worker could not reach and how far ("Log, 12 blocks away, 3 up"); host and single player. | `UnreachableThought` |
-| **New:** a bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes (host only; uses the route map of `UnreachableTasks`). | `StuckEscape` |
+| **New:** a bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes, also one that keeps trying tasks it cannot reach from there (host only; uses the route map of `UnreachableTasks`). | `StuckEscape` |
 | No duplicate build jobs; workers carry a full armful for a blueprint and the ones near it and deliver to them on one trip; builders also build blueprints that cost nothing; a building of several floors is built floor by floor, posts and stairs no longer rise past a floor that still has gaps. | `BuildJobs` |
 | Faster task search in big task areas (mining, digging, many trees): no idle seconds after each block. No waits before asking each project or per kind of resource checked, so every kind of task (building, workshops, storing) is found sooner. | `FasterTaskSearch` |
 | Task reservation: a worker reserves the task it chooses, so idle workers no longer walk to the same task together. | `TaskReservation` |

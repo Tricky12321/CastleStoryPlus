@@ -426,7 +426,14 @@ internal static class TaskPrediction
 			Ranked.Clear();
 			return ranked.GetEnumerator();
 		}
-		return new List<Goal>(Goals).GetEnumerator();
+		List<Goal> goals = new List<Goal>(Goals);
+		// A harvest or cleanup area's tasks nearest first by the worker's walk, as its own search has them.
+		if (RouteOrder.Ordered(project) && Plugin.IsEnabled(Features.WorkerAI))
+		{
+			goals.RemoveAll((Goal goal) => goal.IsNullOrReleased() || !goal.IsValid());
+			RouteOrder.Sort(labor, goals);
+		}
+		return goals.GetEnumerator();
 	}
 
 	// A quarry's search compares every block (CompareAll): highest layer first, then the nearest one the worker can
