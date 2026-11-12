@@ -129,6 +129,11 @@ internal static class AutoCleanup
 		PlanSeen.Clear();
 		SortFrom = labor.transform.position;
 		items.Sort(NearestFirst);
+		// Nearest first by the worker's walk, not the straight line (#69), when it has a choice.
+		if (items.Count > 1 && Plugin.IsEnabled(Features.WorkerAI))
+		{
+			SortByWalk(labor, items);
+		}
 		foreach (GameObject item in items)
 		{
 			if (!IsLoose(item) || Claims.ContainsKey(item) || Knowledge.Instance.IsReserved(item) || ResourceReservation.IsReservedByOther(item, labor))
@@ -172,6 +177,35 @@ internal static class AutoCleanup
 			return item;
 		}
 		return null;
+	}
+
+	private static readonly List<KeyValuePair<long, GameObject>> Walks = new List<KeyValuePair<long, GameObject>>();
+
+	private static readonly System.Comparison<KeyValuePair<long, GameObject>> LowestFirst = (KeyValuePair<long, GameObject> a, KeyValuePair<long, GameObject> b) => a.Key.CompareTo(b.Key);
+
+	// The items (already nearest first in a straight line) nearest first by the worker's walk to them; equal walks keep
+	// the straight line's order.
+	private static void SortByWalk(Labor labor, List<GameObject> items)
+	{
+		RouteDistance.Field field = RouteDistance.For(labor);
+		if (field == null)
+		{
+			return;
+		}
+		Vector3 from = labor.transform.position;
+		Walks.Clear();
+		for (int i = 0; i < items.Count; i++)
+		{
+			long key = ((long)RouteDistance.Rank(field, from, items[i].transform.position) << 20) | (long)i;
+			Walks.Add(new KeyValuePair<long, GameObject>(key, items[i]));
+		}
+		Walks.Sort(LowestFirst);
+		items.Clear();
+		foreach (KeyValuePair<long, GameObject> walk in Walks)
+		{
+			items.Add(walk.Value);
+		}
+		Walks.Clear();
 	}
 
 	// For the developer tools: every loose item the worker would consider, nearest first, with why it would not

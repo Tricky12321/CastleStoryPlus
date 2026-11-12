@@ -25,7 +25,7 @@ internal static class Features
 
 	public const string WorkerAI = "WorkerAI";
 
-	public const string WorkerAIInfo = "Workers start work on their own, help other task groups when theirs is done, react faster, and only dig, harvest or clean up what they can store all of.";
+	public const string WorkerAIInfo = "Workers start work on their own, help other task groups when theirs is done, react faster, only dig, harvest or clean up what they can store all of, and pick the log, tree or loose item to go for by the walk to it, not the straight line.";
 
 	public const string BuildJobs = "BuildJobs";
 
@@ -489,7 +489,7 @@ internal static class Features
 
 	public const string StuckEscape = "StuckEscape";
 
-	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
+	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes, also while it keeps trying tasks it cannot reach from there: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
 
 	public const string Treasure = "Treasure";
 
