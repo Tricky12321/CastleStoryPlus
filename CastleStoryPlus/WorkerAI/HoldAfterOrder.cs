@@ -14,19 +14,29 @@ namespace CastleStoryPlus.WorkerAI;
 // time to say where to put it down. The mod (FasterWorkers) makes it FreeAgent at once, and idle workers look for
 // work every 2 ticks: the bricktron joined a task with the item in its hands (or stored it) before the player could
 // give the drop order. Now it does not look for project work for HoldSeconds after such an order, or until its hands
-// are empty or the player gives it another order. The instinct (fighting) is not held back. Host only (the tasks run
-// on the host), the players' bricktrons.
+// are empty or the player gives it another order. A bricktron told to dig a voxel waits DigHoldSeconds after the dig,
+// carrying something or not, so the player can point it at the next voxel before it goes back to a task (issue #73).
+// The instinct (fighting) is not held back. Host only (the tasks run on the host), the players' bricktrons.
 [Feature(Features.WorkerAI, Features.WorkerAIInfo)]
 internal static class HoldAfterOrder
 {
 	private const float HoldSeconds = 15f;
 
+	private const float DigHoldSeconds = 10f;
+
 	// When each held bricktron may look for work again.
 	private static readonly Dictionary<Labor, float> Until = new Dictionary<Labor, float>();
 
+	// The held bricktrons that wait after a dig order: their hold does not end with empty hands.
+	private static readonly HashSet<Labor> AfterDig = new HashSet<Labor>();
+
 	private static void Enable()
 	{
-		GameSession.OnLeave(Until.Clear);
+		GameSession.OnLeave(() =>
+		{
+			Until.Clear();
+			AfterDig.Clear();
+		});
 	}
 
 	internal static void TaskEnded(Labor labor, Task task)
@@ -37,8 +47,15 @@ internal static class HoldAfterOrder
 		}
 		bool players = labor.faction != null && !labor.faction.isAI;
 		bool userOrder = task != null && task.InitialPackage != null && task.InitialPackage.DecisionSource == Labor.DecisionSource.User;
+		AfterDig.Remove(labor);
 		// A next order already waiting (a queued drop) takes over by itself; nothing to hold for.
-		if (NetworkServer.active && players && userOrder && labor.PendingTask == null && !labor.recepteur.IsEmpty())
+		bool held = NetworkServer.active && players && userOrder && labor.PendingTask == null;
+		if (held && IsDigOrder(task))
+		{
+			Until[labor] = Time.time + DigHoldSeconds;
+			AfterDig.Add(labor);
+		}
+		else if (held && !labor.recepteur.IsEmpty())
 		{
 			Until[labor] = Time.time + HoldSeconds;
 		}
@@ -56,12 +73,19 @@ internal static class HoldAfterOrder
 		}
 		// Time is up or the hands are empty (it put the item down). A later order ends the hold or renews it when that
 		// order's task ends (TaskEnded).
-		if (labor.IsNullOrReleased() || Time.time > until || labor.recepteur.IsEmpty())
+		if (labor.IsNullOrReleased() || Time.time > until || (labor.recepteur.IsEmpty() && !AfterDig.Contains(labor)))
 		{
 			Until.Remove(labor);
+			AfterDig.Remove(labor);
 			return false;
 		}
 		return true;
+	}
+
+	// The player's "dig here" (the secondary right-click on the ground, or the dig command).
+	private static bool IsDigOrder(Task task)
+	{
+		return task.InitialPackage is OrderPackage<Labor, Location> package && package.InstructionValue == Order.ForLabor.GoDig;
 	}
 }
 

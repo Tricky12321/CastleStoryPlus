@@ -40,6 +40,9 @@ internal sealed class AssignNow : MonoBehaviour
 
 		public float Since;
 
+		// The order that stores what the bag holds first; the few seconds to start count from its end.
+		public Task Store;
+
 		// The game's reasons for turning the task's work down, by text, counted.
 		public readonly Dictionary<string, int> Rejects = new Dictionary<string, int>();
 	}
@@ -75,11 +78,39 @@ internal sealed class AssignNow : MonoBehaviour
 			return;
 		}
 		Task current = labor.CurrentTask;
+		bool switching = !WorksOn(labor, project);
 		if (current != null && !From(current, project) && !TaskPrediction.LetGoUnstarted(labor, "moved to another task") && current.CanInterrupt)
 		{
 			labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
 		}
-		Watches[labor] = new Watch { Project = project, Since = Time.time };
+		Task store = switching ? StoreBagFirst(labor, project) : null;
+		Watches[labor] = new Watch { Project = project, Since = Time.time, Store = store };
+	}
+
+	// What the old task left in the bag (stone from a quarry, ore from a tunnel) goes to the nearest storage that takes
+	// it before the bricktron starts on the new task (issue #75: it went back to its old task and dug on until the bag
+	// was full; a part-full bag also has the new task's digging and harvesting turned down). Without a storage that
+	// takes it the bag is kept.
+	private static Task StoreBagFirst(Labor labor, Project project)
+	{
+		if (labor.recepteur == null || labor.recepteur.IsEmpty())
+		{
+			return null;
+		}
+		if (labor.BestRecepteurToStoreInventory() == null)
+		{
+			Plugin.Log.LogInfo("AssignNow: " + labor.name + " keeps its bag (" + labor.recepteur.ContentString() + "), no storage takes it");
+			return null;
+		}
+		Plugin.Log.LogInfo("AssignNow: " + labor.name + " stores its bag (" + labor.recepteur.ContentString() + ") before " + project.name);
+		Order.Transfer.GoStore.Send(labor, Labor.DecisionSource.Project);
+		return labor.PendingTask;
+	}
+
+	// Whether the bricktron was put on a task a moment ago and has not started on it yet.
+	internal static bool IsStarting(Labor labor)
+	{
+		return Watches.Count != 0 && Watches.ContainsKey(labor);
 	}
 
 	// Server: the task would not take the bricktron.
@@ -128,6 +159,16 @@ internal sealed class AssignNow : MonoBehaviour
 			{
 				Done.Add(labor);
 				continue;
+			}
+			if (watch.Store != null)
+			{
+				if (labor.CurrentTask == watch.Store || labor.PendingTask == watch.Store)
+				{
+					watch.Since = Time.time;
+					continue;
+				}
+				watch.Store = null;
+				watch.Since = Time.time;
 			}
 			if (Time.time - watch.Since >= StartSeconds)
 			{

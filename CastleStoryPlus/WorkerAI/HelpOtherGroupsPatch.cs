@@ -11,6 +11,9 @@ namespace CastleStoryPlus.WorkerAI;
 
 // A worker locked to a task group helps the other groups, by priority, when its own group has nothing
 // to do, and returns to its own group as soon as that has work again. Raid projects are excluded.
+// A worker the player has just put on a task does not help elsewhere while it is starting on it (AssignNow's few
+// seconds): a new task's goals are often turned down for a moment while their routes are looked up, and the worker
+// went straight back to its old task (and joined its crew) instead of switching (issues #42, #75).
 [Feature(Features.WorkerAI, Features.WorkerAIInfo)]
 [HarmonyPatch(typeof(Labor), nameof(Labor.RefreshAvailableProjects))]
 internal static class HelpOtherGroupsPatch
@@ -25,7 +28,7 @@ internal static class HelpOtherGroupsPatch
 
 	internal static bool CanHelpOtherProjects(Labor labor)
 	{
-		return labor.Autonomy == AutonomyStatus.LockedToOperable && labor.Operable == null && labor.Project != null && !(labor.Project is IdleProject) && !(labor.Project is RaidProject2);
+		return labor.Autonomy == AutonomyStatus.LockedToOperable && labor.Operable == null && labor.Project != null && !(labor.Project is IdleProject) && !(labor.Project is RaidProject2) && !AssignNow.IsStarting(labor);
 	}
 
 	private static bool Prefix(Labor __instance, List<IOperable<Labor>> projects)
@@ -103,13 +106,23 @@ internal static class RememberHomeProjectPatch
 	}
 }
 
-// A new autonomy (e.g. the player unlocking the worker) forgets the remembered group.
+// A new autonomy (e.g. the player unlocking the worker) forgets the remembered group. Only a real change: the game
+// sets the autonomy again at the end of every task (LockedToOperable stays LockedToOperable), which forgot the group
+// at the first task done in the helped one, and the worker stayed in the helped group's crew for good (issue #42).
 [Feature(Features.WorkerAI, Features.WorkerAIInfo)]
 [HarmonyPatch(typeof(Labor), nameof(Labor.Autonomy), MethodType.Setter)]
 internal static class ForgetHomeProjectPatch
 {
-	private static void Postfix(Labor __instance)
+	private static void Prefix(Labor __instance, out AutonomyStatus __state)
 	{
-		HelpOtherGroupsPatch.HomeProjects.Remove(__instance);
+		__state = __instance.Autonomy;
+	}
+
+	private static void Postfix(Labor __instance, AutonomyStatus __state)
+	{
+		if (__instance.Autonomy != __state)
+		{
+			HelpOtherGroupsPatch.HomeProjects.Remove(__instance);
+		}
 	}
 }

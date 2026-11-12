@@ -17,7 +17,7 @@ Workers find, share and finish their work on their own.
 
 | Feature | Switch |
 |---|---|
-| Workers start work on their own, pick up their next task faster, help other task groups when theirs is done, and only dig, harvest or clean up what they can store all of. | `WorkerAI` |
+| Workers start work on their own, pick up their next task faster, help other task groups when theirs is done (and go back to their own task afterwards), wait a moment for the next order after a dig or pick-up order, and only dig, harvest or clean up what they can store all of. | `WorkerAI` |
 | Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting (after digging also when none of the area's blocks fits in the bag any more). | `TaskFlow` |
 | A task can be paused instead of deleted: no bricktron works on it until it is resumed. | `PauseTasks` |
 | Limit how many bricktrons work on a task at a time, e.g. a quarry with 4. | `WorkLimit` |
@@ -33,8 +33,8 @@ Workers find, share and finish their work on their own.
 | A worker that finishes a task of a quarry, tunnel, dig, flatten, harvest, cleanup or build area, or a step at its workshop, or takes what it dug or felled there to storage, goes on to the area's next task at once (chosen by the game's own choice), instead of standing 1 to 1.5 seconds while the game searches every project. A predicted task that has not started within 2 seconds is let go, so the worker and its task are free again. | `TaskPrediction` |
 | Resource reservation: a worker reserves the items it fetches (a loose item, or its share of a stockpile), so others fetch elsewhere. | `ResourceReservation` |
 | A worker fetching from a stockpile takes any item of the kind there, instead of failing when the item the game picked was taken first. | `StockpilePickup` |
-| Direct task: select bricktrons and right-click a blueprint, tree or block of an area to have them do that task now. | `DirectTask` |
-| **New:** select bricktrons and right-click a task (in the task bar or its area): they start on it at once instead of finishing what they do; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...). Host only. | `AssignNow` |
+| Direct task: select bricktrons and right-click a blueprint, tree or block of an area to have them do that task now; they join that area's crew and stay on it until its work is done. | `DirectTask` |
+| **New:** select bricktrons and right-click a task (in the task bar or its area): they start on it at once instead of finishing what they do, first storing what their bag holds from the old task; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...). Host only. | `AssignNow` |
 | The pick up order on a loose item: each selected bricktron takes an item of that kind no other one is after (not all the same one), then picks up more of that kind lying round it until its hands are full. | `PickUpAround` |
 | Idle workers pick up loose items near the base (home crystal and stockpiles) and store them, no cleanup zone needed; items on top of a building are taken from its foot. The range is the home crystal's blue ring. Items of other players are left alone. With the base's "Auto cleanup" task they leave the items inside its zone to its crew and still take the ones outside it. | `AutoCleanup` |
 | Idle builders repair damaged blocks near the base, no repair zone needed. The range is the home crystal's green ring. | `AutoRepair` |

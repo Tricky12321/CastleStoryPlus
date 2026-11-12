@@ -52,12 +52,30 @@ internal static class DirectTask
 		}
 		if (project != null)
 		{
+			JoinCrew(labor, project);
 			goal.ConnectProject(project);
 		}
 		TaskReservation.Reserve(goal, labor);
 		goal.Instruction.Send(labor, goal.gameObject, Labor.DecisionSource.Project);
 		Plugin.Log.LogInfo("Direct task: " + labor.gameObject.name + " -> " + goal.GetType().Name + " at " + goal.voxel.position);
 		return true;
+	}
+
+	// As the game's assign (UNetProjectCmd.CmdChangeProject): a full crew takes one more.
+	private static void JoinCrew(Labor labor, Project project)
+	{
+		if (project is IdleProject || project is RaidProject2)
+		{
+			return;
+		}
+		if (labor.Project != project && project.IsFull())
+		{
+			project.MaximumCrewSize++;
+		}
+		if (project.Hire(labor))
+		{
+			labor.Autonomy = AutonomyStatus.LockedToOperable;
+		}
 	}
 
 	private static Goal FindGoal(Labor labor, object target, out Project project, out Vector3 point)
@@ -110,7 +128,8 @@ internal static class DirectTask
 					continue;
 				}
 				XYZ at = goal.voxel.position;
-				if (at == voxel || (natureGoal.HasValue && at == natureGoal.Value))
+				// A tree's goal stands at the tree's voxel.
+				if (at == voxel || XYZ.FromVector3(goal.transform.position) == voxel || (natureGoal.HasValue && at == natureGoal.Value))
 				{
 					project = candidate;
 					return goal;
