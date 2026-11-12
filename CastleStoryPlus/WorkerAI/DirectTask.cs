@@ -123,7 +123,8 @@ internal static class DirectTask
 			AllGoals(candidate, Goals);
 			foreach (Goal goal in Goals)
 			{
-				if (!Usable(goal, labor) || goal is BuildGoal)
+				// A tree's or boulder's goal belongs to no player (Neutral); the area holding it is the player's.
+				if (!Usable(goal, labor, ownArea: true) || goal is BuildGoal)
 				{
 					continue;
 				}
@@ -152,7 +153,7 @@ internal static class DirectTask
 		float bestDistance = SpreadRadius * SpreadRadius;
 		foreach (Goal goal in Goals)
 		{
-			if (goal == clicked || goal.GetType() != clicked.GetType() || !Usable(goal, labor) || IsTaken(goal, labor))
+			if (goal == clicked || goal.GetType() != clicked.GetType() || !Usable(goal, labor, ownArea: true) || IsTaken(goal, labor))
 			{
 				continue;
 			}
@@ -171,9 +172,9 @@ internal static class DirectTask
 		return goal.HasOtherWorkerAssigned(labor) || TaskReservation.OtherReservations(goal, labor) > 0;
 	}
 
-	private static bool Usable(Goal goal, Labor labor)
+	private static bool Usable(Goal goal, Labor labor, bool ownArea = false)
 	{
-		return !goal.IsNullOrReleased() && goal.IsValid() && (goal.faction == null || goal.faction == labor.faction);
+		return !goal.IsNullOrReleased() && goal.IsValid() && (ownArea || goal.faction == null || goal.faction == labor.faction);
 	}
 
 	private static Project FindProject(Labor labor, Goal wanted)

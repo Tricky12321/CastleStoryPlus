@@ -25,42 +25,50 @@ internal static class WorkerOrderTests
 	[GameTest("Tasks", "A quarry worker moved to a tree harvest with stone in its bag digs no more: it stores the stone, then goes to the trees", TimeoutSeconds = 420f)]
 	private static IEnumerator ReassignedWorkerStoresThenSwitches(TestContext t)
 	{
-		XYZ site = Scenario.Site(t, 14, 8);
-		// A tree near the quarry, on the same level (one far below a cliff may have no way there).
-		XYZ tree = TreeOnLevel(t, site, 40);
+		XYZ tree = TaskTests.NearestTree(t, Scenario.Home(), 45);
+		// The quarry on the tree's level and not far from it (a tree below a cliff may have no way to it).
+		XYZ site = Scenario.Site(t, 14, 8, accept: center => Mathf.Abs(center.y - tree.y) <= 2 && WorldEndpoints.FlatDistance(center, tree) <= 45 * 45);
 		Scenario.LeavesMess(t);
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
-		MineProject quarry = Quarry(t, site, out List<XYZ> ground);
+		MineProject quarry = Quarry(t, site);
 		HarvestProject harvest = Scenario.NewProject<HarvestProject>(t, () => Scenario.Groupe.CmdSpawnHarvestProject(tree.ToVector3(), Quaternion.identity, false, (int)NatureType.tree));
 		ProjectEndpoints.Commit(harvest);
 		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 1, site.y, site.z - 3));
 		yield return t.Frames(5);
 		Scenario.Hire(quarry, worker);
 		yield return t.UntilGame(() => !worker.recepteur.IsEmpty(), 180f, "the quarry worker to dig something into its bag", 30f, () => t.Log(Describe(worker)));
-		int dugAtSwitch = Dug(ground);
-		int storedAtSwitch = Scenario.Stored(RawResources.RawStone);
+		List<GameObject> carried = new List<GameObject>();
+		foreach (IDescriptor item in worker.recepteur.StoredItems)
+		{
+			if (item != null && item.GameObject != null)
+			{
+				carried.Add(item.GameObject);
+			}
+		}
 		t.Record("bagAtSwitch", worker.recepteur.ContentString());
 		t.Record("bagFullAtSwitch", worker.recepteur.IsFull());
 		t.Log("Moved to the harvest: " + Describe(worker));
 		Scenario.Hire(harvest, worker);
 		yield return t.Frames(2);
 		t.True(worker.Project == harvest, worker.name + " is not on the harvest task");
-		// The block it was digging when moved may still come out; no other.
-		int mostDug = dugAtSwitch + 1;
+		// The block it was digging when moved may still come out; it takes no other. (Other free workers may dig the
+		// quarry: what counts is the worker's own task.)
+		Task atSwitch = worker.CurrentTask;
 		yield return t.UntilGame(() =>
 		{
-			t.True(Dug(ground) <= mostDug, worker.name + " went on digging in the quarry after it was moved (" + (Dug(ground) - dugAtSwitch) + " more blocks): " + Describe(worker));
+			t.True(TaskProject(worker) != quarry || worker.CurrentTask == atSwitch, worker.name + " went on digging in the quarry after it was moved: " + Describe(worker));
 			return worker.recepteur.IsEmpty();
 		}, 90f, "the worker's bag to be emptied", 15f, () => t.Log(Describe(worker)));
-		t.Record("storedSinceSwitch", Scenario.Stored(RawResources.RawStone) - storedAtSwitch);
-		t.True(Scenario.Stored(RawResources.RawStone) > storedAtSwitch, "The stone in the bag was not put into the stockpile (dropped?)");
+		int stored = InStorage(carried);
+		t.Record("carried", carried.Count);
+		t.Record("stored", stored);
+		t.True(stored == carried.Count, "Of the " + carried.Count + " things in the bag " + stored + " went into a storage (dropped?)");
 		yield return t.UntilGame(() =>
 		{
-			t.True(Dug(ground) <= mostDug, worker.name + " went back to digging in the quarry: " + Describe(worker));
+			t.True(TaskProject(worker) != quarry || worker.CurrentTask == atSwitch, worker.name + " went back to digging in the quarry: " + Describe(worker));
 			return TaskProject(worker) == harvest;
 		}, 60f, "the worker to start on the harvest", 15f, () => t.Log(Describe(worker)));
-		t.Record("dugAfterSwitch", Dug(ground) - dugAtSwitch);
 	}
 
 	[GameTest("Tasks", "A worker told to dig a voxel waits for the next order afterwards instead of going back to its task", TimeoutSeconds = 300f)]
@@ -70,7 +78,7 @@ internal static class WorkerOrderTests
 		Scenario.LeavesMess(t);
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
-		MineProject quarry = Quarry(t, site, out List<XYZ> ground);
+		MineProject quarry = Quarry(t, site);
 		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 1, site.y, site.z - 3));
 		yield return t.Frames(5);
 		Scenario.Hire(quarry, worker);
@@ -81,7 +89,6 @@ internal static class WorkerOrderTests
 		t.True(Voxel.IsFull(first) && Voxel.IsFull(second), "The voxels to dig are not ground");
 		OrderDig(worker, first);
 		yield return t.UntilGame(() => !Voxel.IsFull(first), 60f, "the ordered voxel to be dug", 15f, () => t.Log(Describe(worker)));
-		int dugAfterOrder = Dug(ground);
 		t.Log("Dug the ordered voxel: " + Describe(worker));
 		// What the voxel gave is taken out of the bag (a voxel that gives nothing, a load the player had it drop): the
 		// wait after a dig does not depend on carrying something.
@@ -93,11 +100,13 @@ internal static class WorkerOrderTests
 			t.True(TaskProject(worker) == null, worker.name + " went back to work right after the ordered dig: " + Describe(worker));
 			return Time.time >= waitUntil;
 		}, 10f, "6 game seconds");
-		t.Equal(dugAfterOrder, Dug(ground), "Quarry blocks dug while the worker waited");
 		OrderDig(worker, second);
 		yield return t.UntilGame(() => !Voxel.IsFull(second), 60f, "the second ordered voxel to be dug", 15f, () => t.Log(Describe(worker)));
-		// Without another order it goes back to work in the end.
-		yield return t.UntilGame(() => TaskProject(worker) == quarry || Dug(ground) > dugAfterOrder, 60f, "the worker to go back to the quarry", 15f, () => t.Log(Describe(worker)));
+		// Without another order the wait ends and it takes up something again (storing its load, work, the idle
+		// walk; whether the quarry still has room to store into depends on the earlier tests).
+		yield return t.UntilGame(() => CastleStoryPlus.WorkerAI.HoldAfterOrder.IsHeld(worker), 10f, "the worker to wait after the second dig");
+		yield return t.UntilGame(() => !CastleStoryPlus.WorkerAI.HoldAfterOrder.IsHeld(worker) && worker.CurrentTask != null, 30f, "the worker to stop waiting and take up something", 10f, () => t.Log(Describe(worker)));
+		t.Log("After the wait: " + Describe(worker));
 	}
 
 	[GameTest("Tasks", "A worker put on a tree harvest stays on it while another task of higher priority has work", TimeoutSeconds = 480f)]
@@ -121,7 +130,7 @@ internal static class WorkerOrderTests
 		Scenario.LeavesMess(t);
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
-		MineProject quarry = Quarry(t, site, out List<XYZ> ground);
+		MineProject quarry = Quarry(t, site);
 		Scenario.Groupe.CmdRaisePriority(quarry.gameObject);
 		Scenario.Groupe.CmdRaisePriority(quarry.gameObject);
 		HarvestProject harvest = Scenario.NewProject<HarvestProject>(t, () => Scenario.Groupe.CmdSpawnHarvestProject(tree.ToVector3(), Quaternion.identity, false, (int)NatureType.tree));
@@ -147,13 +156,14 @@ internal static class WorkerOrderTests
 		yield return t.Frames(2);
 		t.Record("projectAfterOrder", (worker.Project != null) ? worker.Project.GetType().Name : "none");
 		t.Record("autonomyAfterOrder", worker.Autonomy.Description);
-		int startTrees = TreeGoals(harvest);
+		List<XYZ> treesAtStart = TreePlaces(harvest);
+		t.Record("standingTrees", treesAtStart.Count);
 		yield return t.UntilGame(() =>
 		{
-			t.True(TaskProject(worker) != quarry && Dug(ground) == 0, worker.name + " left the harvest for the quarry: " + Describe(worker));
-			return startTrees - TreeGoals(harvest) >= 2;
-		}, 400f, "two trees of the harvest to be felled", 30f, () => t.Log(Describe(worker) + "; trees left " + TreeGoals(harvest)));
-		t.Record("felled", startTrees - TreeGoals(harvest));
+			t.True(TaskProject(worker) != quarry, worker.name + " left the harvest for the quarry: " + Describe(worker));
+			return Felled(treesAtStart) >= 2;
+		}, 400f, "two trees of the harvest to be felled", 30f, () => t.Log(Describe(worker) + "; felled " + Felled(treesAtStart)));
+		t.Record("felled", Felled(treesAtStart));
 	}
 
 	// ---- helpers
@@ -180,12 +190,12 @@ internal static class WorkerOrderTests
 	}
 
 	// A 4 x 4 quarry of the top ground layer east of the site's middle, committed.
-	private static MineProject Quarry(TestContext t, XYZ site, out List<XYZ> ground)
+	private static MineProject Quarry(TestContext t, XYZ site)
 	{
 		int top = site.y - 1;
 		Vector3 min = new Vector3(site.x + 2, top, site.z - 2);
 		Vector3 max = new Vector3(site.x + 5, top + 2, site.z + 1);
-		ground = new List<XYZ>();
+		List<XYZ> ground = new List<XYZ>();
 		for (int x = (int)min.x; x <= (int)max.x; x++)
 		{
 			for (int z = (int)min.z; z <= (int)max.z; z++)
@@ -203,28 +213,6 @@ internal static class WorkerOrderTests
 		Scenario.Groupe.CmdSetMine(quarry.gameObject, data.Bounds.min.ToVector3(), data.Bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
 		ProjectEndpoints.Commit(quarry);
 		return quarry;
-	}
-
-	// The tree nearest the site within 3 voxels of its height, untouched.
-	private static XYZ TreeOnLevel(TestContext t, XYZ site, int radius)
-	{
-		XYZ best = XYZ.zero;
-		int bestDistance = int.MaxValue;
-		foreach (XYZ tree in WorldEndpoints.TreesOver(site.x - radius, site.z - radius, site.x + radius, site.z + radius))
-		{
-			int distance = WorldEndpoints.FlatDistance(tree, site);
-			if (Mathf.Abs(tree.y - site.y) <= 3 && distance >= 64 && distance < bestDistance && TreeRegistry.Instance.GetTree(tree) != 0 && DamagedTree.GetAt(tree) == null)
-			{
-				best = tree;
-				bestDistance = distance;
-			}
-		}
-		if (bestDistance == int.MaxValue)
-		{
-			t.Skip("No tree on the level of " + site + " within " + radius + " voxels");
-		}
-		t.Log("Tree at " + best);
-		return best;
 	}
 
 	// A tree with another tree within 3 voxels, so a harvest round it has two.
@@ -282,6 +270,60 @@ internal static class WorkerOrderTests
 		return string.Join("; ", parts.ToArray());
 	}
 
+	private static List<XYZ> TreePlaces(Project project)
+	{
+		List<Goal> goals = new List<Goal>();
+		foreach (IGoalProvider provider in project.GetGoalProviders())
+		{
+			provider?.GetAll(goals);
+		}
+		List<XYZ> places = new List<XYZ>();
+		foreach (Goal goal in goals)
+		{
+			XYZ place = XYZ.FromVector3(goal.transform.position);
+			if (goal is TreeGoal && !goal.IsNullOrReleased() && TreeRegistry.Instance.GetTree(place) != 0)
+			{
+				places.Add(place);
+			}
+		}
+		return places;
+	}
+
+	// How many of the things lie in a storage (a stockpile, not a bricktron's bag).
+	private static int InStorage(List<GameObject> items)
+	{
+		HashSet<GameObject> wanted = new HashSet<GameObject>(items);
+		int count = 0;
+		foreach (Recepteur recepteur in Object.FindObjectsOfType<Recepteur>())
+		{
+			if (recepteur == null || recepteur.GetComponent<Labor>() != null)
+			{
+				continue;
+			}
+			foreach (IDescriptor item in recepteur.StoredItems)
+			{
+				if (item != null && item.GameObject != null && wanted.Contains(item.GameObject))
+				{
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
+	private static int Felled(List<XYZ> trees)
+	{
+		int felled = 0;
+		foreach (XYZ tree in trees)
+		{
+			if (TreeRegistry.Instance.GetTree(tree) == 0)
+			{
+				felled++;
+			}
+		}
+		return felled;
+	}
+
 	private static int TreeGoals(Project project)
 	{
 		int count = 0;
@@ -321,19 +363,6 @@ internal static class WorkerOrderTests
 		}
 		Goal goal = giver.GetComponent<Goal>();
 		return (goal != null) ? goal.project : null;
-	}
-
-	private static int Dug(List<XYZ> voxels)
-	{
-		int dug = 0;
-		foreach (XYZ voxel in voxels)
-		{
-			if (!Voxel.IsFull(voxel))
-			{
-				dug++;
-			}
-		}
-		return dug;
 	}
 
 	private static string Describe(Labor labor)

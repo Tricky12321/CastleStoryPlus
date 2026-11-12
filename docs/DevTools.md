@@ -264,6 +264,10 @@ It starts a player of its own (default: the Unity 6 port's `CastleStoryPlus.Play
 | `TaskTests.DeletedProjectReleasesCrew` | A deleted project's bricktrons are on no project afterwards |
 | `TaskTests.HiringGrowsFullCrew` | Hiring three onto a project with room for one grows its crew size to take them all |
 | `TaskTests.PriorityRaisedAndLowered` | A project's priority goes up and back down with the task bar's buttons |
+| `WorkerOrderTests.ReassignedWorkerStoresThenSwitches` | A quarry worker with a part-full bag moved to a tree harvest takes no more quarry work: everything in its bag goes into a storage, then it starts on the harvest |
+| `WorkerOrderTests.ManualDigWaitsForNextOrder` | A worker told to dig a voxel takes no task for 6 game seconds afterwards (also with an empty bag), digs the next ordered voxel, and takes up something again once the wait is over |
+| `WorkerOrderTests.AssignedWorkerStaysOnTask` | A worker put on a tree harvest fells two of its trees and never works in a quarry of higher priority next to it |
+| `WorkerOrderTests.RightClickedWorkerStaysOnTask` | The same for a free worker right-clicked onto a tree of the harvest (`DirectTask`): it joins the harvest's crew and stays on it |
 
 ## Claude Code (`CastleStoryPlus.Mcp`)
 
