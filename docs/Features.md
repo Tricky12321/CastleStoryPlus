@@ -26,7 +26,7 @@ Workers find, share and finish their work on their own.
 | Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |
 | "Can't reach my destination" says what the worker could not reach and how far ("Log, 12 blocks away, 3 up"); host and single player. | `UnreachableThought` |
 | **New:** a bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes (host only; uses the route map of `UnreachableTasks`). | `StuckEscape` |
-| No duplicate build jobs; workers carry a full armful for a blueprint and the ones near it and deliver to them on one trip; builders also build blueprints that cost nothing. | `BuildJobs` |
+| No duplicate build jobs; workers carry a full armful for a blueprint and the ones near it and deliver to them on one trip; builders also build blueprints that cost nothing; a building of several floors is built floor by floor, posts and stairs no longer rise past a floor that still has gaps. | `BuildJobs` |
 | Faster task search in big task areas (mining, digging, many trees): no idle seconds after each block. No waits before asking each project or per kind of resource checked, so every kind of task (building, workshops, storing) is found sooner. | `FasterTaskSearch` |
 | Task reservation: a worker reserves the task it chooses, so idle workers no longer walk to the same task together. | `TaskReservation` |
 | Job board: an idle worker remembers which tasks just had nothing for it and does not ask them again until something they depend on changes (goals, crew, its own state or bag, routes, stockpiles) or 1-5 seconds pass; same tasks, same order (`[JobBoard] JobBoardMode`: Off, Shadow, On). | `JobBoard` |
@@ -38,6 +38,7 @@ Workers find, share and finish their work on their own.
 | The pick up order on a loose item: each selected bricktron takes an item of that kind no other one is after (not all the same one), then picks up more of that kind lying round it until its hands are full. | `PickUpAround` |
 | Idle workers pick up loose items near the base (home crystal and stockpiles) and store them, no cleanup zone needed; items on top of a building are taken from its foot. The range is the home crystal's blue ring. Items of other players are left alone. With the base's "Auto cleanup" task they leave the items inside its zone to its crew and still take the ones outside it. | `AutoCleanup` |
 | Idle builders repair damaged blocks near the base, no repair zone needed. The range is the home crystal's green ring. | `AutoRepair` |
+| Damaged doors are repaired: a repair zone (and the base's repair task) repairs the doors inside it, and idle builders repair the team's damaged doors near the base (with `AutoRepair`). | `DoorRepair` |
 | Auto spawn bricktrons: a switch in the home crystal's popup makes a new bricktron whenever the crystal has the energy for one and the team is under its limit (`[Crystal] AutoSpawn`, per player). | always on |
 
 The ranges of `AutoCleanup` and `AutoRepair` are set on the home crystal's task; "Show ranges" / "Hide ranges" on the crystal's context wheel shows or hides the rings.

@@ -29,7 +29,7 @@ internal static class Features
 
 	public const string BuildJobs = "BuildJobs";
 
-	public const string BuildJobsInfo = "No duplicate build jobs; a worker takes as much material as it can carry for a blueprint and the blueprints near it, and delivers to them on one trip; builders also build blueprints that cost nothing (saplings).";
+	public const string BuildJobsInfo = "No duplicate build jobs; a worker takes as much material as it can carry for a blueprint and the blueprints near it, and delivers to them on one trip; builders also build blueprints that cost nothing (saplings); a building of several floors is built floor by floor (no blueprint is taken two or more levels above an unfinished one nearby that the builder could do now).";
 
 	public const string ArcherAccuracy = "ArcherAccuracy";
 
@@ -230,6 +230,10 @@ internal static class Features
 	public const string AutoRepair = "AutoRepair";
 
 	public const string AutoRepairInfo = "Idle builders repair damaged blocks near the base (home crystal and stockpiles, see [AutoRepair] Radius), without a repair zone. No materials; blocks under attack are left alone. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a green ring around the crystal, shown or hidden with \"Show ranges\" / \"Hide ranges\" on the crystal's context wheel ([BaseRanges] ShowRings).";
+
+	public const string DoorRepair = "DoorRepair";
+
+	public const string DoorRepairInfo = "Damaged doors are repaired like damaged blocks: a repair zone (and the base's repair task) repairs the doors inside it, and with AutoRepair idle builders repair the team's damaged doors near the base.";
 
 	public const string Market = "Market";
 

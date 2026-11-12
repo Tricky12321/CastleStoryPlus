@@ -11,8 +11,10 @@ using Brix.Game.AI.InstructionType;
 using Brix.Game.AI.Nodes;
 using Brix.Game.Components;
 using Brix.Input;
+using Brix.Legacy;
 using Brix.Lifecycle.Pooling;
 using Brix.UI.Icons;
+using CastleStoryPlus.Building;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
 using HarmonyLib;
@@ -26,7 +28,8 @@ namespace CastleStoryPlus.WorkerAI;
 // the player's "repair" order does: no materials, the block gets its health back. Only offered by IdleProject, so any
 // real work comes first, and real work interrupts it (the health already given back stays). Blocks are left alone
 // while they are being hit, inside a repair zone (its workers do them), or for a while after a worker could not get
-// to them. Destroyed blocks are not rebuilt and workshops are not repaired.
+// to them. Destroyed blocks are not rebuilt and workshops are not repaired; damaged doors of the team are (with
+// DoorRepair).
 [Feature(Features.AutoRepair, Features.AutoRepairInfo)]
 internal static class AutoRepair
 {
@@ -80,7 +83,12 @@ internal static class AutoRepair
 			return false;
 		}
 		BlockEngine engine = BrixSingleton<BlockEngine>.Instance;
-		if (engine == null || engine.BlockTracker == null || engine.BlockTracker.DamagedBlocks.Count == 0)
+		if (engine == null || engine.BlockTracker == null)
+		{
+			return false;
+		}
+		Dictionary<XYZ, Porte> doors = DoorRepair.On ? DoorRepair.DamagedDoors() : null;
+		if (engine.BlockTracker.DamagedBlocks.Count == 0 && (doors == null || doors.Count == 0))
 		{
 			return false;
 		}
@@ -119,6 +127,34 @@ internal static class AutoRepair
 				found = true;
 			}
 		}
+		// Damaged doors of the team (DoorRepair): healed by a repair task in the voxel they stand on.
+		if (doors != null)
+		{
+			foreach (KeyValuePair<XYZ, Porte> door in doors)
+			{
+				if (door.Value == null || door.Value.faction != labor.faction || !DoorRepair.IsDamaged(door.Value))
+				{
+					continue;
+				}
+				XYZ voxel = door.Key;
+				if (Claims.ContainsKey(voxel) || Waiting(Failed, voxel, 0f))
+				{
+					continue;
+				}
+				Vector3 at = voxel.ToVector3();
+				if (!Near(anchors, at, radius) || InZone(zones, voxel))
+				{
+					continue;
+				}
+				float distance = (at - position).sqrMagnitude;
+				if (distance < best)
+				{
+					best = distance;
+					target = voxel;
+					found = true;
+				}
+			}
+		}
 		if (!found)
 		{
 			return false;
@@ -143,7 +179,7 @@ internal static class AutoRepair
 			{
 				// Still damaged: the worker could not get to it or was called away.
 				BlockData block = Voxel.GetBlockData(voxel) as BlockData;
-				if (block != null && block.IsDamaged)
+				if ((block != null && block.IsDamaged) || DoorRepair.DamagedDoorAt(voxel) != null)
 				{
 					Failed[voxel] = Time.time + FailedSeconds;
 				}
