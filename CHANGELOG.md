@@ -3,7 +3,7 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
-## Unreleased
+## 0.8.11 — 2026-11-12
 
 - [FIX] **Bricktrons no longer freeze holding a load nothing can store (#49):** a worker that could not store what it carried took no other work (building, digging, workshop fetching all need empty hands or bag room). The idle "store or drop" looked for storage for the first kind in the bag only, waited about 10 seconds, and its drop could fail, so the worker kept its load and started over. Workers whose task failed on storage went back to the same task again and again. Now the worker stores whatever in its bag has room, kind by kind, and puts the rest down at once near the gather point. A loaded worker that idles or keeps failing tasks for 20 seconds is sent to do that, and a workshop worker whose recipe makes no progress for 90 seconds starts afresh. The "you need more empty stockpiles" warning stays (`[Features] LoadRelief`).
 - [FIX] **Task switching (#75):** a bricktron moved from one task to another (quarry to trees, tunnel to harvest...) went back to its old task and kept working there until its bag was full. Now it switches at once: it first stores what its bag holds at the nearest storage that takes it, and while it starts on the new task it does not go off to help other tasks (`[Features] AssignNow`, `WorkerAI`).
