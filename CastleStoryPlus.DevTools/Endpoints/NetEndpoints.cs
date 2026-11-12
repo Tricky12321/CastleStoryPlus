@@ -5,8 +5,11 @@ using Brix.Game.Rules;
 using Brix.Game.Network;
 using Brix.Network;
 using Brix.UI.Builder.Menu;
+using Brix.UI.Scripts;
 using CastleStoryPlus.DevTools.Api;
+using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.UI;
 using static CastleStoryPlus.DevTools.Endpoints.Json;
 
 namespace CastleStoryPlus.DevTools.Endpoints;
@@ -32,7 +35,24 @@ internal static class NetEndpoints
 		{
 			Parameters = "value (default true)"
 		});
-		routes.Add(new Route("POST", "/api/net/start", "The host starts the game from the lobby (every player must be ready)", Start));
+		routes.Add(new Route("POST", "/api/net/start", "The host starts the game from the lobby (every player must be ready)", Start)
+		{
+			Parameters = "button (true: as the start button does, the loading screen first on every player and then the host's ready; default: the host's ready at once)"
+		});
+		routes.Add(new Route("POST", "/api/net/name", "Renames this player in the lobby, as Enter in the lobby's name box does", Name)
+		{
+			Parameters = "value (required)"
+		});
+		routes.Add(new Route("GET", "/api/net/nameedit", "The lobby's name box: shown, focused, its text", NameEditState));
+		routes.Add(new Route("POST", "/api/net/nameedit", "Opens the lobby's name box, focuses it and puts text in it as typing does (nothing is sent until Enter)", NameEdit)
+		{
+			Parameters = "text (required)"
+		});
+		routes.Add(new Route("GET", "/api/net/chat", "The chat box of a game: its text, whether it is open for typing and whether it shows", ChatState));
+		routes.Add(new Route("POST", "/api/net/chat", "Sends a chat message in a multiplayer game, as typing it in the chat box and Enter do", Chat)
+		{
+			Parameters = "text (required)"
+		});
 		routes.Add(new Route("POST", "/api/net/lan", "Looks for games hosted on the LAN, as the multiplayer menu's LAN list does (a host on port 3000 broadcasts on port 3100); GET /api/net lists what was heard (lanGames)", Lan));
 		routes.Add(new Route("POST", "/api/net/online", "Asks Steam for the online list's games (as the multiplayer menu does every second); GET /api/net lists them (onlineGames)", Online));
 		routes.Add(new Route("POST", "/api/net/joinlobby", "Joins a game of the online list by its Steam lobby id, as a click on it and join do", JoinLobby)
@@ -167,8 +187,85 @@ internal static class NetEndpoints
 		{
 			throw new ApiException(409, "Only the host starts the game");
 		}
+		if (request.Bool("button", false))
+		{
+			GameParam.instance.BeginLoadingScreen();
+			return Obj("starting", true, "button", true);
+		}
 		LobbyMenu.StartGame();
 		return Obj("starting", true);
+	}
+
+	private static object Name(ApiRequest request)
+	{
+		RequireLobby();
+		string value = request.Required("value");
+		LegacyLobbyLeftMenu.PlayerName = value;
+		return Obj("name", LobbyMenu.Player.NetworkplayerName, "asked", value);
+	}
+
+	private static InputField NameField(bool open)
+	{
+		RequireLobby();
+		foreach (LegacyLobbyLeftMenu menu in Object.FindObjectsOfType<LegacyLobbyLeftMenu>())
+		{
+			if (menu.TargetContainer == null)
+			{
+				continue;
+			}
+			if (open && !LegacyLobbyLeftMenu.IsExpansionState(LegacyLobbyLeftMenu.ExpansionState.PlayerName))
+			{
+				LegacyLobbyLeftMenu.ToggleExpansionState(LegacyLobbyLeftMenu.ExpansionState.PlayerName);
+			}
+			foreach (Container.Item item in menu.TargetContainer.items)
+			{
+				if (item.containerPopulatorOperation == LegacyBaseMenu.Operation.PlayerNameEdit && item.instance != null && item.instance.actualInputField != null)
+				{
+					return item.instance.actualInputField;
+				}
+			}
+		}
+		throw new ApiException(409, "No lobby name box");
+	}
+
+	private static object NameEditState(ApiRequest request)
+	{
+		InputField field = NameField(false);
+		return Obj("shown", field.gameObject.activeInHierarchy, "focused", field.isFocused, "text", field.text, "name", LobbyMenu.Player.NetworkplayerName);
+	}
+
+	private static object NameEdit(ApiRequest request)
+	{
+		string text = request.Required("text");
+		InputField field = NameField(true);
+		field.Select();
+		field.ActivateInputField();
+		field.text = text;
+		field.caretPosition = text.Length;
+		return Obj("shown", field.gameObject.activeInHierarchy, "focused", field.isFocused, "text", field.text);
+	}
+
+	private static object ChatState(ApiRequest request)
+	{
+		ChatBoxDriver driver = ChatBoxDriver.Instance;
+		if (driver == null || !driver.initialized)
+		{
+			throw new ApiException(409, "No chat box (not in a game)");
+		}
+		Text output = driver.chatPanel.GetPlugComponent<Text>("Output Text");
+		CanvasGroup group = driver.chatPanel.GetComponent<CanvasGroup>();
+		return Obj("text", (output != null) ? output.text : null, "open", driver._isActive, "alpha", (group != null) ? group.alpha : 1f, "panelActive", driver.chatPanel.gameObject.activeInHierarchy);
+	}
+
+	private static object Chat(ApiRequest request)
+	{
+		string text = request.Required("text");
+		if (!Neo.multiplayer || User.LocalUser == null)
+		{
+			throw new ApiException(409, "Not in a multiplayer game");
+		}
+		User.LocalUser.CallCmdSendChatMessage(text);
+		return Obj("sent", text);
 	}
 
 	// Steam as the game sees it: whether its SteamManager got the Steam API, who is signed in, the lobby it is in.

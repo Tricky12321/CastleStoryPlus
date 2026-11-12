@@ -135,7 +135,7 @@ internal static class WorkshopFetchRange
 
 	private static CraftingState Selected()
 	{
-		CraftingStation station = CraftingStation.SelectedStation();
+		CraftingStation station = SelectedStation();
 		return (station != null) ? station.state : null;
 	}
 
@@ -233,6 +233,13 @@ internal static class WorkshopFetchRange
 	internal static void End()
 	{
 		_range = NoLimit;
+	}
+
+	// The game's selected workshop; its crafting selection exists only in a game (null in the menus and while a world
+	// loads, where the game's own lookup throws).
+	private static CraftingStation SelectedStation()
+	{
+		return (UIGameObserver.crafting != null) ? CraftingStation.SelectedStation() : null;
 	}
 
 	// The selected workshop and its range, for the ring; null when none is selected or it has no limit.

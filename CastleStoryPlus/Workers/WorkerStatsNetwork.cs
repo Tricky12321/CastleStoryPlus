@@ -22,6 +22,11 @@ internal static class WorkerStatsNetwork
 		writer.WritePackedUInt32((uint)(stats?.CallToArmsRole ?? 0));
 		writer.WritePackedUInt32((uint)(stats?.Tier ?? 0));
 		writer.WritePackedUInt32((uint)(stats?.Variant ?? 0));
+		writer.WritePackedUInt32((uint)(stats?.Guard ?? 0));
+		writer.WritePackedUInt32((uint)(stats?.HasPost ?? 0));
+		writer.Write(stats?.PostX ?? 0);
+		writer.Write(stats?.PostY ?? 0);
+		writer.Write(stats?.PostZ ?? 0);
 		__result = true;
 	}
 }
@@ -37,11 +42,21 @@ internal static class WorkerStatsNetworkRead
 		int role = (int)reader.ReadPackedUInt32();
 		int tier = (int)reader.ReadPackedUInt32();
 		int variant = (int)reader.ReadPackedUInt32();
+		int guard = (int)reader.ReadPackedUInt32();
+		int hasPost = (int)reader.ReadPackedUInt32();
+		int postX = reader.ReadInt32();
+		int postY = reader.ReadInt32();
+		int postZ = reader.ReadInt32();
 		WorkerStats stats = WorkerStats.For(__instance);
-		if (stats.WorkXp == work && stats.CombatXp == combat && stats.CallToArmsRole == role && stats.Tier == tier && stats.Variant == variant)
+		if (stats.WorkXp == work && stats.CombatXp == combat && stats.CallToArmsRole == role && stats.Tier == tier && stats.Variant == variant && stats.Guard == guard && stats.HasPost == hasPost && stats.PostX == postX && stats.PostY == postY && stats.PostZ == postZ)
 		{
 			return;
 		}
+		stats.Guard = guard;
+		stats.HasPost = hasPost;
+		stats.PostX = postX;
+		stats.PostY = postY;
+		stats.PostZ = postZ;
 		stats.WorkXp = work;
 		stats.CombatXp = combat;
 		stats.CallToArmsRole = role;

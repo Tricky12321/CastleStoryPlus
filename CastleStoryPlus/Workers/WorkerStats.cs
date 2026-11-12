@@ -23,6 +23,18 @@ internal class WorkerStats
 	// 0 = an ordinary unit, 1 = a Healtron (a corruptron that heals its allies, see Combat/Healtron).
 	public int Variant;
 
+	// 1 = a ranged soldier guarding the place it stands on (see Army/RangedGuard).
+	public int Guard;
+
+	// 1 = the unit has a post (see Army/SoldierPosts) at PostX/PostY/PostZ, in hundredths of a block.
+	public int HasPost;
+
+	public int PostX;
+
+	public int PostY;
+
+	public int PostZ;
+
 	// Raised on every peer when a bricktron's stats change (locally on the server, or received by a client).
 	public static event Action<CharacterState> Changed;
 
