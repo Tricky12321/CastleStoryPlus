@@ -45,7 +45,7 @@ internal static class Features
 
 	public const string EnemyTreeClearing = "EnemyTreeClearing";
 
-	public const string EnemyTreeClearingInfo = "Enemy waves are no longer shut out by trees (planted rows of them included): enemies that break their way may route through trees and fell the trees in their way.";
+	public const string EnemyTreeClearingInfo = "Enemy waves are no longer shut out by trees (planted rows of them included): enemies that break their way may route through trees and fell a tree only when it blocks their way (stuck on their route, the tree towards their next step); trees they walk past, fight or wait beside stay standing.";
 
 	public const string SaveAndLeave = "SaveAndLeave";
 
@@ -263,6 +263,10 @@ internal static class Features
 
 	public const string MixedRacksInfo = "A weapon stand holds the weapons and armour of all soldier classes at once (as many weapons, props and hats as before, any classes mixed); equipping takes one whole kit of a single class (see [MixedRacks]).";
 
+	public const string RackFilter = "RackFilter";
+
+	public const string RackFilterInfo = "A weapon stand can be limited to some soldier classes: select the stand and pick the classes whose gear may be put on it (knight, archer, arbalist, alchemist, artificer, halberdier). Gear of the other classes is no longer brought there; what is already on it stays. Saved with the stand and synced to the other players.";
+
 	public const string KitBundles = "KitBundles";
 
 	public const string KitBundlesInfo = "Every soldier kit is one item (Knight kit, Archer kit, ...): the kit recipes make one bundle with the summed cost and work instead of separate pieces, a soldier that equips a bundle unpacks it, one that hands in a whole kit packs it again, and loose whole kits on a weapon stand are packed into a bundle. Saves with kit bundles need the mod (bundles already made are still unpacked with this switched off).";
@@ -469,11 +473,11 @@ internal static class Features
 
 	public const string WorkshopPriority = "WorkshopPriority";
 
-	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes (the game keeps every workshop at high).";
+	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes, and at the bottom of the market's, research station's, smithy's and armoury's windows (the game keeps every workshop at high).";
 
 	public const string WorkshopFetchRange = "WorkshopFetchRange";
 
-	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range.";
+	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range. The range goes along with \"Copy setup\", with copied areas and blueprints (also the blueprint library), and a workshop built from such a blueprint starts with it.";
 
 	public const string DropGearOnDeath = "DropGearOnDeath";
 
@@ -525,7 +529,7 @@ internal static class Features
 
 	public const string WorkshopSetup = "WorkshopSetup";
 
-	public const string WorkshopSetupInfo = "\"Copy setup\" and \"Paste setup\" in a workshop's menu: copies its queue, looping and stock limits to another workshop of the same kind (only the recipes it can make).";
+	public const string WorkshopSetupInfo = "\"Copy setup\" and \"Paste setup\" in a workshop's menu: copies its queue, looping, stock limits and fetch range to another workshop of the same kind (only the recipes it can make).";
 
 	public const string Metallurgy = "Metallurgy";
 

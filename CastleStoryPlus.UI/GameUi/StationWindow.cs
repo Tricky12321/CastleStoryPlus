@@ -46,6 +46,11 @@ internal abstract class CsStationWindow : MonoBehaviour
 
 	private CsWindowDrag _drag;
 
+	// The workshop rows at the bottom (WorkshopPriority, WorkshopFetchRange), as under a workshop's recipes.
+	private Button[] _priority;
+
+	private Text _fetchRange;
+
 	protected abstract float Width { get; }
 
 	// The selected station when it is this window's kind, else null.
@@ -120,6 +125,7 @@ internal abstract class CsStationWindow : MonoBehaviour
 		UiKit.Fixed(close.gameObject, 26f, 26f);
 		RoundButton(close, UiTheme.SlotRadius);
 		Build();
+		BuildWorkshopRows();
 		Body.gameObject.SetActive(false);
 		background.enabled = false;
 	}
@@ -140,10 +146,88 @@ internal abstract class CsStationWindow : MonoBehaviour
 		{
 			_readAt = Time.unscaledTime;
 			Read(station);
+			ReadWorkshopRows(station);
 		}
 		if (station != null)
 		{
 			Place();
+		}
+	}
+
+	// Priority (four steps side by side) and fetch range ("-  40  +", Shift 25 at a time), each when its feature is on.
+	private void BuildWorkshopRows()
+	{
+		bool priority = Plugin.IsEnabled(Core.Features.WorkshopPriority);
+		bool range = Plugin.IsEnabled(Core.Features.WorkshopFetchRange);
+		if (!priority && !range)
+		{
+			return;
+		}
+		Line(Body);
+		if (priority)
+		{
+			Transform row = Row(Body, 26f, 4f);
+			Text caption = Caption(row, "Priority");
+			UiKit.Fixed(caption.gameObject, 92f, 26f);
+			_priority = new Button[Economy.WorkshopPriority.StepNames.Length];
+			for (int i = 0; i < _priority.Length; i++)
+			{
+				int step = i;
+				Button button = UiKit.CreateButton(row, Economy.WorkshopPriority.StepNames[i], 0f, () =>
+				{
+					if (Station != null && !GameUiState.Paused)
+					{
+						Economy.WorkshopPriority.ChangeStep(Station.state, step);
+						ReadWorkshopRows(Station);
+					}
+				});
+				RoundButton(button, UiTheme.SlotRadius);
+				_priority[i] = button;
+			}
+		}
+		if (range)
+		{
+			Transform row = Row(Body, 26f, 4f);
+			Text caption = Caption(row, "Fetch within");
+			UiKit.Fixed(caption.gameObject, 92f, 26f);
+			Button less = UiKit.CreateButton(row, "-", 26f, () => StepRange(-1));
+			RoundButton(less, UiTheme.SlotRadius);
+			_fetchRange = LuiWidgets.Label(row, string.Empty, LuiStyle.SmallFontSize + 1, LuiStyle.White, TextAnchor.MiddleCenter, LuiStyle.Bold);
+			UiKit.Fixed(_fetchRange.gameObject, 70f, 26f);
+			Button more = UiKit.CreateButton(row, "+", 26f, () => StepRange(1));
+			RoundButton(more, UiTheme.SlotRadius);
+			Clickable(_fetchRange.gameObject, null, () => "How far from this building, in blocks, its workers go for what it needs, to stockpiles and loose items (Shift: 25 at a time). Past " + Economy.WorkshopFetchRange.Max + ": no limit.");
+		}
+	}
+
+	private void StepRange(int direction)
+	{
+		if (Station == null || GameUiState.Paused)
+		{
+			return;
+		}
+		bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+		Economy.WorkshopFetchRange.StepFor(Station.state, direction, shift);
+		ReadWorkshopRows(Station);
+	}
+
+	private void ReadWorkshopRows(CraftingStation station)
+	{
+		if (_priority != null)
+		{
+			int current = Economy.WorkshopPriority.StepOf(station.state);
+			for (int i = 0; i < _priority.Length; i++)
+			{
+				Text label = _priority[i].GetComponentInChildren<Text>();
+				if (label != null)
+				{
+					label.color = (i == current) ? LuiStyle.CastleYellow : UiTheme.TextMuted;
+				}
+			}
+		}
+		if (_fetchRange != null)
+		{
+			CsRowParts.SetText(_fetchRange, Economy.WorkshopFetchRange.Shown(Economy.WorkshopFetchRange.Get(station.state)));
 		}
 	}
 

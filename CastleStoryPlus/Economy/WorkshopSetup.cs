@@ -10,7 +10,7 @@ using CastleStoryPlus.LuaUi;
 namespace CastleStoryPlus.Economy;
 
 // Copying a workshop's setup to another: "Copy setup" in a workshop's menu takes its queue, whether it loops and its
-// loop-until-stock limits (CraftLoopLimit); "Paste setup" in another workshop's menu replaces that one's queue with
+// loop-until-stock limits (CraftLoopLimit) and its fetch range (WorkshopFetchRange); "Paste setup" in another workshop's menu replaces that one's queue with
 // them. Only the recipes the other workshop can make are pasted, so a forge's setup goes to another forge (and a
 // kind of workshop with none of the recipes cannot take it). Everything goes through the game's own queue commands
 // and the limits' own command, so it works on multiplayer clients too.
@@ -28,6 +28,9 @@ internal static class WorkshopSetup
 		public CraftingStation From;
 
 		public string Name;
+
+		// The workshop's own fetch range (WorkshopFetchRange), -1: the default; null when that feature is off.
+		public int? FetchRange;
 	}
 
 	private static Setup _copied;
@@ -48,7 +51,7 @@ internal static class WorkshopSetup
 			Label = () => "Copy setup",
 			Icon = () => GameUiState.Icon(IconKeys._UI_CopyBlueprints),
 			IconColor = () => LuiStyle.CastleYellow,
-			Tooltip = () => "Copy setup: remember this workshop's queue, looping and stock limits, to paste them into another workshop",
+			Tooltip = () => "Copy setup: remember this workshop's queue, looping, stock limits and fetch range, to paste them into another workshop",
 			OnClick = (bool shift, bool ctrl) => Copy(GameUiState.Station)
 		});
 		section.Add(new UiButton
@@ -76,6 +79,7 @@ internal static class WorkshopSetup
 		}
 		Dictionary<int, int> limits = Plugin.IsEnabled(Features.CraftLoopLimit) ? CraftLoopLimit.All(station.state) : null;
 		setup.Limits = (limits != null) ? new Dictionary<int, int>(limits) : null;
+		setup.FetchRange = Plugin.IsEnabled(Features.WorkshopFetchRange) ? WorkshopFetchRange.Raw(station.state) : (int?)null;
 		_copied = setup;
 	}
 
@@ -166,6 +170,10 @@ internal static class WorkshopSetup
 		if (station.Looping != _copied.Looping)
 		{
 			CraftingStation.localUserProject.CallCmdcraftingLoop(station.gameObject, _copied.Looping);
+		}
+		if (_copied.FetchRange.HasValue && Plugin.IsEnabled(Features.WorkshopFetchRange))
+		{
+			WorkshopFetchRange.Change(station.state, _copied.FetchRange.Value);
 		}
 		if (_copied.Limits == null || station.state == null)
 		{

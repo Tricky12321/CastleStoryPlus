@@ -83,6 +83,12 @@ internal sealed class AssignNow : MonoBehaviour
 		{
 			labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
 		}
+		else if (current == null && labor.PendingTask != null && !From(labor.PendingTask, project))
+		{
+			// A task of another group chosen a moment before (not started yet) would start next and take the bricktron
+			// into that group's crew again; the abort also drops the pending task.
+			labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
+		}
 		Task store = switching ? StoreBagFirst(labor, project) : null;
 		Watches[labor] = new Watch { Project = project, Since = Time.time, Store = store };
 	}
@@ -155,6 +161,10 @@ internal sealed class AssignNow : MonoBehaviour
 		{
 			Labor labor = pair.Key;
 			Watch watch = pair.Value;
+			if (!labor.IsNullOrReleased() && watch.Project != null && watch.Project.IsStillAlive && labor.Project != watch.Project && TakeBack(labor, watch))
+			{
+				continue;
+			}
 			if (labor.IsNullOrReleased() || watch.Project == null || !watch.Project.IsStillAlive || labor.Project != watch.Project || WorksOn(labor, watch.Project))
 			{
 				Done.Add(labor);
@@ -256,6 +266,32 @@ internal sealed class AssignNow : MonoBehaviour
 	}
 
 	// Whether the bricktron's task (or the one it is about to start) comes from the task.
+	// A bricktron put on a task that a task of another group took into that group's crew while it was starting (a
+	// task it had chosen just before, which could not be broken off): it is put back in the task it was given and that
+	// other task is broken off when it may be. A move by the player starts a new watch, so it is never undone here.
+	// False when it cannot be put back (the task's crew is full or will not take it).
+	private static bool TakeBack(Labor labor, Watch watch)
+	{
+		if (labor.Project == null || labor.Project is IdleProject || labor.Autonomy != AutonomyStatus.LockedToOperable)
+		{
+			return false;
+		}
+		Project other = labor.Project;
+		if (!watch.Project.Hire(labor))
+		{
+			return false;
+		}
+		labor.Autonomy = AutonomyStatus.LockedToOperable;
+		Task current = labor.CurrentTask;
+		if (current != null && !From(current, watch.Project) && current.CanInterrupt)
+		{
+			labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
+		}
+		Plugin.Log.LogInfo("AssignNow: " + labor.name + " was taken into " + other.name + " by a task chosen before; back in " + watch.Project.name);
+		watch.Since = Time.time;
+		return true;
+	}
+
 	private static bool WorksOn(Labor labor, Project project)
 	{
 		return From(labor.CurrentTask, project) || From(labor.PendingTask, project);

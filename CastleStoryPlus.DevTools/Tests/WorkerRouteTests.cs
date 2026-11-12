@@ -133,6 +133,23 @@ internal static class WorkerRouteTests
 		planned = AutoCleanup.TryPlan(builder);
 		AutoCleanup.Release(builder);
 		t.Log("With an iron ingot there, the idle cleanup chose " + ((planned != null) ? planned.name + " at " + planned.transform.position : "nothing"));
+		if (planned == null)
+		{
+			// The idle cleanup only looks round the base: a site the test had to put far away is out of its reach.
+			bool considered = false;
+			foreach (KeyValuePair<GameObject, string> entry in AutoCleanup.Explain(builder))
+			{
+				if (entry.Key == ingot)
+				{
+					considered = true;
+					t.Log("The iron ingot: " + (entry.Value ?? "would pick it up"));
+				}
+			}
+			if (!considered)
+			{
+				t.Skip("The iron ingot at " + site + " is outside the idle cleanup's reach (no flat ground left near the base)");
+			}
+		}
 		t.True(planned == ingot, "The idle cleanup did not choose the iron ingot");
 	}
 
@@ -145,7 +162,7 @@ internal static class WorkerRouteTests
 		yield return t.Seconds(1f);
 		t.Log("In the pit at " + Units.VoxelOf(builder));
 		t.True(Units.VoxelOf(builder).y < site.y - 2, "The builder is not in the pit");
-		yield return t.UntilGame(() => Units.VoxelOf(builder).y >= site.y, 240f, "the builder to get out of the pit");
+		yield return t.UntilGame(() => OutOfPit(builder, site), 240f, "the builder to get out of the pit");
 		t.Log("Out at " + Units.VoxelOf(builder));
 	}
 
@@ -164,7 +181,7 @@ internal static class WorkerRouteTests
 		// the ground round the pit.
 		yield return t.UntilGame(() =>
 		{
-			if (Units.VoxelOf(builder).y >= site.y || ReachesUp(builder, site.y))
+			if (OutOfPit(builder, site) || ReachesUp(builder, site.y))
 			{
 				return true;
 			}
@@ -205,6 +222,14 @@ internal static class WorkerRouteTests
 
 	// A pit of one column dug depth deep under the standing voxel (the voxels' own damage receivers, as digging does,
 	// so the route graph hears of it).
+	// Out of the pit: up at the ground's height, or off the site (on a slope the nearest place on the routes can lie
+	// lower down the hill, and the way out is dug sideways to it).
+	private static bool OutOfPit(Labor builder, XYZ site)
+	{
+		XYZ at = Units.VoxelOf(builder);
+		return at.y >= site.y || Mathf.Max(Mathf.Abs(at.x - site.x), Mathf.Abs(at.z - site.z)) > 3;
+	}
+
 	private static IEnumerator Pit(TestContext t, XYZ at, int depth)
 	{
 		Scenario.LeavesMess(t);

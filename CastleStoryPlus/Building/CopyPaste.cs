@@ -46,6 +46,9 @@ internal static class CopyPaste
 		public bool AtVoxel;
 
 		public XYZ Voxel;
+
+		// A workshop's own fetch range (WorkshopFetchRange), carried by its blueprint; -1: none.
+		public int FetchRange = -1;
 	}
 
 	private const int BelowCorners = 8;
@@ -282,7 +285,7 @@ internal static class CopyPaste
 				continue;
 			}
 			taken.Add(go);
-			pieces.Add(new Piece { Key = key, Position = go.transform.position, Rotation = go.transform.rotation, Voxel = voxel });
+			pieces.Add(new Piece { Key = key, Position = go.transform.position, Rotation = go.transform.rotation, Voxel = voxel, FetchRange = Economy.WorkshopFetchRangeBlueprints.RawOf(go) });
 		}
 
 		// Own pending blueprints (not removal markers, not the cursor's ghosts).
@@ -305,7 +308,7 @@ internal static class CopyPaste
 				continue;
 			}
 			taken.Add(go);
-			pieces.Add(new Piece { Key = key, Position = go.transform.position, Rotation = go.transform.rotation, Voxel = voxel });
+			pieces.Add(new Piece { Key = key, Position = go.transform.position, Rotation = go.transform.rotation, Voxel = voxel, FetchRange = Economy.WorkshopFetchRangeBlueprints.RawOf(go) });
 		}
 
 		if (pieces.Count == 0)
@@ -407,6 +410,7 @@ internal static class CopyPaste
 			node.Type = piece.Key;
 			node.Pos = piece.Position;
 			node.Rot = piece.Rotation;
+			Economy.WorkshopFetchRangeBlueprints.SetNode(node, piece.FetchRange);
 			graph._nodes.Add(node);
 		}
 		GameObject compoundObject = ObjectPoolSingleton.Request_Unsafe(Brix.External.Factories.Compounders.BlueprintCompound, active: false);
