@@ -391,6 +391,10 @@ internal static class Features
 
 	public const string StuckResetInfo = "Failsafe for a hanging worker: one that has not moved for 10 seconds in a walking task (60 in any other) has its task cancelled and puts down what it carries, then starts afresh ([StuckReset] Seconds, LongSeconds).";
 
+	public const string LoadRelief = "LoadRelief";
+
+	public const string LoadReliefInfo = "Workers do not stand frozen with a load nothing can store: \"store or drop\" stores what has room kind by kind and puts the rest down near the gather point at once; a loaded worker that idles or fails tasks for 20 seconds is sent to do that; a workshop worker whose recipe makes no progress for 90 seconds starts afresh ([LoadRelief] Seconds, RecipeSeconds, DropWalk).";
+
 	public const string QuickNextTask = "QuickNextTask";
 
 	public const string QuickNextTaskInfo = "Workers go on to their next task sooner: the wait after a task is 2 AI ticks instead of 10, after a failed one 10 instead of 30 ([QuickNextTask] TicksAfterTask, TicksAfterFailure).";
