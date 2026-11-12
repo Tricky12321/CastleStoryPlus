@@ -17,7 +17,7 @@ Workers find, share and finish their work on their own.
 
 | Feature | Switch |
 |---|---|
-| Workers start work on their own, pick up their next task faster, help other task groups when theirs is done, and only dig, harvest or clean up what they can store all of. | `WorkerAI` |
+| Workers start work on their own, pick up their next task faster, help other task groups when theirs is done, and only dig, harvest or clean up what they can store all of; a quarry always keeps its stair steps. | `WorkerAI` |
 | Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting (after digging also when none of the area's blocks fits in the bag any more). | `TaskFlow` |
 | A task can be paused instead of deleted: no bricktron works on it until it is resumed. | `PauseTasks` |
 | Limit how many bricktrons work on a task at a time, e.g. a quarry with 4. | `WorkLimit` |
