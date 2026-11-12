@@ -39,7 +39,7 @@ internal static class RackEquipDropFirstPatch
 	}
 
 	// As Recepteur.DropAll, but without the check that the load fits the spot (forceDrop).
-	private static void ForceDrop(Labor labor)
+	internal static void ForceDrop(Labor labor)
 	{
 		Recepteur recepteur = labor.recepteur;
 		if (recepteur == null || recepteur.IsEmpty())
