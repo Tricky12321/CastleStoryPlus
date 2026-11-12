@@ -169,7 +169,7 @@ internal static class Features
 
 	public const string DirectTask = "DirectTask";
 
-	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and stay in their crew.";
+	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and join that task's crew, staying on it until its work is done.";
 
 	public const string PlayerOrdersFirst = "PlayerOrdersFirst";
 
@@ -177,7 +177,7 @@ internal static class Features
 
 	public const string AssignNow = "AssignNow";
 
-	public const string AssignNowInfo = "Bricktrons put on a task (right-click the task with them selected) start on it at once instead of finishing what they do, also when they are in its crew already; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...).";
+	public const string AssignNowInfo = "Bricktrons put on a task (right-click the task with them selected) start on it at once instead of finishing what they do (storing what their bag holds from the old task first), also when they are in its crew already; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...).";
 
 	public const string PickUpAround = "PickUpAround";
 
