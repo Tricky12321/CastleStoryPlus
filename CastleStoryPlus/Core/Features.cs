@@ -545,7 +545,15 @@ internal static class Features
 
 	public const string MenuTextFields = "MenuTextFields";
 
-	public const string MenuTextFieldsInfo = "Unity 6 port: text boxes in the game's menus (the lobby's player name, ...) take what was typed on Enter or when left; the port's menus had lost that link, so the name could not be changed.";
+	public const string MenuTextFieldsInfo = "Unity 6 port: text boxes in the game's menus (the lobby's player name, ...) take what was typed on Enter or when left; the port's menus had lost that link, so the name could not be changed. What a player is typing in the lobby's name box is kept when the player list changes (another player's name, faction or team), so several players can rename themselves at once.";
+
+	public const string LobbyStart = "LobbyStart";
+
+	public const string LobbyStartInfo = "Unity 6 port, multiplayer: once the host has pressed start, a client's \"not ready\" (pressed as the loading screen came up) is kept ready, the lobby's \"everyone not ready\" waits, a player joining in that moment is turned away and one leaving no longer holds up the others; host and clients sat at 0 % loaded for good before.";
+
+	public const string GameChat = "GameChat";
+
+	public const string GameChatInfo = "Multiplayer: chat messages in a game go away after [Multiplayer] ChatFadeSeconds (12; 0: they stay) and show again while the chat is open for typing; [Multiplayer] Chat = false switches the chat box in a game off (the lobby's chat stays).";
 
 	public const string DesyncProtection = "DesyncProtection";
 

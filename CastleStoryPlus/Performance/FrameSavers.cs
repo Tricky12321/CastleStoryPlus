@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Semantique;
+using Brix.Lifecycle.Pooling;
 using Brix.NewUI.OverheadDisplay;
 using CastleStoryPlus.Core;
 using HarmonyLib;
@@ -55,7 +57,7 @@ internal static class FrameSavers
 			DecorSeen.Clear();
 			IdleUnitMotion.StillUnits.Clear();
 			KnowledgeRegionsSpread.Clear();
-			FrameSaversOverheadPatch.Off.Clear();
+			FrameSaversOverheadPatch.RestoreAll();
 		});
 		Plugin.Root.AddComponent<FrameSaversDriver>();
 	}
@@ -165,8 +167,16 @@ internal static class FrameSavers
 [HarmonyPatch(typeof(OverheadDisplay), "Show")]
 internal static class FrameSaversOverheadPatch
 {
-	// Per hidden icon, the canvases inside it this switched off.
-	internal static readonly Dictionary<OverheadDisplay, List<Canvas>> Off = new Dictionary<OverheadDisplay, List<Canvas>>();
+	// The canvases inside hidden icons this switched off. Kept per canvas, not per icon: the lines in an icon (name
+	// tag, big icon, ...) and the icons themselves are pooled, and one given back to the pool while hidden kept its
+	// canvases off. The next icon to take it from the pool showed it without them (a task's beacon pole without its
+	// icon, mostly after loading a save, whose objects all came from the pool again).
+	internal static readonly HashSet<Canvas> Off = new HashSet<Canvas>();
+
+	// The icons that switched off canvases inside them since they last showed (the rest have nothing to switch on).
+	private static readonly HashSet<OverheadDisplay> Dimmed = new HashSet<OverheadDisplay>();
+
+	private static readonly List<Canvas> Found = new List<Canvas>();
 
 	private static void Postfix(OverheadDisplay __instance, bool value)
 	{
@@ -174,6 +184,47 @@ internal static class FrameSaversOverheadPatch
 		Switch(__instance.ArrowCanvas, __instance, value);
 		SwitchNested(__instance, value);
 		SwitchContent(__instance, value);
+	}
+
+	// Every canvas under root this switched off is switched on again.
+	internal static void Restore(Transform root)
+	{
+		if (Off.Count == 0 || root == null)
+		{
+			return;
+		}
+		Found.Clear();
+		root.GetComponentsInChildren(true, Found);
+		foreach (Canvas canvas in Found)
+		{
+			if (Off.Remove(canvas))
+			{
+				canvas.enabled = true;
+			}
+		}
+		Found.Clear();
+	}
+
+	internal static void Released(OverheadDisplay display)
+	{
+		if (display != null)
+		{
+			Dimmed.Remove(display);
+		}
+	}
+
+	// Leaving a game: everything still there gets its canvases back (pooled icons and lines outlive the game).
+	internal static void RestoreAll()
+	{
+		foreach (Canvas canvas in Off)
+		{
+			if (canvas != null)
+			{
+				canvas.enabled = true;
+			}
+		}
+		Off.Clear();
+		Dimmed.Clear();
 	}
 
 	// The hidden content object itself is switched off (Unity 6 port): see-through, it still cost every frame. Its
@@ -199,38 +250,30 @@ internal static class FrameSaversOverheadPatch
 
 	// The canvases nested in a hidden icon (its content's, each line's arrow; three a stockpile icon, some 600 in a big
 	// base) are switched off too: what they hold then belongs to the icon's own canvas, which draws nothing while the
-	// content is see-through. They are switched on again, as they were, when it shows.
+	// content is see-through. They are switched on again when it shows.
 	private static void SwitchNested(OverheadDisplay display, bool value)
 	{
 		if (value)
 		{
-			if (Off.TryGetValue(display, out List<Canvas> off))
+			if (Dimmed.Remove(display))
 			{
-				foreach (Canvas canvas in off)
-				{
-					if (canvas != null)
-					{
-						canvas.enabled = true;
-					}
-				}
-				Off.Remove(display);
+				Restore(display.transform);
 			}
 			return;
 		}
-		foreach (Canvas canvas in display.GetComponentsInChildren<Canvas>(true))
+		Found.Clear();
+		display.GetComponentsInChildren(true, Found);
+		foreach (Canvas canvas in Found)
 		{
 			if (canvas == display.MainCanvas || !canvas.enabled)
 			{
 				continue;
 			}
-			if (!Off.TryGetValue(display, out List<Canvas> off))
-			{
-				off = new List<Canvas>();
-				Off[display] = off;
-			}
 			canvas.enabled = false;
-			off.Add(canvas);
+			Off.Add(canvas);
+			Dimmed.Add(display);
 		}
+		Found.Clear();
 	}
 
 	// Only a canvas that holds nothing but the hidden part: the content itself or inside it, or the canvas the
@@ -248,6 +291,27 @@ internal static class FrameSaversOverheadPatch
 		if (inside || holdsOnlyContent)
 		{
 			canvas.enabled = value;
+		}
+	}
+}
+
+// An icon or one of its lines given back to the pool gets the canvases back that FrameSaversOverheadPatch switched
+// off while it was hidden; the pool hands it out again as it is.
+[Feature(Features.FrameSavers, Features.FrameSaversInfo)]
+[HarmonyPatch(typeof(ObjectPoolSingleton), nameof(ObjectPoolSingleton.Release), typeof(FactoryImprint))]
+internal static class FrameSaversOverheadReleasePatch
+{
+	private static void Prefix(FactoryImprint imprint)
+	{
+		if (FrameSaversOverheadPatch.Off.Count == 0 || imprint == null)
+		{
+			return;
+		}
+		GameObject go = imprint.gameObject;
+		if (go.GetComponent<Overhead>() != null || go.GetComponent<OverheadDisplay>() != null)
+		{
+			FrameSaversOverheadPatch.Restore(go.transform);
+			FrameSaversOverheadPatch.Released(go.GetComponent<OverheadDisplay>());
 		}
 	}
 }

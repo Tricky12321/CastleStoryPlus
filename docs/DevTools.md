@@ -52,7 +52,9 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `POST /api/net/host?port=&name=` | Hosts a multiplayer game from the title screen, as the host button does (the lobby opens and picks an official map) |
 | `POST /api/net/relations?value=allied\|neutral\|enemy` | Host: how the players' factions stand to each other in a game in progress (the game mode's rule); rebuilds who is sent what |
 | `POST /api/net/join?address=&port=&name=` | Joins by address, as the custom server window's join does |
-| `POST /api/net/ready?value=`, `POST /api/net/start`, `POST /api/net/leave` | The lobby's ready, the host's start, leaving |
+| `POST /api/net/ready?value=`, `POST /api/net/start?button=`, `POST /api/net/leave` | The lobby's ready, the host's start (`button=true`: as the start button does, the loading screen on every player first, then the host's ready), leaving |
+| `POST /api/net/name?value=`, `GET`/`POST /api/net/nameedit?text=` | Renames this player as Enter in the lobby's name box does; the name box (shown, focused, text), and typing into it without Enter |
+| `GET`/`POST /api/net/chat?text=` | The chat box of a game (text, open, shown); sends a chat message |
 | `POST /api/net/lan` | Looks for games hosted on the LAN, as the LAN list does |
 | `POST /api/net/online`, `POST /api/net/joinlobby?lobby=&name=` | Asks Steam for the online list's games (`onlineGames` in `GET /api/net`, which also shows `steam`: running, user, lobby); joins one by its lobby id as a click and join do |
 | `GET /api/vision?path=&max=` | Fog of war per object: visible for the local faction and why (always visible, owned, allied, `factionsSeeing`, `carrierVisible` for what something carries), `hostVisibility`, renderers on, `trackedBy` |
