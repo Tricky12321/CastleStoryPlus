@@ -18,6 +18,10 @@ namespace CastleStoryPlus.WorkerAI;
 // is shut in. The cheapest way out is then looked for: a walk of steps at most one block up or down, on solid ground,
 // through terrain only, to the nearest place of the faction's route map (ReachMap) outside the pocket. The worker
 // digs it block by block, without drops (it is stone in the way, not work). Host only; nothing is saved.
+// A worker shut in is seldom idle at the moment of a check (#62): the idle task's walks and sits, and tasks it tries
+// and fails on in its pocket, keep a task on it nearly all the time, and an escape waited for it to be free between
+// two blocks until it ran out of time. A busy worker is now found as well (still shut in at the same place over
+// BusySeconds), and an escaping worker's other tasks are broken off so it digs on.
 [Feature(Features.StuckEscape, Features.StuckEscapeInfo)]
 internal class StuckEscape : MonoBehaviour
 {
@@ -37,6 +41,13 @@ internal class StuckEscape : MonoBehaviour
 	// A SmartTransfer order that has left its worker standing idle for this long is stuck: a stockpile it cannot
 	// step up to leaves the task waiting for ever (the game has no timeout for a current task).
 	private const float StuckTransferSeconds = 10f;
+
+	// A worker with a task counts as shut in once it has been in the same pocket this long (its task may yet take it
+	// out: a dig opening the pocket).
+	private const float BusySeconds = 20f;
+
+	// How often an escaping worker's other task is broken off at most.
+	private const float AbortSeconds = 2f;
 
 	private static readonly XYZ[] Sides = { new XYZ(1, 0, 0), new XYZ(-1, 0, 0), new XYZ(0, 0, 1), new XYZ(0, 0, -1) };
 
@@ -61,6 +72,8 @@ internal class StuckEscape : MonoBehaviour
 		public DigGoal Goal;
 
 		public float Until;
+
+		public float LastAbort;
 	}
 
 	private readonly Dictionary<Labor, Escape> _escapes = new Dictionary<Labor, Escape>();
@@ -69,6 +82,9 @@ internal class StuckEscape : MonoBehaviour
 	// something digging does not open (stockpiles all round): it is not sent to dig again there, or it would eat away
 	// the terrain round it for ever.
 	private readonly Dictionary<Labor, XYZ> _triedFrom = new Dictionary<Labor, XYZ>();
+
+	// Busy workers found shut in: where, and since when.
+	private readonly Dictionary<Labor, KeyValuePair<XYZ, float>> _busyShutIn = new Dictionary<Labor, KeyValuePair<XYZ, float>>();
 
 	private float _nextCheck;
 
@@ -88,6 +104,7 @@ internal class StuckEscape : MonoBehaviour
 				_escapes.Clear();
 			}
 			_triedFrom.Clear();
+			_busyShutIn.Clear();
 			return;
 		}
 		Advance();
@@ -108,8 +125,9 @@ internal class StuckEscape : MonoBehaviour
 		}
 		foreach (Labor labor in Live<Labor>.Active())
 		{
-			if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI || _escapes.ContainsKey(labor) || !labor.IsAvailable() || labor.CurrentTask != null)
+			if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI || _escapes.ContainsKey(labor) || labor.IsPhasedOut || labor.Activity == Activity.Fighting)
 			{
+				_busyShutIn.Remove(labor);
 				continue;
 			}
 			try
@@ -137,9 +155,23 @@ internal class StuckEscape : MonoBehaviour
 		HashSet<XYZ> pocket = Pocket(labor, node);
 		if (pocket == null)
 		{
+			_busyShutIn.Remove(labor);
 			return;
 		}
 		XYZ start = node.RepresentativePosition;
+		bool busy = !labor.IsAvailable() || labor.CurrentTask != null;
+		if (busy)
+		{
+			if (!_busyShutIn.TryGetValue(labor, out KeyValuePair<XYZ, float> since) || since.Key != start)
+			{
+				_busyShutIn[labor] = new KeyValuePair<XYZ, float>(start, Time.time);
+				return;
+			}
+			if (Time.time - since.Value < BusySeconds)
+			{
+				return;
+			}
+		}
 		if (_triedFrom.TryGetValue(labor, out XYZ tried))
 		{
 			if (tried == start)
@@ -154,10 +186,11 @@ internal class StuckEscape : MonoBehaviour
 			// Nothing to dig: an open way the route graph does not have is no way out by digging.
 			return;
 		}
+		_busyShutIn.Remove(labor);
 		Escape escape = new Escape { Labor = labor, Start = start, Until = Time.time + EscapeSeconds };
 		escape.Blocks.AddRange(blocks);
 		_escapes[labor] = escape;
-		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " is shut in at " + start + " (" + pocket.Count + " places), digging " + blocks.Count + " blocks out to " + exit);
+		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " is shut in at " + start + " (" + pocket.Count + " places" + (busy ? ", busy with '" + Describe(labor) + "'" : string.Empty) + "), digging " + blocks.Count + " blocks out to " + exit);
 	}
 
 	// SmartTransfer orders that have left their worker standing still for too long: the game's stockpile order has
@@ -392,7 +425,8 @@ internal class StuckEscape : MonoBehaviour
 			Escape escape = _escapes[labor];
 			Finish(escape);
 			_escapes.Remove(labor);
-			if (!labor.IsNullOrReleased())
+			// Only an escape that dug its whole way: one given up (the worker was kept from it) is tried again.
+			if (!labor.IsNullOrReleased() && escape.Next >= escape.Blocks.Count)
 			{
 				_triedFrom[labor] = escape.Start;
 			}
@@ -405,11 +439,19 @@ internal class StuckEscape : MonoBehaviour
 				(gone ?? (gone = new List<Labor>())).Add(labor);
 			}
 		}
+		foreach (Labor labor in _busyShutIn.Keys)
+		{
+			if (labor.IsNullOrReleased())
+			{
+				(gone ?? (gone = new List<Labor>())).Add(labor);
+			}
+		}
 		if (gone != null)
 		{
 			foreach (Labor labor in gone)
 			{
 				_triedFrom.Remove(labor);
+				_busyShutIn.Remove(labor);
 			}
 		}
 	}
@@ -423,10 +465,14 @@ internal class StuckEscape : MonoBehaviour
 		}
 		if (escape.Goal != null && !escape.Goal.IsNullOrReleased() && !Voxel.IsEmpty(escape.Goal.voxel.position))
 		{
-			// Still digging it; a worker that dropped the task gets it again.
+			// Still digging it; a worker that dropped the task gets it again, one busy with another breaks it off.
 			if (escape.Labor.IsAvailable() && escape.Labor.CurrentTask == null)
 			{
 				Send(escape.Labor, escape.Goal);
+			}
+			else
+			{
+				BreakOff(escape);
 			}
 			return false;
 		}
@@ -441,6 +487,7 @@ internal class StuckEscape : MonoBehaviour
 		}
 		if (!escape.Labor.IsAvailable() || escape.Labor.CurrentTask != null)
 		{
+			BreakOff(escape);
 			return false;
 		}
 		XYZ block = escape.Blocks[escape.Next];
@@ -454,6 +501,30 @@ internal class StuckEscape : MonoBehaviour
 		escape.Goal = goal;
 		Send(escape.Labor, goal);
 		return false;
+	}
+
+	// The escaping worker's task, when it is not the escape's own dig: broken off (at most every AbortSeconds), so the
+	// worker is free for the next block. A task in the pocket leads nowhere anyway.
+	private static void BreakOff(Escape escape)
+	{
+		Labor labor = escape.Labor;
+		Task task = labor.CurrentTask;
+		if (task == null || Time.time - escape.LastAbort < AbortSeconds)
+		{
+			return;
+		}
+		if (escape.Goal != null && !escape.Goal.IsNullOrReleased() && task.Target == escape.Goal.gameObject)
+		{
+			return;
+		}
+		escape.LastAbort = Time.time;
+		labor.AbortWorkSignal.Invoke(TaskResult.ReceivedNewInstruction);
+	}
+
+	private static string Describe(Labor labor)
+	{
+		Task task = labor.CurrentTask ?? labor.PendingTask;
+		return (task != null) ? task.Description : "waiting";
 	}
 
 	private static void Send(Labor labor, Goal goal)

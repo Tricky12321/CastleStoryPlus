@@ -297,7 +297,8 @@ internal static class RangedRepositionPatch
 		{
 			return true;
 		}
-		if (___labor.faction == null || ___labor.faction.isAI)
+		// A guard (RangedGuard) does not leave its place for a clear shot.
+		if (___labor.faction == null || ___labor.faction.isAI || Army.RangedGuard.IsGuarding(___labor))
 		{
 			return true;
 		}

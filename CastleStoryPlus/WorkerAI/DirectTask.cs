@@ -52,12 +52,30 @@ internal static class DirectTask
 		}
 		if (project != null)
 		{
+			JoinCrew(labor, project);
 			goal.ConnectProject(project);
 		}
 		TaskReservation.Reserve(goal, labor);
 		goal.Instruction.Send(labor, goal.gameObject, Labor.DecisionSource.Project);
 		Plugin.Log.LogInfo("Direct task: " + labor.gameObject.name + " -> " + goal.GetType().Name + " at " + goal.voxel.position);
 		return true;
+	}
+
+	// As the game's assign (UNetProjectCmd.CmdChangeProject): a full crew takes one more.
+	private static void JoinCrew(Labor labor, Project project)
+	{
+		if (project is IdleProject || project is RaidProject2)
+		{
+			return;
+		}
+		if (labor.Project != project && project.IsFull())
+		{
+			project.MaximumCrewSize++;
+		}
+		if (project.Hire(labor))
+		{
+			labor.Autonomy = AutonomyStatus.LockedToOperable;
+		}
 	}
 
 	private static Goal FindGoal(Labor labor, object target, out Project project, out Vector3 point)
@@ -105,12 +123,14 @@ internal static class DirectTask
 			AllGoals(candidate, Goals);
 			foreach (Goal goal in Goals)
 			{
-				if (!Usable(goal, labor) || goal is BuildGoal)
+				// A tree's or boulder's goal belongs to no player (Neutral); the area holding it is the player's.
+				if (!Usable(goal, labor, ownArea: true) || goal is BuildGoal)
 				{
 					continue;
 				}
 				XYZ at = goal.voxel.position;
-				if (at == voxel || (natureGoal.HasValue && at == natureGoal.Value))
+				// A tree's goal stands at the tree's voxel.
+				if (at == voxel || XYZ.FromVector3(goal.transform.position) == voxel || (natureGoal.HasValue && at == natureGoal.Value))
 				{
 					project = candidate;
 					return goal;
@@ -133,7 +153,7 @@ internal static class DirectTask
 		float bestDistance = SpreadRadius * SpreadRadius;
 		foreach (Goal goal in Goals)
 		{
-			if (goal == clicked || goal.GetType() != clicked.GetType() || !Usable(goal, labor) || IsTaken(goal, labor))
+			if (goal == clicked || goal.GetType() != clicked.GetType() || !Usable(goal, labor, ownArea: true) || IsTaken(goal, labor))
 			{
 				continue;
 			}
@@ -152,9 +172,9 @@ internal static class DirectTask
 		return goal.HasOtherWorkerAssigned(labor) || TaskReservation.OtherReservations(goal, labor) > 0;
 	}
 
-	private static bool Usable(Goal goal, Labor labor)
+	private static bool Usable(Goal goal, Labor labor, bool ownArea = false)
 	{
-		return !goal.IsNullOrReleased() && goal.IsValid() && (goal.faction == null || goal.faction == labor.faction);
+		return !goal.IsNullOrReleased() && goal.IsValid() && (ownArea || goal.faction == null || goal.faction == labor.faction);
 	}
 
 	private static Project FindProject(Labor labor, Goal wanted)

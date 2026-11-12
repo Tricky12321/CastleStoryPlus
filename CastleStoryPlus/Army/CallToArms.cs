@@ -162,7 +162,7 @@ internal static class CallToArms
 				{
 					Send(builder, crystal, NoKit);
 				}
-				else if (hasRally)
+				else if (hasRally || SoldierPosts.Has(builder))
 				{
 					free--;
 					Send(builder, crystal, AnyKit);
@@ -350,6 +350,13 @@ internal static class CallToArms
 	{
 		foreach (Labor soldier in soldiers)
 		{
+			// A unit with a post of its own (SoldierPosts) goes there instead of to its class's rally point.
+			if (SoldierPosts.TryGet(soldier, out Vector3 post))
+			{
+				soldier.AssignToIdle();
+				User.LocalUser.GetComponent<UNetProjectCmd>().CallCmdAddMoveToGoal(soldier.gameObject, post, drop: false, queued: false);
+				continue;
+			}
 			bool ranged = soldier.Occupation.CurrentOccupation == Occupation.Type.Archer;
 			if (ranged ? !CallToArmsSettings.HasRanged : !CallToArmsSettings.HasMelee)
 			{
@@ -374,6 +381,11 @@ internal static class CallToArms
 	private static Node RallyNode(Labor labor, Orders orders)
 	{
 		Occupation.Type type = labor.Occupation.CurrentOccupation;
+		// Armed, with a post of its own (SoldierPosts): there, instead of the class's rally point.
+		if (type != Occupation.Type.Builder && SoldierPosts.TryGet(labor, out Vector3 post))
+		{
+			return labor.RunToward(Location.Of(post), precise: true, aggressive: false);
+		}
 		if (type == Occupation.Type.Archer && orders.HasRanged)
 		{
 			return labor.RunToward(Location.Of(orders.Ranged), precise: true, aggressive: false);

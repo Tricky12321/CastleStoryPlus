@@ -122,7 +122,7 @@ internal static class BaseJobs
 		return dx * dx + dz * dz <= beacon.radius * beacon.radius;
 	}
 
-	private static Project Find(Faction faction, bool cleanup)
+	internal static Project Find(Faction faction, bool cleanup)
 	{
 		List<IOperable<Labor>> projects = new List<IOperable<Labor>>();
 		ProjectDatabase.For(faction).Projects().AddTo(projects);

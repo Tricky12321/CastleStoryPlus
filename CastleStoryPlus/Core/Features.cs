@@ -25,11 +25,11 @@ internal static class Features
 
 	public const string WorkerAI = "WorkerAI";
 
-	public const string WorkerAIInfo = "Workers start work on their own, help other task groups when theirs is done, react faster, and only dig, harvest or clean up what they can store all of.";
+	public const string WorkerAIInfo = "Workers start work on their own, help other task groups when theirs is done, react faster, only dig, harvest or clean up what they can store all of, and pick the log, tree or loose item to go for by the walk to it, not the straight line; a quarry keeps its stair steps (never dug away) and a step's task is no longer thrown away and remade while a worker walks to it.";
 
 	public const string BuildJobs = "BuildJobs";
 
-	public const string BuildJobsInfo = "No duplicate build jobs; a worker takes as much material as it can carry for a blueprint and the blueprints near it, and delivers to them on one trip; builders also build blueprints that cost nothing (saplings).";
+	public const string BuildJobsInfo = "No duplicate build jobs; a worker takes as much material as it can carry for a blueprint and the blueprints near it, and delivers to them on one trip; builders also build blueprints that cost nothing (saplings); a building of several floors is built floor by floor (no blueprint is taken two or more levels above an unfinished one nearby that the builder could do now).";
 
 	public const string ArcherAccuracy = "ArcherAccuracy";
 
@@ -169,7 +169,7 @@ internal static class Features
 
 	public const string DirectTask = "DirectTask";
 
-	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and stay in their crew.";
+	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and join that task's crew, staying on it until its work is done.";
 
 	public const string PlayerOrdersFirst = "PlayerOrdersFirst";
 
@@ -177,7 +177,7 @@ internal static class Features
 
 	public const string AssignNow = "AssignNow";
 
-	public const string AssignNowInfo = "Bricktrons put on a task (right-click the task with them selected) start on it at once instead of finishing what they do, also when they are in its crew already; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...).";
+	public const string AssignNowInfo = "Bricktrons put on a task (right-click the task with them selected) start on it at once instead of finishing what they do (storing what their bag holds from the old task first), also when they are in its crew already; one that has not started within 4 seconds is reported on screen with the reason (cannot reach it, no storage room, nothing to do, paused...).";
 
 	public const string PickUpAround = "PickUpAround";
 
@@ -231,6 +231,10 @@ internal static class Features
 
 	public const string AutoRepairInfo = "Idle builders repair damaged blocks near the base (home crystal and stockpiles, see [AutoRepair] Radius), without a repair zone. No materials; blocks under attack are left alone. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a green ring around the crystal, shown or hidden with \"Show ranges\" / \"Hide ranges\" on the crystal's context wheel ([BaseRanges] ShowRings).";
 
+	public const string DoorRepair = "DoorRepair";
+
+	public const string DoorRepairInfo = "Damaged doors are repaired like damaged blocks: a repair zone (and the base's repair task) repairs the doors inside it, and with AutoRepair idle builders repair the team's damaged doors near the base.";
+
 	public const string Market = "Market";
 
 	public const string MarketInfo = "Market building (build menu, crafting): trade any resource for any other. Prices rise with trading and recover over time (a trade then asks more for the same lot), with a fee, so trading never makes resources (see [Market]). Coal and steel can be traded too (steel only given). In the C# menu the market keeps goods in stock: up to 20 standing trades (as many as any workshop queues), each with how many to keep and what to pay with. The window lists the trades made before and favourites to choose again with one click. Up to 3 more workers help fetch for the current trade. Workers walk inside.";
@@ -242,6 +246,18 @@ internal static class Features
 	public const string MixedStockpiles = "MixedStockpiles";
 
 	public const string MixedStockpilesInfo = "A stockpile holds several resources at once: each of its four columns holds one resource type.";
+
+	public const string KitReservation = "KitReservation";
+
+	public const string KitReservationInfo = "A bricktron reserves the kit (or the free place for its kit) on the weapon stand it sets out for, so others go to another stand instead of running to the same last kit or place.";
+
+	public const string RangedGuard = "RangedGuard";
+
+	public const string RangedGuardInfo = "\"Guard here\" in the action wheel of ranged soldiers: they stay on the place they stand on and shoot every enemy in range from there, never leaving it for an enemy or a better shot, and walk back to it when pushed off.";
+
+	public const string SoldierPosts = "SoldierPosts";
+
+	public const string SoldierPostsInfo = "A post of its own for each unit: \"Set post\" in the action wheel keeps the place each selected unit stands on, \"Back to post\" sends them there, and a call to arms sends units with a post there instead of to their class's rally point.";
 
 	public const string MixedRacks = "MixedRacks";
 
@@ -387,6 +403,10 @@ internal static class Features
 
 	public const string StuckResetInfo = "Failsafe for a hanging worker: one that has not moved for 10 seconds in a walking task (60 in any other) has its task cancelled and puts down what it carries, then starts afresh ([StuckReset] Seconds, LongSeconds).";
 
+	public const string LoadRelief = "LoadRelief";
+
+	public const string LoadReliefInfo = "Workers do not stand frozen with a load nothing can store: \"store or drop\" stores what has room kind by kind and puts the rest down near the gather point at once; a loaded worker that idles or fails tasks for 20 seconds is sent to do that; a workshop worker whose recipe makes no progress for 90 seconds starts afresh ([LoadRelief] Seconds, RecipeSeconds, DropWalk).";
+
 	public const string QuickNextTask = "QuickNextTask";
 
 	public const string QuickNextTaskInfo = "Workers go on to their next task sooner: the wait after a task is 2 AI ticks instead of 10, after a failed one 10 instead of 30 ([QuickNextTask] TicksAfterTask, TicksAfterFailure).";
@@ -489,7 +509,7 @@ internal static class Features
 
 	public const string StuckEscape = "StuckEscape";
 
-	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
+	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes, also while it keeps trying tasks it cannot reach from there: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
 
 	public const string Treasure = "Treasure";
 
@@ -541,7 +561,15 @@ internal static class Features
 
 	public const string MenuTextFields = "MenuTextFields";
 
-	public const string MenuTextFieldsInfo = "Unity 6 port: text boxes in the game's menus (the lobby's player name, ...) take what was typed on Enter or when left; the port's menus had lost that link, so the name could not be changed.";
+	public const string MenuTextFieldsInfo = "Unity 6 port: text boxes in the game's menus (the lobby's player name, ...) take what was typed on Enter or when left; the port's menus had lost that link, so the name could not be changed. What a player is typing in the lobby's name box is kept when the player list changes (another player's name, faction or team), so several players can rename themselves at once.";
+
+	public const string LobbyStart = "LobbyStart";
+
+	public const string LobbyStartInfo = "Unity 6 port, multiplayer: once the host has pressed start, a client's \"not ready\" (pressed as the loading screen came up) is kept ready, the lobby's \"everyone not ready\" waits, a player joining in that moment is turned away and one leaving no longer holds up the others; host and clients sat at 0 % loaded for good before.";
+
+	public const string GameChat = "GameChat";
+
+	public const string GameChatInfo = "Multiplayer: chat messages in a game go away after [Multiplayer] ChatFadeSeconds (12; 0: they stay) and show again while the chat is open for typing; [Multiplayer] Chat = false switches the chat box in a game off (the lobby's chat stays).";
 
 	public const string DesyncProtection = "DesyncProtection";
 
