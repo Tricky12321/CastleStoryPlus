@@ -18,7 +18,7 @@ internal static class TestEndpoints
 		});
 		routes.Add(new Route("POST", "/api/tests/run", "Starts a run of the matching tests (answers at once; follow it with /api/tests/results)", Run)
 		{
-			Parameters = "filter (part of a test name or category; empty: all), speed (game speed for the run, 0.25-20, back to 1x when it ends; single player/host only), parallel (tests at the same time, 1-8, default 1: those of [ParallelTests] classes, one per group; the others alone), clearUnits (true: take the world's own units, the player's bricktrons and roaming enemies, away first and keep the base's repair and cleanup tasks without crew during the run)"
+			Parameters = "filter (part of a test name or category; empty: all), names (instead of filter: full test names, Class.Method, comma-separated; to split a run over several players), speed (game speed for the run, 0.25-20, back to 1x when it ends; single player/host only), parallel (tests at the same time, 1-8, default 1: those of [ParallelTests] classes, one per group; the others alone), clearUnits (true: take the world's own units, the player's bricktrons and roaming enemies, away first and keep the base's repair and cleanup tasks without crew during the run)"
 		});
 		routes.Add(new Route("GET", "/api/tests/results", "The current or last run: progress and each test's outcome, message, log and recorded values", Results)
 		{
@@ -39,7 +39,26 @@ internal static class TestEndpoints
 
 	private static object Run(ApiRequest request)
 	{
-		List<TestRunner.TestInfo> tests = TestRunner.Matching(request.String("filter", null));
+		List<TestRunner.TestInfo> tests;
+		string names = request.String("names", null);
+		if (!string.IsNullOrEmpty(names))
+		{
+			tests = new List<TestRunner.TestInfo>();
+			foreach (string part in names.Split(','))
+			{
+				string name = part.Trim();
+				TestRunner.TestInfo test = TestRunner.Tests.Find((TestRunner.TestInfo info) => info.Name == name);
+				if (test == null)
+				{
+					throw new ApiException(404, "No test named '" + name + "'");
+				}
+				tests.Add(test);
+			}
+		}
+		else
+		{
+			tests = TestRunner.Matching(request.String("filter", null));
+		}
 		if (tests.Count == 0)
 		{
 			throw new ApiException(404, "No test matches '" + request.String("filter", string.Empty) + "'");

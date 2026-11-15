@@ -86,6 +86,11 @@ internal class TestRunner : MonoBehaviour
 	// (t.Seconds) count game time, their timeouts real time, so a faster game finishes them sooner.
 	private float _speed = 1f;
 
+	// The most game time one frame may advance during a fast run: the game's per-frame logic (the AI's timers, walks,
+	// work steps) behaves the same at 10x as at 1x only while each frame is a small step. When the frame rate cannot
+	// keep up, the game runs slower than the asked speed instead (the tests count game time).
+	private const float MaxFrameSeconds = 0.25f;
+
 	// How many tests may run at the same time (1: one after the other).
 	private int _parallel = 1;
 
@@ -193,7 +198,7 @@ internal class TestRunner : MonoBehaviour
 		bool fast = _speed != 1f && GameSpeed.InGame() && !Neo.multiplayer;
 		if (fast)
 		{
-			GameSpeed.Instance.Set(_speed, 0f);
+			GameSpeed.Instance.Set(_speed, 0f, MaxFrameSeconds);
 		}
 		bool quieted = false;
 		if (_clearUnits && InHostGame())
@@ -203,7 +208,7 @@ internal class TestRunner : MonoBehaviour
 			quieted = true;
 			// The world a few seconds without them before the first test.
 			yield return new WaitForSeconds(3f);
-			// A builder of the run's own on open ground far from the tests' ground, standing still: the mod's route map
+			// A knight of the run's own on open ground far from the tests' ground, standing still: the mod's route map
 			// of where the player's workers can walk (ReachMap) is flooded from where its workers stand, and without
 			// one on open ground it would hold only the pockets other tests' workers stand in (a pit, a walled ring),
 			// so what a test finds reachable would depend on what ran before it. The tests then start once a map
@@ -230,6 +235,7 @@ internal class TestRunner : MonoBehaviour
 		List<int> deferred = new List<int>();
 		HashSet<string> busyGroups = new HashSet<string>();
 		bool aloneRunning = false;
+		float nextStrayCheck = 0f;
 		while (queue.Count > 0 || running.Count > 0 || deferred.Count > 0)
 		{
 			if (running.Count == 0 && deferred.Count > 0)
@@ -290,6 +296,13 @@ internal class TestRunner : MonoBehaviour
 						deferred.Add(index);
 					}
 				}));
+			}
+			// The home crystal makes bricktrons from the fireflies of killed enemies at any time: taken away again at
+			// once, before they take up chores on a running test's ground.
+			if (_anchored && Time.unscaledTime >= nextStrayCheck)
+			{
+				nextStrayCheck = Time.unscaledTime + 0.25f;
+				Scenario.RemoveStrays();
 			}
 			yield return null;
 		}

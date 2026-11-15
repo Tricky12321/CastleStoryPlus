@@ -463,15 +463,15 @@ internal static class Scenario
 		return at;
 	}
 
-	// The player's bricktrons that are not this test's (the run's own builder, ...) are switched off for the test and
-	// on again by its clean-up: a builder with nothing to do, idle or on a project without work, takes a workshop's
-	// order by itself.
+	// The player's bricktrons that are not this test's are switched off for the test and on again by its clean-up: a
+	// builder with nothing to do, idle or on a project without work, takes a workshop's order by itself. Not the run's
+	// own knight: it waits for orders, and the route map of where the workers can walk is flooded from it.
 	internal static void SidelineOthers(TestContext t)
 	{
 		List<GameObject> others = new List<GameObject>();
 		foreach (Labor labor in Object.FindObjectsOfType<Labor>())
 		{
-			if (labor != null && labor.gameObject.activeInHierarchy && labor.faction == Player && !Contexts.ContainsKey(labor) && Alive(labor))
+			if (labor != null && labor.gameObject.activeInHierarchy && labor.faction == Player && labor.gameObject != _anchor && !Contexts.ContainsKey(labor) && Alive(labor))
 			{
 				labor.AssignToIdle();
 				labor.gameObject.SetActive(false);
@@ -495,8 +495,9 @@ internal static class Scenario
 		});
 	}
 
-	// The run's own builder on open ground (TestRunner): about 70 voxels from the home crystal, out of the way of the
-	// tests round the crystal and short of the plots, waiting for orders. Spawned again when it is gone (killed).
+	// The run's own bricktron on open ground (TestRunner): about 70 voxels from the home crystal, out of the way of the
+	// tests round the crystal and short of the plots, waiting for orders. A knight: a builder, even one waiting for
+	// orders, takes a workshop's order or an idle chore by itself. Spawned again when it is gone (killed).
 	private static GameObject _anchor;
 
 	internal static void EnsureAnchor()
@@ -524,16 +525,16 @@ internal static class Scenario
 					{
 						return;
 					}
-					_anchor.GetComponent<Occupation>().SetOccupation(Occupation.Type.Builder, true);
+					_anchor.GetComponent<Occupation>().SetOccupation(Occupation.Type.Knight, true);
 					_anchor.GetComponent<Labor>().Autonomy = AutonomyStatus.WaitForOrders;
-					DevToolsPlugin.Log.LogInfo("Tests: the run's builder at " + at);
+					DevToolsPlugin.Log.LogInfo("Tests: the run's knight at " + at);
 					return;
 				}
 			}
 		}
 	}
 
-	// Units no running test spawned and not the run's builder: ones the game made by itself meanwhile (the home
+	// Units no running test spawned and not the run's knight: ones the game made by itself meanwhile (the home
 	// crystal makes a bricktron from the fireflies of killed enemies), who would take up chores on any test's ground.
 	// Taken away before each test of a run that cleared the world's units. Switched-off ones (SidelineOthers) stay.
 	internal static int RemoveStrays()
@@ -544,7 +545,7 @@ internal static class Scenario
 			if (labor != null && labor.gameObject.activeInHierarchy && labor.gameObject != _anchor && !Contexts.ContainsKey(labor))
 			{
 				DevToolsPlugin.Log.LogInfo("Tests: took away " + labor.name + " (" + ((labor.faction != null) ? labor.faction.name : "no faction") + "), no test's unit");
-				Release(labor.gameObject);
+				Discard(labor.gameObject);
 				removed++;
 			}
 		}
@@ -555,7 +556,7 @@ internal static class Scenario
 	{
 		if (_anchor != null)
 		{
-			Release(_anchor);
+			Discard(_anchor);
 		}
 		_anchor = null;
 	}
@@ -623,7 +624,24 @@ internal static class Scenario
 		{
 			return;
 		}
-		Release(labor.gameObject);
+		Discard(labor.gameObject);
+	}
+
+	// Takes a test's unit out of the game for good: off the network and destroyed, not back into its pool. A unit
+	// taken away alive keeps what the game and the mod remember of it (its post, guard order, targets, raid, ...) on
+	// the pooled object, and the next test's unit of that kind would be the same object with all that still on it.
+	internal static void Discard(GameObject go)
+	{
+		if (go == null || go.IsNullOrReleased())
+		{
+			return;
+		}
+		if (NetworkServer.active && go.GetComponent<NetworkIdentity>() != null)
+		{
+			NetworkServer.UnSpawn(go);
+		}
+		go.SetActive(false);
+		Object.Destroy(go);
 	}
 
 	// The test each spawned unit belongs to.
@@ -885,7 +903,7 @@ internal static class Scenario
 	// ---- buildings
 
 	// A building (stockpile, workshop, ...) at the voxel, finished at once as the last material arriving finishes
-	// it; taken down again by the clean-up.
+	// it; taken down again by the clean-up (destroyed, not pooled: a stockpile or workshop keeps its settings and queue).
 	internal static IEnumerator Building(TestContext t, Factory.AssetKey blueprint, XYZ at, Project project, Action<GameObject> built)
 	{
 		BlueprintPlacer.Result result = null;
@@ -914,7 +932,7 @@ internal static class Scenario
 		{
 			if (made != null && made.activeInHierarchy)
 			{
-				Release(made);
+				Discard(made);
 			}
 		});
 		t.Log(blueprint.Name + " built at " + XYZ.FromVector3(made.transform.position));

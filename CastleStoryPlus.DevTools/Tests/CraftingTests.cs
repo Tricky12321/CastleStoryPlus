@@ -31,6 +31,14 @@ internal static class CraftingTests
 
 	private static int Planks => Scenario.Count(FactoryBlocks.Wood_DoublePlank_AA);
 
+	// What the shop and its worker are doing, for a failed run's log.
+	private static void Note(TestContext t, Shop shop)
+	{
+		Labor worker = shop.Worker;
+		string doing = (worker == null) ? "no worker" : worker.name + " " + worker.Activity + " at " + CastleStoryPlus.DevTools.Pathing.Units.VoxelOf(worker) + ", task " + ((worker.CurrentTask != null) ? worker.CurrentTask.ToString() : "none") + ", bag " + worker.recepteur.ContentString();
+		t.Log(doing + "; queue " + shop.Station.QueueCount + ", operator " + ((shop.Station.Operator != null) ? shop.Station.Operator.name : "none") + ", logs stored " + Scenario.Stored(FactoryBlocks.Wood_DoubleLog_AA) + ", planks " + Planks);
+	}
+
 	[GameTest("Crafting", "A chopping block with a worker and logs in a stockpile: one Planks order makes 3 planks", TimeoutSeconds = 300f)]
 	private static IEnumerator ChoppingBlockMakesPlanks(TestContext t)
 	{
@@ -42,7 +50,7 @@ internal static class CraftingTests
 		t.Record("queued", shop.Station.QueueCount);
 		t.True(shop.Station.QueueCount >= 1, "The Planks order is not in the chopping block's queue");
 		float started = Time.time;
-		yield return t.UntilGame(() => Planks >= planksBefore + CookBook.Planks.QtyCreated, 240f, CookBook.Planks.QtyCreated + " planks to be made");
+		yield return t.UntilGame(() => Planks >= planksBefore + CookBook.Planks.QtyCreated, 240f, CookBook.Planks.QtyCreated + " planks to be made", 30f, () => Note(t, shop));
 		t.Record("gameSeconds", Mathf.Round(Time.time - started));
 		t.Record("planks", Planks - planksBefore);
 		t.Equal(logsBefore - 1, Scenario.Count(FactoryBlocks.Wood_DoubleLog_AA), "Logs left (one used)");
@@ -56,7 +64,7 @@ internal static class CraftingTests
 		int planksBefore = Planks;
 		int logsBefore = Scenario.Count(FactoryBlocks.Wood_DoubleLog_AA);
 		Queue(shop, 2);
-		yield return t.UntilGame(() => Planks >= planksBefore + 2 * CookBook.Planks.QtyCreated, 240f, "6 planks to be made");
+		yield return t.UntilGame(() => Planks >= planksBefore + 2 * CookBook.Planks.QtyCreated, 240f, "6 planks to be made", 30f, () => Note(t, shop));
 		t.Equal(logsBefore - 2, Scenario.Count(FactoryBlocks.Wood_DoubleLog_AA), "Logs left (both used)");
 	}
 
@@ -108,7 +116,7 @@ internal static class CraftingTests
 		Queue(shop, 1);
 		Scenario.ProjectCommands.CmdcraftingLoop(shop.Station.gameObject, true);
 		t.True(shop.Station.craftingLabor.LoopRecipe, "The chopping block does not loop");
-		yield return t.UntilGame(() => Planks >= planksBefore + 2 * CookBook.Planks.QtyCreated, 240f, "6 planks from the looping order");
+		yield return t.UntilGame(() => Planks >= planksBefore + 2 * CookBook.Planks.QtyCreated, 240f, "6 planks from the looping order", 30f, () => Note(t, shop));
 	}
 
 	[GameTest("Crafting", "An idle builder takes a chopping block's Planks order by itself (no worker assigned) and makes the planks", TimeoutSeconds = 300f)]
