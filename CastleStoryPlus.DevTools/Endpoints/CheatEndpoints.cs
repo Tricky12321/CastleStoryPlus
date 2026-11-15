@@ -40,7 +40,7 @@ internal static class CheatEndpoints
 		});
 		routes.Add(new Route("POST", "/api/cheat/enemies", "Cheat: spawns enemies of the enemy faction, by default as a new raid that attacks the player's home crystal", Enemies)
 		{
-			Parameters = "type (corruptron, biftron, minitron, crawler, magitron or healtron; default corruptron), count (default 1, at most 50), at (x,y,z; default on the ground about 20 voxels from the home crystal), level (CharacterLevel 1-10, default 1), raid (default true: hired into a new raid project aimed at the home crystal as an invasion wave is; false: left to their instinct)"
+			Parameters = "type (corruptron, biftron, minitron, crawler, magitron or healtron; default corruptron), count (default 1, at most 50), at (x,y,z; default on the ground about 20 voxels from the home crystal), level (CharacterLevel 1-10, default 1), raid (default true: hired into a new raid project aimed at the home crystal as an invasion wave is; false: left to their instinct), wave (the raid's wave number, as the invasion script gives its waves; default none)"
 		});
 	}
 
@@ -248,6 +248,12 @@ internal static class CheatEndpoints
 		RaidProject raid = (request.Bool("raid", true) && units.Count > 0) ? NewRaid(enemy, home) : null;
 		if (raid != null)
 		{
+			// As the invasion script numbers its waves (raid.waveNumber), so the scoreboard counts it as that wave.
+			int wave = request.Int("wave", 0);
+			if (wave > 0 && raid.data != null)
+			{
+				raid.data.NetworkWaveNumber = wave;
+			}
 			foreach (Labor labor in units)
 			{
 				Hire(raid, labor);
