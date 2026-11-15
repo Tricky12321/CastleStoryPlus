@@ -384,7 +384,8 @@ internal static class TaskTests
 			bool unmapped = false;
 			bool match = goal.IsMatchFor(labor, errors, ref time, ref unmapped);
 			string why = match ? "match" : ((errors.GetMostImportantError(labor) != null) ? errors.GetMostImportantError(labor).ToString() : "no");
-			result.Add(XYZ.FromVector3(goal.transform.position) + ": " + why + ", reach " + Knowledge.Instance.CanReach(labor, goal) + ", valid " + goal.IsValid() + ", other worker " + goal.HasOtherWorkerAssigned(labor) + ", could store " + goal.CouldStore(labor) + ", bag full " + labor.recepteur.IsFull() + ", breaks voxels " + labor.Occupation.Profession.CanBreakVoxels());
+			Factory.AssetKey resource = Voxel.GetBlockInfo(goal.voxel.position).ResourceKey;
+			result.Add(XYZ.FromVector3(goal.transform.position) + ": " + why + ", gives " + ((resource != null) ? resource.Name : "nothing") + ", reach " + Knowledge.Instance.CanReach(labor, goal) + ", valid " + goal.IsValid() + ", other worker " + goal.HasOtherWorkerAssigned(labor) + ", could store " + goal.CouldStore(labor) + ", bag full " + labor.recepteur.IsFull() + ", breaks voxels " + labor.Occupation.Profession.CanBreakVoxels());
 			if (result.Count >= 10)
 			{
 				break;

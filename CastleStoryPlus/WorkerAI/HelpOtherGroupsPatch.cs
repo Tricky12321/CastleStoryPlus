@@ -14,6 +14,11 @@ namespace CastleStoryPlus.WorkerAI;
 // A worker the player has just put on a task does not help elsewhere while it is starting on it (AssignNow's few
 // seconds): a new task's goals are often turned down for a moment while their routes are looked up, and the worker
 // went straight back to its old task (and joined its crew) instead of switching (issues #42, #75).
+// Nor while it is on a task of its own group (walking to the tree it fells, say): the game looks for better work during
+// such a task, its own group then offers nothing more (its goal is taken, by the worker itself), and the worker was
+// hired into another group with work of a higher priority next to it. "Nothing to do" means no goal left in the group
+// at all (AssignedWork.HasWork), not just none free for this worker at the moment: a full crew on a big quarry drifted
+// off to other groups one by one while the quarry still had blocks to dig (issue #86).
 [Feature(Features.WorkerAI, Features.WorkerAIInfo)]
 [HarmonyPatch(typeof(Labor), nameof(Labor.RefreshAvailableProjects))]
 internal static class HelpOtherGroupsPatch
@@ -28,7 +33,7 @@ internal static class HelpOtherGroupsPatch
 
 	internal static bool CanHelpOtherProjects(Labor labor)
 	{
-		return labor.Autonomy == AutonomyStatus.LockedToOperable && labor.Operable == null && labor.Project != null && !(labor.Project is IdleProject) && !(labor.Project is RaidProject2) && !AssignNow.IsStarting(labor);
+		return labor.Autonomy == AutonomyStatus.LockedToOperable && labor.Operable == null && labor.Project != null && !(labor.Project is IdleProject) && !(labor.Project is RaidProject2) && !AssignNow.IsStarting(labor) && !AssignNow.WorksOn(labor, labor.Project) && !AssignedWork.HasWork(labor.Project);
 	}
 
 	private static bool Prefix(Labor __instance, List<IOperable<Labor>> projects)

@@ -313,7 +313,7 @@ internal static class AutoRepairPatch
 {
 	private static bool Prefix(IdleProject __instance, Labor labor, Var<OrderPackage<Labor>> result, bool __runOriginal)
 	{
-		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
+		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor) || !AssignedWork.IdleChoresFor(labor))
 		{
 			return __runOriginal;
 		}

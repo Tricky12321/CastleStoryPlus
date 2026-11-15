@@ -292,7 +292,7 @@ internal sealed class AssignNow : MonoBehaviour
 		return true;
 	}
 
-	private static bool WorksOn(Labor labor, Project project)
+	internal static bool WorksOn(Labor labor, Project project)
 	{
 		return From(labor.CurrentTask, project) || From(labor.PendingTask, project);
 	}

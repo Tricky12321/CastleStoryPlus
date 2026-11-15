@@ -19,7 +19,7 @@ internal static class StockpileConsolidationPatch
 		{
 			return false;
 		}
-		if (!labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
+		if (!labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor) || !AssignedWork.IdleChoresFor(labor))
 		{
 			return true;
 		}

@@ -168,6 +168,91 @@ internal static class WorkerOrderTests
 		t.Record("felled", Felled(treesAtStart));
 	}
 
+	[GameTest("Tasks", "Eight builders put on a big quarry stay on it while it has blocks left: none walks off to the gather point or to another quarry of higher priority next to it (#86)", TimeoutSeconds = 300f)]
+	private static IEnumerator FullCrewStaysOnBigQuarry(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 20, 14);
+		Scenario.LeavesMess(t);
+		int top = site.y - 1;
+		// 8 x 8 and 3 deep on the west half, keeping nothing (no storage needed); a small one of higher priority and no
+		// crew on the east half.
+		MineProject quarry = Quarry(t, new Vector3(site.x - 9, top - 2, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
+		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		MineProject other = Quarry(t, new Vector3(site.x + 3, top, site.z - 2), new Vector3(site.x + 6, top + 2, site.z + 1));
+		other.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		Scenario.Groupe.CmdRaisePriority(other.gameObject);
+		Scenario.Groupe.CmdRaisePriority(other.gameObject);
+		Labor[] crew = new Labor[8];
+		for (int i = 0; i < crew.Length; i++)
+		{
+			crew[i] = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 9 + i, site.y, site.z - 6));
+		}
+		yield return t.Frames(5);
+		Scenario.Hire(quarry, crew);
+		yield return t.Frames(2);
+		Vector3 middle = new Vector3(site.x - 5.5f, site.y, site.z - 0.5f);
+		float end = Time.time + 90f;
+		float farthest = 0f;
+		yield return t.UntilGame(() =>
+		{
+			foreach (Labor worker in crew)
+			{
+				t.True(worker.Project == quarry, worker.name + " left the quarry's crew: " + Describe(worker));
+				t.True(TaskProject(worker) != other, worker.name + " works in the other quarry: " + Describe(worker));
+				Vector3 at = worker.transform.position;
+				float away = new Vector2(at.x - middle.x, at.z - middle.z).magnitude;
+				farthest = Mathf.Max(farthest, away);
+				// The gather point (the home crystal) is a plot or more away; 20 leaves room for a step aside round the quarry.
+				t.AtMost(20f, away, worker.name + "'s distance from the quarry's middle (" + Describe(worker) + ")");
+			}
+			return Time.time >= end;
+		}, 100f, "90 game seconds of digging", 30f, () => t.Log("quarry " + ProjectEndpoints.Describe(quarry)));
+		t.Record("farthest", Mathf.Round(farthest * 10f) / 10f);
+	}
+
+	[GameTest("Tasks", "A builder put on a quarry with blocks left does not go after loose logs by a stockpile next to it (#81)", TimeoutSeconds = 240f)]
+	private static IEnumerator AssignedWorkerLeavesLooseLogs(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 14, 8);
+		Scenario.LeavesMess(t);
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
+		// Loose logs within the idle cleanup's reach of the stockpile, and a quarry keeping nothing for two builders.
+		List<GameObject> logs = Scenario.Items(t, Brix.External.Factories.Blocks.Wood_DoubleLog_AA, 4, new XYZ(site.x - 3, site.y, site.z + 3).ToVector3());
+		MineProject quarry = Quarry(t, site);
+		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		Labor a = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 3));
+		Labor b = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x + 1, site.y, site.z - 3));
+		yield return t.Frames(5);
+		Scenario.Hire(quarry, a, b);
+		yield return t.Frames(2);
+		List<Vector3> lying = logs.ConvertAll((GameObject log) => log.transform.position);
+		float end = Time.time + 60f;
+		yield return t.UntilGame(() =>
+		{
+			foreach (Labor worker in new[] { a, b })
+			{
+				t.False(CastleStoryPlus.WorkerAI.AutoCleanup.IsCarrying(worker), worker.name + " went after the loose logs: " + Describe(worker));
+				t.True(worker.Project == quarry, worker.name + " left the quarry: " + Describe(worker));
+			}
+			for (int i = 0; i < logs.Count; i++)
+			{
+				t.True(logs[i] != null && logs[i].activeInHierarchy && Vector3.Distance(logs[i].transform.position, lying[i]) < 2f, "A loose log was picked up or moved (from " + lying[i] + ")");
+			}
+			return Time.time >= end || QuarryDone(quarry);
+		}, 70f, "60 game seconds of digging", 20f, () => t.Log(Describe(a) + "; " + Describe(b)));
+	}
+
+	private static bool QuarryDone(MineProject quarry)
+	{
+		List<Goal> goals = new List<Goal>();
+		foreach (IGoalProvider provider in quarry.GetGoalProviders())
+		{
+			provider?.GetAll(goals);
+		}
+		return goals.Count == 0;
+	}
+
 	// ---- helpers
 
 	// The player's dig order, as the right-click with the secondary action sends it (ContextualActor.SendOrder).
@@ -195,8 +280,13 @@ internal static class WorkerOrderTests
 	private static MineProject Quarry(TestContext t, XYZ site)
 	{
 		int top = site.y - 1;
-		Vector3 min = new Vector3(site.x + 2, top, site.z - 2);
-		Vector3 max = new Vector3(site.x + 5, top + 2, site.z + 1);
+		return Quarry(t, new Vector3(site.x + 2, top, site.z - 2), new Vector3(site.x + 5, top + 2, site.z + 1));
+	}
+
+	// A quarry from min to max (max.y two above the top ground layer), committed.
+	private static MineProject Quarry(TestContext t, Vector3 min, Vector3 max)
+	{
+		int top = (int)max.y - 2;
 		List<XYZ> ground = new List<XYZ>();
 		for (int x = (int)min.x; x <= (int)max.x; x++)
 		{
