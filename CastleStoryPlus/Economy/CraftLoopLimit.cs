@@ -55,8 +55,16 @@ internal static class CraftLoopLimit
 
 	private static readonly Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>> StockCache = new Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>>();
 
+	private static readonly Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>> ComingCache = new Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>>();
+
 	private static void Enable()
 	{
+		GameSession.OnLeave(() =>
+		{
+			Labors.Clear();
+			StockCache.Clear();
+			ComingCache.Clear();
+		});
 		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), SetLimitHash, InvokeSetLimit);
 		LuaInjection.AddFunction("LoopLimit", (ScriptExecutionContext context, CallbackArguments args) => DynValue.NewNumber(Get(Selected())));
 		LuaInjection.AddFunction("LoopLimitOn", (ScriptExecutionContext context, CallbackArguments args) => DynValue.NewBoolean(Get(Selected()) > 0));
@@ -301,18 +309,25 @@ end
 			return "Loop until stock: off. \"+\" keeps this many in stock while the queue loops.";
 		}
 		string text = "Loop until " + limit + " in stock";
-		List<LuaCrafting.LuaRecipe> recipes = GameUi.CraftingCatalog.RecipesOf(CraftingStation.SelectedStation());
-		List<RecipeInfo> infos = (recipes != null && slot < recipes.Count) ? LuaCrafting.ToRecipeInfo(recipes[slot]) : null;
-		Ressource product = (infos != null && infos.Count > 0) ? Product(infos[0]) : null;
+		RecipeInfo recipe = RowRecipe(slot);
+		Ressource product = Product(recipe);
 		if (product != null && state != null)
 		{
-			text += " (" + Stock(Faction.GetFaction(state.gameObject), product, cached: true) + " now)";
+			Faction faction = Faction.GetFaction(state.gameObject);
+			int coming = Coming(faction, product, recipe.Creates, cached: true);
+			text += " (" + Stock(faction, product, cached: true) + " now" + ((coming > 0) ? ", " + coming + " being made or on the way" : string.Empty) + ")";
+		}
+		int batch = Batch(recipe);
+		if (batch > 1)
+		{
+			text += ", in steps of " + batch + " (one order makes " + batch + ")";
 		}
 		return text + ": the recipe waits while there is enough.";
 	}
 
-	// 1 at a time under 10, 5 under 50, then 10 (Shift: ten steps); "+" from off turns it on and the queue's looping
-	// with it, and puts the recipe in the queue when it is not there; "-" at 1 turns it off.
+	// 1 at a time under 10, 5 under 50, then 10 (Shift: ten steps); a recipe that makes several at once (3 planks,
+	// 4 glass) steps by what one order makes. "+" from off turns it on and the queue's looping with it, and puts the
+	// recipe in the queue when it is not there; "-" at the lowest step turns it off.
 	private static bool StepRecipe(int slot, int delta)
 	{
 		CraftingState state = Selected();
@@ -322,9 +337,10 @@ end
 			return false;
 		}
 		int direction = Math.Sign(delta);
+		int batch = Batch(RowRecipe(slot));
 		int own = Raw(state, ids[0]);
 		int raw = (own != 0) ? own : Get(state);
-		int value = Value(raw);
+		int value = RoundUp(Value(raw), batch);
 		if (raw <= 0)
 		{
 			if (direction < 0)
@@ -342,12 +358,12 @@ end
 		{
 			for (int i = 0; i < Math.Abs(delta); i++)
 			{
-				if (direction < 0 && value <= 1)
+				if (direction < 0 && value <= batch)
 				{
 					value = -1;
 					break;
 				}
-				value = Next(value, direction);
+				value = Next(value, direction, batch);
 			}
 			raw = (value < 0) ? -1 : value;
 		}
@@ -388,6 +404,62 @@ end
 	{
 		int step = (direction > 0) ? ((value < 10) ? 1 : ((value < 50) ? 5 : 10)) : ((value <= 10) ? 1 : ((value <= 50) ? 5 : 10));
 		return Mathf.Clamp(value + direction * step, 1, MaxLimit);
+	}
+
+	// The next limit for a recipe that makes batch at once: whole orders only (a limit of 5 planks, 3 at a time, ends
+	// at 6 anyway). A value between steps goes to the next whole order up or down.
+	internal static int Next(int value, int direction, int batch)
+	{
+		if (batch <= 1)
+		{
+			return Next(value, direction);
+		}
+		int top = MaxLimit / batch * batch;
+		int next = (direction > 0) ? (value / batch + 1) * batch : ((value + batch - 1) / batch - 1) * batch;
+		return Mathf.Clamp(next, batch, top);
+	}
+
+	// value up to whole orders of batch.
+	internal static int RoundUp(int value, int batch)
+	{
+		if (batch <= 1 || value <= 0)
+		{
+			return value;
+		}
+		return Mathf.Min((value + batch - 1) / batch * batch, MaxLimit / batch * batch);
+	}
+
+	// What one order of the recipe makes, counted as the stock counts it.
+	internal static int Batch(RecipeInfo recipe)
+	{
+		Ressource product = Product(recipe);
+		if (product == null)
+		{
+			return 1;
+		}
+		return Mathf.Max(1, recipe.QtyCreated * PerItem(recipe.Creates, product));
+	}
+
+	// How much of the product one made item is (1 for the game's recipes).
+	private static int PerItem(Factory.AssetKey creates, Ressource product)
+	{
+		GameObject template = Factory.Peek(creates);
+		IDescriptor descriptor = (template != null) ? template.GetComponent<IDescriptor>() : null;
+		int value = (descriptor != null && descriptor.Description != null) ? descriptor.Description.Value(product) : 0;
+		return (value > 0) ? value : 1;
+	}
+
+	// The first recipe of the selected workshop's recipe row (a kit is several), or null.
+	private static RecipeInfo RowRecipe(int slot)
+	{
+		List<LuaCrafting.LuaRecipe> recipes = GameUi.CraftingCatalog.RecipesOf(CraftingStation.SelectedStation());
+		if (recipes == null || slot >= recipes.Count)
+		{
+			return null;
+		}
+		GameUi.CraftingCatalog.EnsureMapped();
+		List<RecipeInfo> infos = LuaCrafting.ToRecipeInfo(recipes[slot]);
+		return (infos != null && infos.Count > 0) ? infos[0] : null;
 	}
 
 	// " (12 now)" while the limit is on and the queue's product is known.
@@ -505,6 +577,7 @@ end
 			{
 				continue;
 			}
+			Ressource product = Product(queue[i]);
 			if (i > 0)
 			{
 				List<RecipeInfo> waiting = queue.GetRange(0, i);
@@ -512,12 +585,21 @@ end
 				queue.AddRange(waiting);
 				labor.state.SetRecipes(queue);
 			}
+			// The order starts now: the next workshop that asks counts it (another looping workshop making the same
+			// product within the cache's second would otherwise start one too many).
+			if (product != null)
+			{
+				Forget(faction, product);
+			}
 			return true;
 		}
 		return false;
 	}
 
-	// Whether the stock already holds the recipe's limit of what it makes (never while the queue does not loop).
+	// Whether the stock already holds the recipe's limit of what it makes (never while the queue does not loop). What
+	// is being made, or was made and is not stored yet, counts too (Coming): an order runs for a while, its product
+	// waits in the workshop and is then carried to a stockpile, and counting only the stockpiles started more orders
+	// meanwhile, so the stock went past its limit (#82).
 	internal static bool HasEnough(CraftingLabor labor, RecipeInfo recipe, Faction faction)
 	{
 		if (!labor.LoopRecipe)
@@ -526,10 +608,117 @@ end
 		}
 		int limit = LimitFor(labor.state, recipe.id);
 		Ressource product = Product(recipe);
-		return limit > 0 && product != null && Stock(faction, product, cached: true) >= limit;
+		if (limit <= 0 || product == null)
+		{
+			return false;
+		}
+		int stock = Stock(faction, product, cached: true);
+		return stock >= limit || stock + Coming(faction, product, recipe.Creates, cached: true) >= limit;
 	}
 
-	private static Ressource Product(RecipeInfo recipe)
+	// The cached counts of a product (after an order of it started).
+	private static void Forget(Faction faction, Ressource product)
+	{
+		KeyValuePair<Faction, Type> key = new KeyValuePair<Faction, Type>(faction, product.GetType());
+		StockCache.Remove(key);
+		ComingCache.Remove(key);
+	}
+
+	// What the team has of the product outside its stockpiles and tool racks, and what its workshops are making of it:
+	// - made items in a workshop that makes them (waiting to be carried away), in a bricktron's bag or on the ground;
+	//   not in a workshop that does not make it (there it is an ingredient about to be used);
+	// - the order a workshop is working on, and every queued order of a workshop that does not loop (a looping
+	//   workshop asks again before each order).
+	internal static int Coming(Faction faction, Ressource product, Factory.AssetKey creates, bool cached)
+	{
+		KeyValuePair<Faction, Type> key = new KeyValuePair<Faction, Type>(faction, product.GetType());
+		if (cached && ComingCache.TryGetValue(key, out KeyValuePair<float, int> entry) && Time.time - entry.Key < StockCacheSeconds)
+		{
+			return entry.Value;
+		}
+		int count = 0;
+		AutoList list = BrixSingleton<AutoList>.Instance;
+		HashSet<GameObject> items = (list != null && creates != null && !creates.IsEmpty()) ? list.GetInstances(creates) : null;
+		if (items != null)
+		{
+			foreach (GameObject item in items)
+			{
+				if (item == null || Faction.GetFaction(item) != faction || !IsComing(item, creates))
+				{
+					continue;
+				}
+				IDescriptor descriptor = item.GetComponent<IDescriptor>();
+				count += (descriptor != null && descriptor.Description != null) ? Mathf.Max(0, descriptor.Description.Value(product)) : 1;
+			}
+		}
+		Labors.RemoveWhere((CraftingLabor labor) => labor == null);
+		foreach (CraftingLabor labor in Labors)
+		{
+			if (!labor.gameObject.activeInHierarchy || labor.state == null || Faction.GetFaction(labor.gameObject) != faction)
+			{
+				continue;
+			}
+			if (labor.LoopRecipe)
+			{
+				Recipe current = labor.CurrentRecipe;
+				if (current != null && current.Info != null && !current.Finished && current.Creates == creates)
+				{
+					count += Batch(current.Info);
+				}
+				continue;
+			}
+			foreach (RecipeInfo queued in labor.QueuedRecipes)
+			{
+				if (queued != null && queued.Creates == creates)
+				{
+					count += Batch(queued);
+				}
+			}
+		}
+		ComingCache[key] = new KeyValuePair<float, int>(Time.time, count);
+		return count;
+	}
+
+	// An item of the product that is not in a stockpile or tool rack (Stock counts those), nor an ingredient in a
+	// workshop that does not make it.
+	private static bool IsComing(GameObject item, Factory.AssetKey creates)
+	{
+		Transform parent = item.transform.parent;
+		Recepteur holder = (parent != null) ? parent.GetComponentInParent<Recepteur>() : null;
+		if (holder == null)
+		{
+			return item.activeInHierarchy;
+		}
+		// The storage's own object (its recepteur may sit on a part of it).
+		FactoryImprint imprint = holder.GetComponentInParent<FactoryImprint>();
+		if (imprint != null && (imprint.AssetKey == ObjetsDynamiques.Palette || imprint.AssetKey == ObjetsDynamiques.Toolrack || imprint.AssetKey == ObjetsDynamiques.SingleToolrack))
+		{
+			return false;
+		}
+		CraftingLabor workshop = holder.GetComponentInParent<CraftingLabor>();
+		if (workshop == null)
+		{
+			return true;
+		}
+		Recipe current = workshop.CurrentRecipe;
+		if (current != null && current.Creates == creates)
+		{
+			return true;
+		}
+		foreach (RecipeInfo queued in workshop.QueuedRecipes)
+		{
+			if (queued != null && queued.Creates == creates)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// The workshops' crafting (CraftLoopLimitLaborPatch adds each as it starts).
+	internal static readonly HashSet<CraftingLabor> Labors = new HashSet<CraftingLabor>();
+
+	internal static Ressource Product(RecipeInfo recipe)
 	{
 		if (recipe == null || recipe.Creates == null || recipe.Creates.IsEmpty())
 		{
@@ -593,6 +782,17 @@ internal static class CraftLoopLimitQueuePatch
 			aCraftingLabor.instructions.CookPackage(aCraftingLabor.CurrentRecipe).Send(aCraftingLabor);
 		}, __instance);
 		return false;
+	}
+}
+
+// Every workshop's crafting, for CraftLoopLimit.Coming (what the workshops are making).
+[Feature(Features.CraftLoopLimit, Features.CraftLoopLimitInfo)]
+[HarmonyPatch(typeof(CraftingLabor), nameof(CraftingLabor.Initialize))]
+internal static class CraftLoopLimitLaborPatch
+{
+	private static void Postfix(CraftingLabor __instance)
+	{
+		CraftLoopLimit.Labors.Add(__instance);
 	}
 }
 
