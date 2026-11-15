@@ -2,10 +2,12 @@ using System;
 using System.Collections;
 using Brix.Engine;
 using Brix.External.Factories;
+using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
 using CastleStoryPlus.DevTools.Testing;
+using CastleStoryPlus.Economy;
 using UnityEngine;
 using FactoryBlocks = Brix.External.Factories.Blocks;
 using Object = UnityEngine.Object;
@@ -36,7 +38,20 @@ internal static class CraftingTests
 	{
 		Labor worker = shop.Worker;
 		string doing = (worker == null) ? "no worker" : worker.name + " " + worker.Activity + " at " + CastleStoryPlus.DevTools.Pathing.Units.VoxelOf(worker) + ", task " + ((worker.CurrentTask != null) ? worker.CurrentTask.ToString() : "none") + ", bag " + worker.recepteur.ContentString();
-		t.Log(doing + "; queue " + shop.Station.QueueCount + ", operator " + ((shop.Station.Operator != null) ? shop.Station.Operator.name : "none") + ", logs stored " + Scenario.Stored(FactoryBlocks.Wood_DoubleLog_AA) + ", planks " + Planks);
+		Faction faction = Faction.GetFaction(shop.Station.gameObject);
+		RecipeInfo planks = CookBook.Planks;
+		Ressource product = CraftLoopLimit.Product(planks);
+		Recipe current = shop.Station.CurrentRecipe;
+		string station = string.Empty;
+		if (worker != null)
+		{
+			GameObject made = null;
+			bool pickup = shop.Station.inventory != null && shop.Station.inventory.ItemToPickup(out made);
+			GameObject store = (made != null) ? worker.BestRecepteurToStore(made) : null;
+			station = ", station " + shop.Station.recepteur.ContentString() + ", decide " + shop.Station.DecideWhatToDo(worker) + ", work for worker " + shop.Station.HasWorkFor(worker) + ", product to pick up " + pickup + " (store " + ((store != null) ? store.name : "none") + "), pick up and store " + shop.Station.CanPickUpProduction(worker, andStore: true) + ", ingredients " + (current != null && current.HasIngredientsIn(shop.Station.recepteur)) + ", room for product " + (current != null && shop.Station.recepteur.HasRoomFor(current.Creates)) + ", needs work " + shop.Station.NeedsWork(current);
+		}
+		string limit = (product != null) ? ", plank stock " + CraftLoopLimit.Stock(faction, product, cached: false) + " coming " + CraftLoopLimit.Coming(faction, product, planks.Creates, cached: false) : string.Empty;
+		t.Log(doing + "; queue " + shop.Station.QueueCount + ", current " + ((current != null) ? current.Info.id + (current.Finished ? " finished" : string.Empty) : "none") + limit + station + ", operator " + ((shop.Station.Operator != null) ? shop.Station.Operator.name : "none") + ", logs stored " + Scenario.Stored(FactoryBlocks.Wood_DoubleLog_AA) + ", planks " + Planks);
 	}
 
 	[GameTest("Crafting", "A chopping block with a worker and logs in a stockpile: one Planks order makes 3 planks", TimeoutSeconds = 300f)]
@@ -117,6 +132,46 @@ internal static class CraftingTests
 		Scenario.ProjectCommands.CmdcraftingLoop(shop.Station.gameObject, true);
 		t.True(shop.Station.craftingLabor.LoopRecipe, "The chopping block does not loop");
 		yield return t.UntilGame(() => Planks >= planksBefore + 2 * CookBook.Planks.QtyCreated, 240f, "6 planks from the looping order", 30f, () => Note(t, shop));
+	}
+
+	[GameTest("Crafting", "A looping Planks order kept to a stock limit (two orders above what there is) with logs for more stops exactly at the limit and waits: planks being made, in the workshop or carried count, so no order more starts", TimeoutSeconds = 420f)]
+	private static IEnumerator LoopLimitHoldsStock(TestContext t)
+	{
+		Shop shop = null;
+		yield return ChoppingBlock(t, 4, true, made => shop = made);
+		// An empty stockpile for the planks: the one with the logs takes no planks, and a workshop full of planks makes
+		// no more (the planks then count as stock, as the limit counts them).
+		Recepteur planksPile = null;
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(shop.Site.x - 1, shop.Site.y, shop.Site.z + 4), Scenario.BuildProject(t, shop.Site), go => planksPile = go.GetComponent<Recepteur>());
+		t.NotNull(planksPile, "The stockpile for the planks");
+		RecipeInfo planks = CookBook.Planks;
+		int batch = CraftLoopLimit.Batch(planks);
+		t.Equal(planks.QtyCreated, batch, "Planks one order makes (the step of the limit)");
+		t.Equal(2 * batch, CraftLoopLimit.Next(batch, 1, batch), "The limit's step up from one order");
+		t.Equal(batch, CraftLoopLimit.Next(batch + 1, -1, batch), "The limit's step down from between orders");
+		Faction faction = Faction.GetFaction(shop.Station.gameObject);
+		Ressource product = CraftLoopLimit.Product(planks);
+		t.NotNull(product, "The Planks recipe's product");
+		// A new chopping block starts its default looping Planks order at once: that order counts already (Coming).
+		int stockBefore = CraftLoopLimit.Stock(faction, product, cached: false);
+		int have = stockBefore + CraftLoopLimit.Coming(faction, product, planks.Creates, cached: false);
+		int limit = have + 2 * batch;
+		int planksBefore = Planks;
+		t.Record("limit", limit);
+		CraftingState state = shop.Station.state;
+		CraftLoopLimit.Set(state, planks.id, limit);
+		t.Cleanup(() => CraftLoopLimit.SetAll(state, null));
+		Queue(shop, 1);
+		Scenario.ProjectCommands.CmdcraftingLoop(shop.Station.gameObject, true);
+		yield return t.UntilGame(() => CraftLoopLimit.Stock(faction, product, cached: false) >= limit, 300f, "the stock to reach the limit", 30f, () => Note(t, shop));
+		// Long enough for a third order to be made had it started.
+		yield return t.Seconds(90f);
+		Note(t, shop);
+		t.Record("made", Planks - planksBefore);
+		t.Record("stock", CraftLoopLimit.Stock(faction, product, cached: false));
+		t.Equal(limit, CraftLoopLimit.Stock(faction, product, cached: false), "Planks in stock once the limit is reached");
+		t.Equal(planksBefore + limit - stockBefore, Planks, "Planks made once the limit is reached (no order more)");
+		t.True(shop.Station.craftingLabor.LoopRecipe && shop.Station.QueueCount >= 1, "The looping order is still queued, waiting");
 	}
 
 	[GameTest("Crafting", "An idle builder takes a chopping block's Planks order by itself (no worker assigned) and makes the planks", TimeoutSeconds = 300f)]

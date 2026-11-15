@@ -26,6 +26,9 @@ internal class AllSettingsPanel : MonoBehaviour
 
 	private const float ListHeight = 640f;
 
+	// Space between the lists and the description of the value under the mouse.
+	private const float DescriptionGap = 14f;
+
 	// Set while Embed adds a panel, so an Awake run at once (an active parent) does not build a window.
 	private static bool _embedding;
 
@@ -134,7 +137,7 @@ internal class AllSettingsPanel : MonoBehaviour
 
 	private LayoutElement _valuesSize;
 
-	// The lists as tall as the page leaves them (header, description and notes under them take about 160).
+	// The lists as tall as the page leaves them (header, gap, description and notes under them take about 160 + gap).
 	private void Fit()
 	{
 		float height = ((RectTransform)_window.transform).rect.height;
@@ -142,7 +145,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		{
 			return;
 		}
-		_listHeight = Mathf.Max(200f, height - 160f);
+		_listHeight = Mathf.Max(200f, height - 160f - DescriptionGap);
 		_sectionsSize.minHeight = _sectionsSize.preferredHeight = _listHeight;
 		_valuesSize.minHeight = _valuesSize.preferredHeight = _listHeight;
 		LayoutElement lists = _lists.GetComponent<LayoutElement>();
@@ -306,6 +309,8 @@ internal class AllSettingsPanel : MonoBehaviour
 		valuesSize.minHeight = _listHeight;
 		valuesSize.preferredHeight = _listHeight;
 
+		// A gap between the lists and the description, so the text does not sit on the lists' bottom edge (#89).
+		Fixed(CreateRect("DescriptionGap", root).gameObject, 0f, DescriptionGap);
 		_description = CreateText(root, string.Empty, 13, TextColor, TextAnchor.UpperLeft);
 		_description.horizontalOverflow = HorizontalWrapMode.Wrap;
 		Fixed(_description.gameObject, _width - 28f, 54f);

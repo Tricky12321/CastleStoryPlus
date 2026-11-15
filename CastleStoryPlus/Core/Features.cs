@@ -571,6 +571,10 @@ internal static class Features
 
 	public const string LobbyStartInfo = "Unity 6 port, multiplayer: once the host has pressed start, a client's \"not ready\" (pressed as the loading screen came up) is kept ready, the lobby's \"everyone not ready\" waits, a player joining in that moment is turned away and one leaving no longer holds up the others; host and clients sat at 0 % loaded for good before.";
 
+	public const string CheatGuard = "CheatGuard";
+
+	public const string CheatGuardInfo = "Multiplayer: no debug cheats unless the host allows them (\"Cheats\" in the lobby, off by default; the choice is sent to every player). While they are off the host refuses other players' spawn commands and every instant build or demolition, and the debug menu and the developer API refuse their cheats (energy, bricktrons, resources, enemies, waves, time of day, instant build, fog of war, x-ray, critical hits) on every player. Single player is not affected.";
+
 	public const string GameChat = "GameChat";
 
 	public const string GameChatInfo = "Multiplayer: chat messages in a game go away after [Multiplayer] ChatFadeSeconds (12; 0: they stay) and show again while the chat is open for typing; [Multiplayer] Chat = false switches the chat box in a game off (the lobby's chat stays).";

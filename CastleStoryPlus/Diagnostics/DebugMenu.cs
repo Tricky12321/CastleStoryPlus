@@ -17,6 +17,7 @@ using Brix.Utils;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Giant;
 using CastleStoryPlus.Menus;
+using CastleStoryPlus.Multiplayer;
 using MoonSharp.Interpreter;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -44,6 +45,9 @@ namespace CastleStoryPlus.Diagnostics;
 // - Fog of war: on or off (the game's own switch: everything visible, no fog drawn);
 // - X-ray (XRayView): hides the terrain near the camera; semi draws the walls of mines, tunnels and caves, full only the ore.
 // Wave commands are queued here and carried out by the invasion server script on its next slow update.
+// In a multiplayer game whose host did not allow cheats (CheatGuard) every cheat here is refused, on the host as on
+// the clients: only the routes, the worker trace and the speed keys' switch (single player only anyway) still work,
+// and the x-ray, spawn points, 100% critrate and a fog of war this menu switched off are put back.
 [Feature(Features.DebugMenu, Features.DebugMenuInfo)]
 internal class DebugMenu : MonoBehaviour
 {
@@ -225,9 +229,16 @@ end)
 		_window.SetActive(false);
 	}
 
+	// Whether this menu switched the fog of war off (put back on while cheats are off).
+	private static bool _fogOffByMenu;
+
 	private void Update()
 	{
-		if (XRayKeyPressed())
+		if (CheatGuard.Restricted)
+		{
+			EnforceNoCheats();
+		}
+		if (XRayKeyPressed() && !CheatsOff())
 		{
 			SetXRay((XRayView.Current == XRayView.Mode.Semi) ? XRayView.Mode.Off : XRayView.Mode.Semi);
 		}
@@ -257,6 +268,43 @@ end)
 		{
 			Refresh();
 		}
+	}
+
+	// Multiplayer without cheats: what this menu switched on goes off again (the x-ray and the fog are this
+	// machine's view, the critical hits and spawn points the host's game).
+	private void EnforceNoCheats()
+	{
+		if (XRayView.Current != XRayView.Mode.Off)
+		{
+			XRayView.Set(XRayView.Mode.Off);
+		}
+		if (SpawnView.Enabled)
+		{
+			SpawnView.Toggle();
+		}
+		if (CastleStoryPlus.Combat.CriticalHits.Forced)
+		{
+			CastleStoryPlus.Combat.CriticalHits.Forced = false;
+		}
+		if (_fogOffByMenu && !LocalFactionVision.IsEnabled())
+		{
+			LocalFactionVision.ToggleFogSystem(true);
+		}
+		_fogOffByMenu = false;
+	}
+
+	// True (and says why) while cheats are off in this multiplayer game.
+	private bool CheatsOff()
+	{
+		if (!CheatGuard.Restricted)
+		{
+			return false;
+		}
+		if (_status != null)
+		{
+			SetStatus(CheatGuard.Explanation);
+		}
+		return true;
 	}
 
 	private void SetVisible(bool visible)
@@ -312,6 +360,10 @@ end)
 		Transform building = CreateRow(body, 26f);
 		Button instant = CreateButton(building, string.Empty, 160f, () =>
 		{
+			if (CheatsOff())
+			{
+				return;
+			}
 			// The game's own editor mode (its debug sidebar's instant build): what is placed is built at once, without
 			// workers or materials, and what is removed goes at once. This machine only; off again when the game is left.
 			Brix.Engine.Architecte.editorMode = !Brix.Engine.Architecte.editorMode;
@@ -394,6 +446,10 @@ end)
 		Transform spawnRow = CreateRow(body, 26f);
 		Button spawnButton = CreateButton(spawnRow, string.Empty, 150f, () =>
 		{
+			if (CheatsOff())
+			{
+				return;
+			}
 			SpawnView.Toggle();
 			SetStatus(SpawnView.Enabled ? "Spawn points shown: click a pillar, then the ground, to move it." : "Spawn points hidden.");
 			Refresh();
@@ -409,8 +465,13 @@ end)
 		Transform fogRow = CreateRow(body, 26f);
 		Button fog = CreateButton(fogRow, string.Empty, 160f, () =>
 		{
+			if (CheatsOff())
+			{
+				return;
+			}
 			// The game's own switch (as its Lua SetFogOfWar): everything visible, the fog drawn no more.
 			LocalFactionVision.ToggleFogSystem(!LocalFactionVision.IsEnabled());
+			_fogOffByMenu = !LocalFactionVision.IsEnabled();
 			SetStatus(LocalFactionVision.IsEnabled() ? "Fog of war on." : "Fog of war off: everything is visible.");
 			Refresh();
 		});
@@ -461,6 +522,10 @@ end)
 		CreateButton(enemies, "Kill enemies near", 135f, () => Run(KillEnemies));
 		Button crit = CreateButton(enemies, string.Empty, 140f, () =>
 		{
+			if (CheatsOff())
+			{
+				return;
+			}
 			CastleStoryPlus.Combat.CriticalHits.Forced = !CastleStoryPlus.Combat.CriticalHits.Forced;
 			SetStatus(CastleStoryPlus.Combat.CriticalHits.Forced ? "Every hit and shot of your bricktrons is a critical hit." : "Critical hits by level again.");
 			Refresh();
@@ -508,6 +573,10 @@ end)
 
 	private void SetXRay(XRayView.Mode mode)
 	{
+		if (mode != XRayView.Mode.Off && CheatsOff())
+		{
+			return;
+		}
 		XRayView.Set(mode);
 		SetStatus(mode == XRayView.Mode.Off ? "X-ray off." : (mode == XRayView.Mode.Semi ? "X-ray: the walls of mines, tunnels and caves" : "X-ray: only the ore") + " within " + XRayView.Radius + " blocks of where the camera looks.");
 		Refresh();
@@ -543,7 +612,11 @@ end)
 		_spawnText.text = SpawnView.Enabled ? SpawnView.Summary : string.Empty;
 		_xrayLabel.text = "X-ray: " + XRayView.Current.ToString().ToLower();
 		_xrayText.text = XRayView.Summary;
-		if (!NetworkServer.active)
+		if (CheatGuard.Restricted)
+		{
+			SetStatus(CheatGuard.Explanation);
+		}
+		else if (!NetworkServer.active)
 		{
 			SetStatus("Host only: these commands run on the host.");
 		}
@@ -570,6 +643,10 @@ end)
 
 	private void Run(System.Func<string> command)
 	{
+		if (CheatsOff())
+		{
+			return;
+		}
 		if (!NetworkServer.active)
 		{
 			SetStatus("Host only: these commands run on the host.");
@@ -591,6 +668,10 @@ end)
 
 	private void QueueWave(int command)
 	{
+		if (CheatsOff())
+		{
+			return;
+		}
 		if (!NetworkServer.active)
 		{
 			SetStatus("Host only: these commands run on the host.");
