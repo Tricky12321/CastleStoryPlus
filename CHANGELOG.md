@@ -3,6 +3,10 @@
 All changes compared to the original Castle Story game. Every entry has one tag:
 `[ADD]` new feature, `[CHANGE]` changed behaviour, `[FIX]` bug fix, `[REMOVE]` removed feature.
 
+## Unreleased
+
+- [CHANGE] **DevTools: in-game tests are deterministic, parallel and run at 10x:** `tools/run-game-tests.py` plays on a generated flat Test Island, gives every test its own plot (from its name), plants trees for tree tests, seeds the game's random numbers per test, and pauses wild plants and treasure during runs. Test units and buildings are destroyed rather than pooled, so no state leaks between tests; a run knight keeps the reach map whole and stray units are removed. It runs several players at once (`--workers`, ports 27870+, merged results, `--lock`) at `--speed 10` with frames capped at 0.25 game seconds, and `[GameTest(MaxSpeed)]` for speed-sensitive tests. It waits for the route graph and navmesh instead of a fixed 60 s. A full run takes about 2.5 minutes instead of about 8.
+
 ## 0.8.12 — 2026-11-12
 
 - [FIX] **Enemies felling trees for no reason:** corruptrons and the other enemies that break their way struck any tree beside them while they stood still (fighting, breaking a block, waiting) and trees they merely walked past. Now an enemy fells a tree only when it is stuck on its route for a second and the tree lies towards its next step (`[Features] EnemyTreeClearing`).
