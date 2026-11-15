@@ -282,7 +282,7 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 | `WorkerOrderTests.ManualDigWaitsForNextOrder` | A worker told to dig a voxel takes no task for 6 game seconds afterwards (also with an empty bag), digs the next ordered voxel, and takes up something again once the wait is over |
 | `WorkerOrderTests.AssignedWorkerStaysOnTask` | A worker put on a tree harvest fells two of its trees and never works in a quarry of higher priority next to it |
 | `WorkerOrderTests.RightClickedWorkerStaysOnTask` | The same for a free worker right-clicked onto a tree of the harvest (`DirectTask`): it joins the harvest's crew and stays on it |
-| `WorkerOrderTests.FullCrewStaysOnBigQuarry` | Eight builders put on an 8 x 8 quarry 3 deep stay in its crew and within 20 voxels of its middle (the gather point is far off) for 90 game seconds, with a quarry of higher priority and no crew next to it (#86) |
+| `WorkerOrderTests.FullCrewStaysOnBigQuarry` | Eight builders put on an 8 x 8 quarry one layer deep stay in its crew and within 20 voxels of its middle (the gather point is far off) until it is dug out, also once fewer blocks are left than workers, with a quarry of higher priority and no crew next to it (#86) |
 | `WorkerOrderTests.AssignedWorkerLeavesLooseLogs` | Two builders put on a quarry leave loose logs by a stockpile next to it alone (no idle cleanup for workers on a task) (#81) |
 
 ## Claude Code (`CastleStoryPlus.Mcp`)

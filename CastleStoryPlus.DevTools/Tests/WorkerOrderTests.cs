@@ -168,15 +168,16 @@ internal static class WorkerOrderTests
 		t.Record("felled", Felled(treesAtStart));
 	}
 
-	[GameTest("Tasks", "Eight builders put on a big quarry stay on it while it has blocks left: none walks off to the gather point or to another quarry of higher priority next to it (#86)", TimeoutSeconds = 300f)]
+	[GameTest("Tasks", "Eight builders put on an 8 x 8 quarry stay on it until it is dug out, also while there are fewer blocks left than workers: none walks off to the gather point or to another quarry of higher priority next to it (#86)", TimeoutSeconds = 300f)]
 	private static IEnumerator FullCrewStaysOnBigQuarry(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 20, 14);
 		Scenario.LeavesMess(t);
 		int top = site.y - 1;
-		// 8 x 8 and 3 deep on the west half, keeping nothing (no storage needed); a small one of higher priority and no
-		// crew on the east half.
-		MineProject quarry = Quarry(t, new Vector3(site.x - 9, top - 2, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
+		// 8 x 8, one layer, on the west half, keeping nothing (no storage needed); a small one of higher priority and no
+		// crew on the east half. Towards the end there are fewer blocks than workers: the ones without a block of their
+		// own must wait for the last ones, not leave.
+		MineProject quarry = Quarry(t, new Vector3(site.x - 9, top, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
 		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
 		MineProject other = Quarry(t, new Vector3(site.x + 3, top, site.z - 2), new Vector3(site.x + 6, top + 2, site.z + 1));
 		other.GetComponent<QuarryData>().SetTypesToHarvest(0);
@@ -191,10 +192,13 @@ internal static class WorkerOrderTests
 		Scenario.Hire(quarry, crew);
 		yield return t.Frames(2);
 		Vector3 middle = new Vector3(site.x - 5.5f, site.y, site.z - 0.5f);
-		float end = Time.time + 90f;
 		float farthest = 0f;
 		yield return t.UntilGame(() =>
 		{
+			if (QuarryDone(quarry))
+			{
+				return true;
+			}
 			foreach (Labor worker in crew)
 			{
 				t.True(worker.Project == quarry, worker.name + " left the quarry's crew: " + Describe(worker));
@@ -205,8 +209,8 @@ internal static class WorkerOrderTests
 				// The gather point (the home crystal) is a plot or more away; 20 leaves room for a step aside round the quarry.
 				t.AtMost(20f, away, worker.name + "'s distance from the quarry's middle (" + Describe(worker) + ")");
 			}
-			return Time.time >= end;
-		}, 100f, "90 game seconds of digging", 30f, () => t.Log("quarry " + ProjectEndpoints.Describe(quarry)));
+			return false;
+		}, 240f, "the quarry to be dug out", 30f, () => t.Log("quarry " + ProjectEndpoints.Describe(quarry)));
 		t.Record("farthest", Mathf.Round(farthest * 10f) / 10f);
 	}
 
