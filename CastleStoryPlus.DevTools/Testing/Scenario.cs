@@ -533,6 +533,24 @@ internal static class Scenario
 		}
 	}
 
+	// Units no running test spawned and not the run's builder: ones the game made by itself meanwhile (the home
+	// crystal makes a bricktron from the fireflies of killed enemies), who would take up chores on any test's ground.
+	// Taken away before each test of a run that cleared the world's units. Switched-off ones (SidelineOthers) stay.
+	internal static int RemoveStrays()
+	{
+		int removed = 0;
+		foreach (Labor labor in Object.FindObjectsOfType<Labor>())
+		{
+			if (labor != null && labor.gameObject.activeInHierarchy && labor.gameObject != _anchor && !Contexts.ContainsKey(labor))
+			{
+				DevToolsPlugin.Log.LogInfo("Tests: took away " + labor.name + " (" + ((labor.faction != null) ? labor.faction.name : "no faction") + "), no test's unit");
+				Release(labor.gameObject);
+				removed++;
+			}
+		}
+		return removed;
+	}
+
 	internal static void ReleaseAnchor()
 	{
 		if (_anchor != null)

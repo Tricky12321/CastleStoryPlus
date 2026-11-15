@@ -318,8 +318,9 @@ internal class TestRunner : MonoBehaviour
 		result.Attempts++;
 		if (_anchored)
 		{
-			// Back if a test's enemies killed it.
+			// Back if a test's enemies killed it; and no unit about that no test brought.
 			Scenario.EnsureAnchor();
+			Scenario.RemoveStrays();
 		}
 		yield return StartCoroutine(RunOne(test, result));
 		done();
