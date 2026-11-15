@@ -64,6 +64,58 @@ internal static class NetEndpoints
 		{
 			Parameters = "value (allied, neutral or enemy; required)"
 		});
+		routes.Add(new Route("POST", "/api/net/cheats", "Host: allows cheats for every player of this multiplayer game or not, as the lobby's \"Cheats\" does (off for every new lobby). While they are off, the API's cheats answer 403", Cheats)
+		{
+			Parameters = "value (true or false; required)"
+		});
+		routes.Add(new Route("POST", "/api/net/cheatprobe", "Test of the cheat guard: sends the game's spawn command (a builder by the home crystal) or a blueprint placed at once to the host, as a changed game could; the host refuses them while cheats are off", CheatProbe)
+		{
+			Parameters = "kind (spawn or instant; required), key (instant: Factory/Name of the blueprint), at (instant: x,y,z)"
+		});
+	}
+
+	// Sends a cheat to the host as a player with a changed game could: the game's spawn command, or a blueprint placed
+	// at once. For testing that the host refuses them (CheatGuard); the host's answer shows in its world, not here.
+	private static object CheatProbe(ApiRequest request)
+	{
+		if (User.LocalUser == null || User.LocalUser.faction == null)
+		{
+			throw new ApiException(409, "No game in progress");
+		}
+		string kind = request.Required("kind");
+		if (kind == "spawn")
+		{
+			Vector3 at = WorldEndpoints.HomeVoxel().ToVector3() + new Vector3(3f, 1f, 3f);
+			User.LocalUser.GetComponent<UNetProjectCmd>().CallCmdSpawn(Brix.External.Factories.Test.Bricktron.Factory, Brix.External.Factories.Test.Bricktron.Name, at, Quaternion.identity, User.LocalUser.faction.gameObject, Brix.Game.AI.Occupation.Type.Builder, true);
+			return Obj("sent", "CmdSpawn", "at", at.ToString());
+		}
+		if (kind == "instant")
+		{
+			string[] key = request.Required("key").Split('/');
+			if (key.Length != 2)
+			{
+				throw new ApiException(400, "'key' takes Factory/Name");
+			}
+			Vector3 at = request.Vector("at");
+			User.LocalUser.GetComponent<UNetBlueprint>().CallCmdSpawnPlacedBlueprint(key[0], key[1], at, Quaternion.identity, true, null, false);
+			return Obj("sent", "CmdSpawnPlacedBlueprint instant", "at", at.ToString());
+		}
+		throw new ApiException(400, "'kind' takes spawn or instant");
+	}
+
+	private static object Cheats(ApiRequest request)
+	{
+		if (!CastleStoryPlus.Multiplayer.CheatGuard.CanChoose)
+		{
+			throw new ApiException(409, "Only the host of a multiplayer game or lobby");
+		}
+		CastleStoryPlus.Multiplayer.CheatGuard.SetAllowed(request.Bool("value", false));
+		return CheatsState();
+	}
+
+	private static object CheatsState()
+	{
+		return Obj("hostAllows", CastleStoryPlus.Multiplayer.CheatGuard.HostAllows, "multiplayerGame", CastleStoryPlus.Multiplayer.CheatGuard.InMultiplayerGame, "allowed", CastleStoryPlus.Multiplayer.CheatGuard.Allowed);
 	}
 
 	private static object Relations(ApiRequest request)
@@ -133,7 +185,8 @@ internal static class NetEndpoints
 			"steam", Steam(),
 			"lanSearch", manager != null && manager.networkDiscovery != null && manager.networkDiscovery.running && manager.networkDiscovery.isClient,
 			"lanGames", LanGames,
-			"onlineGames", OnlineGames());
+			"onlineGames", OnlineGames(),
+			"cheats", CheatsState());
 	}
 
 	private static object Host(ApiRequest request)
