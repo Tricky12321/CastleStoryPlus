@@ -40,6 +40,11 @@ internal static class GameEndpoints
 		{
 			Parameters = "all (true: every faction, else only the player's), q (name/job filter), route (true: add the route being walked)"
 		});
+		routes.Add(new Route("POST", "/api/bricktrons/weaponammo", "Sets the ammunition of this player's own copies of the ranged weapons of some of its bricktrons (not sent to anyone): a client's copies are never updated by the host, so this makes the state a client can be in, for testing what depends on it", WeaponAmmoSet)
+		{
+			Parameters = "value (default 0), count (bricktrons, default all), q (name/job filter)"
+		});
+		routes.Add(new Route("GET", "/api/raids", "Raid projects as this player has them (invasion waves, cheat raids, the treasure chests' guards): faction, wave number, crew, and the enemies of each kind; for comparing host and client", Raids));
 		routes.Add(new Route("GET", "/api/objects", "Things in the world by type name (buildings, blueprints, resources, units; trees as Nature.Tree, nearest first)", Objects)
 		{
 			Parameters = "q (part of the type name, required; tree or arbre finds the trees), max (default 100), x, z (trees: nearest this column first; default the home crystal)"
@@ -140,9 +145,115 @@ internal static class GameEndpoints
 				"pending", (labor.PendingTask != null) ? labor.PendingTask.Description : null,
 				"autonomy", (labor.Autonomy != null) ? labor.Autonomy.Id.ToString() : null,
 				"moving", Moving(labor),
+				"archetype", (labor.Profession != null) ? labor.Profession.InferedArchetype().ToString() : null,
+				"project", (labor.Project != null) ? labor.Project.GetType().Name : null,
+				"weaponAmmo", WeaponAmmo(labor),
+				"ammo", (labor.GetComponent<CharacterState>() != null) ? (object)labor.GetComponent<CharacterState>().AmmoCount : null,
 				"route", route ? Route(labor) : null));
 		}
 		return Obj("count", result.Count, "bricktrons", result);
+	}
+
+	// The ammunition of the ranged weapons a bricktron holds, as this player's copies of them have it; null without one.
+	private static object WeaponAmmo(Labor labor)
+	{
+		ProjectileWeapon[] weapons = labor.GetComponentsInChildren<ProjectileWeapon>(true);
+		if (weapons.Length == 0)
+		{
+			return null;
+		}
+		long sum = 0;
+		foreach (ProjectileWeapon weapon in weapons)
+		{
+			sum += weapon.AmmoCountGetter;
+		}
+		return sum;
+	}
+
+	private static object WeaponAmmoSet(ApiRequest request)
+	{
+		int value = request.Int("value", 0);
+		int count = request.Int("count", int.MaxValue);
+		string filter = request.String("q", string.Empty);
+		Faction local = (User.LocalUser != null) ? User.LocalUser.faction : null;
+		List<object> changed = new List<object>();
+		foreach (Labor labor in Object.FindObjectsOfType<Labor>())
+		{
+			if (changed.Count >= count)
+			{
+				break;
+			}
+			if (labor == null || local == null || !local.IsSame(labor.gameObject))
+			{
+				continue;
+			}
+			string job = (labor.Occupation != null) ? labor.Occupation.CurrentJob.ToString() : string.Empty;
+			if (filter.Length > 0 && (labor.name + " " + job).IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+			{
+				continue;
+			}
+			ProjectileWeapon[] weapons = labor.GetComponentsInChildren<ProjectileWeapon>(true);
+			if (weapons.Length == 0)
+			{
+				continue;
+			}
+			foreach (ProjectileWeapon weapon in weapons)
+			{
+				// The field, not AmmoCountGetter: its setter also sets the bricktron's total, which the host sends.
+				weapon.AmmoCount = value;
+			}
+			changed.Add(Obj("id", labor.gameObject.InstanceId(), "name", labor.name, "archetype", labor.Profession.InferedArchetype().ToString()));
+		}
+		return Obj("changed", changed.Count, "bricktrons", changed);
+	}
+
+	private static object Raids(ApiRequest request)
+	{
+		List<object> raids = new List<object>();
+		foreach (RaidProject raid in Object.FindObjectsOfType<RaidProject>())
+		{
+			if (raid == null)
+			{
+				continue;
+			}
+			Dictionary<string, int> kinds = new Dictionary<string, int>();
+			int crew = 0;
+			foreach (Labor labor in raid.Crew())
+			{
+				if (labor == null)
+				{
+					continue;
+				}
+				crew++;
+				string kind = (labor.Profession != null) ? labor.Profession.InferedArchetype().ToString() : "?";
+				kinds.TryGetValue(kind, out int n);
+				kinds[kind] = n + 1;
+			}
+			raids.Add(Obj(
+				"id", raid.gameObject.InstanceId(),
+				"name", raid.name,
+				"faction", (raid.faction != null) ? raid.faction.name : null,
+				"waveNumber", (raid.data != null) ? raid.data.WaveNumber : -1,
+				"guards", CastleStoryPlus.Treasure.TreasureChests.IsGuardRaid(raid.gameObject),
+				"crew", crew,
+				"kinds", kinds));
+		}
+		int enemies = 0;
+		int enemiesInRaid = 0;
+		foreach (Labor labor in Object.FindObjectsOfType<Labor>())
+		{
+			if (labor == null || labor.Profession == null || labor.Profession.InferedArchetype() == Occupation.Type.Builder || labor.Profession.InferedArchetype() == Occupation.Type.Knight || labor.Profession.InferedArchetype() == Occupation.Type.Archer)
+			{
+				continue;
+			}
+			enemies++;
+			if (labor.Project is RaidProject)
+			{
+				enemiesInRaid++;
+			}
+		}
+		int[] rows = CastleStoryPlus.Invasion.WaveCountsSync.Rows;
+		return Obj("count", raids.Count, "raids", raids, "enemies", enemies, "enemiesInRaid", enemiesInRaid, "hostWaveRows", (rows != null) ? new List<int>(rows) : null);
 	}
 
 	// What a task works on: its object's name, type, id and position.
