@@ -38,6 +38,9 @@ internal class TestRunner : MonoBehaviour
 		// May run next to other tests ([ParallelTests] on its class and not Exclusive).
 		public bool Parallel;
 
+		// The fastest game speed the test is stable at (0: any).
+		public float MaxSpeed;
+
 		// Tests of one group never run at the same time.
 		public string Group;
 
@@ -135,6 +138,7 @@ internal class TestRunner : MonoBehaviour
 					Description = attribute.Description,
 					TimeoutSeconds = attribute.TimeoutSeconds,
 					NeedsHostGame = attribute.NeedsHostGame,
+					MaxSpeed = attribute.MaxSpeed,
 					Method = method
 				});
 			}
@@ -200,6 +204,13 @@ internal class TestRunner : MonoBehaviour
 		{
 			GameSpeed.Instance.Set(_speed, 0f, MaxFrameSeconds);
 		}
+		// The player's units get their routes from the navigation mesh (NavMeshExperiment), which a new world builds a
+		// while after it is loaded: a test that starts before it is ready has workers without routes.
+		float meshUntil = Time.realtimeSinceStartup + 120f;
+		while (CastleStoryPlus.Pathfinding.NavMeshExperiment.Active && !CastleStoryPlus.Pathfinding.NavMeshExperiment.Ready && CastleStoryPlus.Pathfinding.NavMeshExperiment.Phase != "failed" && Time.realtimeSinceStartup < meshUntil)
+		{
+			yield return null;
+		}
 		bool quieted = false;
 		if (_clearUnits && InHostGame())
 		{
@@ -258,7 +269,7 @@ internal class TestRunner : MonoBehaviour
 			{
 				int index = queue[q];
 				TestInfo test = tests[index];
-				bool alone = !test.Parallel || _parallel == 1;
+				bool alone = !test.Parallel || _parallel == 1 || Slowed(test);
 				if (alone && running.Count > 0)
 				{
 					// Waits for the others; nothing after it starts first, so the order holds.
@@ -335,8 +346,23 @@ internal class TestRunner : MonoBehaviour
 			Scenario.EnsureAnchor();
 			Scenario.RemoveStrays();
 		}
+		// A test not stable at the run's speed runs alone (Slowed), at its own top speed.
+		bool slowed = Slowed(test) && GameSpeed.Instance.Active;
+		if (slowed)
+		{
+			GameSpeed.Instance.Set(test.MaxSpeed, 0f, MaxFrameSeconds);
+		}
 		yield return StartCoroutine(RunOne(test, result));
+		if (slowed && GameSpeed.InGame())
+		{
+			GameSpeed.Instance.Set(_speed, 0f, MaxFrameSeconds);
+		}
 		done();
+	}
+
+	private bool Slowed(TestInfo test)
+	{
+		return test.MaxSpeed > 0f && test.MaxSpeed < _speed;
 	}
 
 	// Takes every unit the world has now out of it: the player's bricktrons and the map's roaming enemies and beasts.

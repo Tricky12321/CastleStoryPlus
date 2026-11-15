@@ -15,8 +15,8 @@ The default map is Test Island: round, perfectly flat and empty (tools/make_test
 in the game's own folder), so every test finds the same ground on its own plot in every run and the results do not
 depend on what ran before or next to it. The tests that need trees plant their own.
 
---speed is the game speed during the tests (default 10). Tests marked [GameTest(MaxSpeed = ...)] run alone at that
-speed at most.
+--speed is the game speed during the tests (default 10); a frame advances the game by at most 0.25 s, so a player
+whose frame rate cannot keep up runs slower than that rather than in bigger steps (the tests count game time).
 
 --player is a player folder with run_bepinex.sh and the mod (default: the Unity 6 port's
 CastleStoryPlus.Player/Build/Linux). --root-src is a folder holding the game's Info (maps, Lua), copied for the run
