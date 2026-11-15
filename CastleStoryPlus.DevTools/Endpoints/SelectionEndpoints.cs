@@ -21,10 +21,34 @@ internal static class SelectionEndpoints
 	internal static void Add(List<Route> routes)
 	{
 		routes.Add(new Route("GET", "/api/selection", "What the player has selected: bricktrons, wards, objects, workshop, project; with ids, positions and whether a thing can be moved", Selection));
+		routes.Add(new Route("POST", "/api/select/army", "Selects the player's melee or ranged units, as a click on the task list's melee or ranged row does", SelectArmy)
+		{
+			Parameters = "ranged (true: the ranged units, false: the melee units; default true)"
+		});
 		routes.Add(new Route("POST", "/api/move", "Moves a building (as the mod's move key does): its blueprint at the new position, the old one demolished by the workers of a build project", Move)
 		{
 			Parameters = "id (object id, required), to (x,y,z world position of the building, required), turn (degrees round the vertical, default: as it is), project (build project id; default: the last selected build project)"
 		});
+	}
+
+	private static object SelectArmy(ApiRequest request)
+	{
+		if (UIGameObserver.bricktrons == null || User.LocalUser == null)
+		{
+			throw new ApiException(409, "No game in progress");
+		}
+		bool ranged = request.Bool("ranged", true);
+		Brix.UI.UIGameActor.SelectIdleProject();
+		Brix.UI.UIGameActor.SelectByOccupation(ranged ? Occupation.Type.Archer : Occupation.Type.Knight, User.LocalUser.faction);
+		int count = 0;
+		foreach (Labor labor in UIGameObserver.bricktrons.CheckSelection())
+		{
+			if (labor != null)
+			{
+				count++;
+			}
+		}
+		return Obj("ranged", ranged, "selected", count);
 	}
 
 	private static object Selection(ApiRequest request)

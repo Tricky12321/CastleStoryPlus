@@ -14,7 +14,7 @@ namespace CastleStoryPlus.Multiplayer;
 // No cheats in a multiplayer game unless the host allows them (#88). A game counts as multiplayer while it is hosted
 // for others and another player is in it (a connection or a second lobby player), and always on a client; single
 // player stays as it was. The host picks "Cheats: allowed / off" in the lobby (CheatGuardLobby; off for every new
-// lobby), and the choice is sent to the other players (message 206) when it changes and every few seconds.
+// lobby), and the choice is sent to the other players (message 207) when it changes and every few seconds.
 // While cheats are off:
 // - the host refuses the game's spawn commands (CmdSpawn and its kinds: units of any team out of nothing) from the
 //   other players; the host's own game still uses them (a magitron raising the dead);
@@ -28,7 +28,7 @@ namespace CastleStoryPlus.Multiplayer;
 [Feature(Features.CheatGuard, Features.CheatGuardInfo)]
 internal static class CheatGuard
 {
-	private const short SyncMessage = 206;
+	private const short SyncMessage = 207;
 
 	private const float BroadcastSeconds = 3f;
 

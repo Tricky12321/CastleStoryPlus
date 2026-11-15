@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Brix.Assets;
 using Brix.Engine;
 using Brix.Game;
 using Brix.Game.Rules;
@@ -42,6 +43,15 @@ internal static class NetEndpoints
 		routes.Add(new Route("POST", "/api/net/name", "Renames this player in the lobby, as Enter in the lobby's name box does", Name)
 		{
 			Parameters = "value (required)"
+		});
+		routes.Add(new Route("POST", "/api/net/mode", "Host: picks the lobby's game mode and preset (and a map that has the mode), as the lobby's map and mode lists do", Mode)
+		{
+			Parameters = "gamemode (codename, required, e.g. invasion), preset (codename or name; default the mode's default), map (codename or name; default the lobby's map if it has the mode, else the first official one that has it)"
+		});
+		routes.Add(new Route("GET", "/api/net/rules", "The game's rules as this player has them: the bricktron limit (with the research's Housing; baseCap without it)", Rules));
+		routes.Add(new Route("POST", "/api/net/rules", "Sets the game's bricktron limit as a game mode's settings do when the map loads (the host: for every player; a client: as its own game mode script does, which the host's limit overrides)", SetRules)
+		{
+			Parameters = "bricktronCap (required)"
 		});
 		routes.Add(new Route("GET", "/api/net/nameedit", "The lobby's name box: shown, focused, its text", NameEditState));
 		routes.Add(new Route("POST", "/api/net/nameedit", "Opens the lobby's name box, focuses it and puts text in it as typing does (nothing is sent until Enter)", NameEdit)
@@ -247,6 +257,101 @@ internal static class NetEndpoints
 		}
 		LobbyMenu.StartGame();
 		return Obj("starting", true);
+	}
+
+	private static object Mode(ApiRequest request)
+	{
+		RequireLobby();
+		if (!NetworkServer.active)
+		{
+			throw new ApiException(409, "Only the host picks the mode");
+		}
+		string modeName = request.Required("gamemode");
+		string mapName = request.String("map", null);
+		Asset_Map map = null;
+		List<Asset_Map> maps = new List<Asset_Map>(AssetDispensary.maps.SendQuery(AssetQueryParameters.AllSources | AssetQueryParameters.RefreshCache, AssetPlayableContext.Multiplayer, loadSubassets: true));
+		if (mapName == null && GameParam.Map != null && ModeOf(GameParam.Map, modeName) != null)
+		{
+			map = GameParam.Map;
+		}
+		foreach (Asset_Map candidate in maps)
+		{
+			if (map != null)
+			{
+				break;
+			}
+			bool matches = (mapName == null)
+				? candidate.authorType == AssetAuthorType.Official && ModeOf(candidate, modeName) != null
+				: candidate.codename.Equals(mapName, System.StringComparison.OrdinalIgnoreCase) || candidate.displayName.Equals(mapName, System.StringComparison.OrdinalIgnoreCase);
+			if (matches)
+			{
+				map = candidate;
+			}
+		}
+		if (map == null)
+		{
+			throw new ApiException(404, (mapName == null) ? "No official multiplayer map has the mode '" + modeName + "'" : "No multiplayer map '" + mapName + "'");
+		}
+		Asset_Gamemode mode = ModeOf(map, modeName);
+		if (mode == null)
+		{
+			throw new ApiException(404, "The map " + map.displayName + " has no multiplayer mode '" + modeName + "'");
+		}
+		string presetName = request.String("preset", null);
+		Asset_GamemodePreset preset = null;
+		foreach (Asset_GamemodePreset candidate in mode.GetPresets(AssetQueryParameters.AllSources, AssetPlayableContext.Multiplayer))
+		{
+			if (presetName == null ? candidate.isDefault : (candidate.codename.Equals(presetName, System.StringComparison.OrdinalIgnoreCase) || candidate.displayName.Equals(presetName, System.StringComparison.OrdinalIgnoreCase)))
+			{
+				preset = candidate;
+				break;
+			}
+		}
+		if (preset == null)
+		{
+			preset = (presetName == null) ? mode.GetDefaultPreset(AssetQueryParameters.AllSources, AssetPlayableContext.Multiplayer) : null;
+			if (preset == null)
+			{
+				throw new ApiException(404, "The mode " + mode.codename + " has no multiplayer preset '" + presetName + "'");
+			}
+		}
+		GameParam.Map = map;
+		GameParam.Gamemode = mode;
+		GameParam.Preset = preset;
+		return Obj("map", map.displayName, "mapCodename", map.codename, "gamemode", mode.codename, "preset", preset.codename);
+	}
+
+	private static Asset_Gamemode ModeOf(Asset_Map map, string modeName)
+	{
+		foreach (Asset_Gamemode mode in map.GetGamemodes(AssetPlayableContext.Multiplayer))
+		{
+			if (mode != null && (mode.codename.Equals(modeName, System.StringComparison.OrdinalIgnoreCase) || mode.displayName.Equals(modeName, System.StringComparison.OrdinalIgnoreCase)))
+			{
+				return mode;
+			}
+		}
+		return null;
+	}
+
+	private static object Rules(ApiRequest request)
+	{
+		GeneralRules rules = GeneralRules.Main;
+		if (rules == null)
+		{
+			throw new ApiException(409, "No game rules (not in a game)");
+		}
+		return Obj("server", NetworkServer.active, "bricktronCap", rules.bricktronCap, "baseCap", rules._bricktronCap);
+	}
+
+	private static object SetRules(ApiRequest request)
+	{
+		if (GeneralRules.Main == null)
+		{
+			throw new ApiException(409, "No game rules (not in a game)");
+		}
+		// Through the property by reflection, as the game mode's Lua (Rules.bricktronCap = ...) sets it.
+		typeof(GeneralRules).GetProperty(nameof(GeneralRules.bricktronCap)).SetValue(GeneralRules.Main, request.Int("bricktronCap", GeneralRules.Main._bricktronCap), null);
+		return Rules(request);
 	}
 
 	private static object Name(ApiRequest request)

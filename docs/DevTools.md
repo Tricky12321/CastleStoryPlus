@@ -35,6 +35,10 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/bricktrons?all=&q=` | Bricktrons: name, job, activity, task, position, what they carry (`healtron: true` marks a Healtron) |
 | `GET /api/objects?q=&max=` | Things in the world by type name, with counts |
 | `GET /api/storage?q=&empty=&max=` | Storages and what they hold: amounts per resource (type and the name the UI shows) and stored objects by type |
+| `GET /api/storage/trackers?at=x,y,z&radius=&max=` | Items near a place (also the hidden ones a storage or blueprint holds) and what holds them as this player sees it: the holder its network tracker names, whether it took the item in, the item's network id; on the host also the players it is sent to (`observers`) and for which faction its fog of war shows it (`visibleFor`) |
+| `GET /api/raids` | Raid projects as this player has them (faction, wave number, crew by kind, treasure guards); on a client also the scoreboard's wave rows the host sent (`hostWaveRows`) |
+| `POST /api/select/army?ranged=` | Selects the player's ranged (or melee) units, as a click on the task list's ranged or melee row does |
+| `POST /api/bricktrons/weaponammo?value=&count=&q=` | Sets the ammunition of this player's own copies of some bricktrons' ranged weapons (sent to no one), the state a client's copies can be in, for testing what depends on it |
 | `GET /api/selection` | What the player has selected, with ids, positions and whether it can be moved |
 | `POST /api/move?id=&to=x,y,z&turn=&project=` | Moves a building like the mod's move key: a blueprint at the new place, the old one demolished |
 | `GET /api/problems?count=&q=` | The system log's problems (F9): failed bricktron tasks with their reason, errors and warnings |
@@ -51,6 +55,8 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/net` | Multiplayer: server and client running, connections, the lobby's players (name, host, ready, faction, ping), the map, LAN games heard (`lanGames`) |
 | `POST /api/net/host?port=&name=` | Hosts a multiplayer game from the title screen, as the host button does (the lobby opens and picks an official map) |
 | `POST /api/net/relations?value=allied\|neutral\|enemy` | Host: how the players' factions stand to each other in a game in progress (the game mode's rule); rebuilds who is sent what |
+| `POST /api/net/mode?gamemode=&preset=&map=` | Host, in the lobby: picks the game mode and preset (default the mode's default), and a map that has the mode, as the lobby's lists do |
+| `GET`/`POST /api/net/rules?bricktronCap=` | The bricktron limit as this player has it (`baseCap` without the research's Housing); sets it as a game mode's script does: on the host for every player, on a client as its own script does (the host's limit wins) |
 | `POST /api/net/join?address=&port=&name=` | Joins by address, as the custom server window's join does |
 | `POST /api/net/ready?value=`, `POST /api/net/start?button=`, `POST /api/net/leave` | The lobby's ready, the host's start (`button=true`: as the start button does, the loading screen on every player first, then the host's ready), leaving |
 | `POST /api/net/name?value=`, `GET`/`POST /api/net/nameedit?text=` | Renames this player as Enter in the lobby's name box does; the name box (shown, focused, text), and typing into it without Enter |
@@ -97,7 +103,7 @@ The API takes calls on its own threads. Everything that touches the game runs on
 
 ### Playing through the API
 
-Cheats (host only): `instant=true` on `POST /api/blueprints/place` or `POST /api/blueprints/complete` builds blueprints at once; `POST /api/cheat/bricktrons?count=&job=` spawns bricktrons; `POST /api/cheat/items?key=&count=` spawns items; `POST /api/cheat/enemies?type=&count=&at=&level=&raid=` spawns enemies (corruptron, biftron, minitron, crawler, magitron or healtron), by default about 20 voxels from the home crystal as a new raid aimed at it. `POST /api/projects/hire?id=&count=` puts idle bricktrons on a project (a project's crew size alone does not hire anyone). Workshops: `GET /api/workshops`, `POST /api/workshops/worker?id=`, `POST /api/workshops/queue?id=&recipe=Planks&loop=true`. `POST /api/blueprints/remove?from=&to=` takes away unbuilt blueprints; `POST /api/demolish?from=&to=` takes down placed buildings (`instant=true` at once). Leave walkways between stockpiles: workers cannot reach a stockpile surrounded by others. Workers cannot dig a quarry under trees: `POST /api/projects/create?type=quarry` refuses it unless `clear=true` (a harvest project cuts them first); `GET /api/ground?flat=6&noTrees=true&heights=false` lists places without trees. Stone walls need interlocking bricks (joints shifted per layer), or the upper layers never get support. `game_start` (MCP) starts the game through the launcher: it leaves `BepInEx/devtools/autoplay`, and the launcher (patched by the mod) presses Play once when it finds it.
+Cheats (host only): `instant=true` on `POST /api/blueprints/place` or `POST /api/blueprints/complete` builds blueprints at once; `POST /api/cheat/bricktrons?count=&job=` spawns bricktrons; `POST /api/cheat/items?key=&count=` spawns items; `POST /api/cheat/enemies?type=&count=&at=&level=&raid=&wave=` spawns enemies (corruptron, biftron, minitron, crawler, magitron or healtron), by default about 20 voxels from the home crystal as a new raid aimed at it (`wave`: the raid's wave number, so the scoreboard counts it as that wave). `POST /api/projects/hire?id=&count=` puts idle bricktrons on a project (a project's crew size alone does not hire anyone). Workshops: `GET /api/workshops`, `POST /api/workshops/worker?id=`, `POST /api/workshops/queue?id=&recipe=Planks&loop=true`. `POST /api/blueprints/remove?from=&to=` takes away unbuilt blueprints; `POST /api/demolish?from=&to=` takes down placed buildings (`instant=true` at once). Leave walkways between stockpiles: workers cannot reach a stockpile surrounded by others. Workers cannot dig a quarry under trees: `POST /api/projects/create?type=quarry` refuses it unless `clear=true` (a harvest project cuts them first); `GET /api/ground?flat=6&noTrees=true&heights=false` lists places without trees. Stone walls need interlocking bricks (joints shifted per layer), or the upper layers never get support. `game_start` (MCP) starts the game through the launcher: it leaves `BepInEx/devtools/autoplay`, and the launcher (patched by the mod) presses Play once when it finds it.
 
 So Claude can play a game by itself: start a world without enemies, find flat ground and build.
 
@@ -284,6 +290,24 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 | `WorkerOrderTests.ManualDigWaitsForNextOrder` | A worker told to dig a voxel takes no task for 6 game seconds afterwards (also with an empty bag), digs the next ordered voxel, and takes up something again once the wait is over |
 | `WorkerOrderTests.AssignedWorkerStaysOnTask` | A worker put on a tree harvest fells two of its trees and never works in a quarry of higher priority next to it |
 | `WorkerOrderTests.RightClickedWorkerStaysOnTask` | The same for a free worker right-clicked onto a tree of the harvest (`DirectTask`): it joins the harvest's crew and stays on it |
+
+### Multiplayer checks
+
+`tools/run-multiplayer-tests.py` checks what a client gets from the host: it starts two test players of the player folder (a host on `--port`, default 27890, and a client on the next port), each on its own copy of a game root without saves, hosts a game on the loopback address, picks Invasion in the lobby (`POST /api/net/mode`), joins the client, starts and closes both introductions, then runs its checks through both APIs and saves and closes the players.
+
+| Check | What the client must have |
+|---|---|
+| `BricktronCap` | The host's bricktron limit (27), also after its own game mode script sets its own (#87) |
+| `ArmySelection` | The ranged row selects all of the host's 6 archers, also with 4 of them holding empty weapons in the client's copy (#84) |
+| `BlueprintDeliveries` | The same bricks and planks in a warehouse blueprint as the host's, after the host's builders deliver them (#83) |
+| `WaveRows` | The scoreboard's row of a wave (a cheat raid numbered 7) the host counts (#85) |
+
+```sh
+tools/run-multiplayer-tests.py                       # all checks
+tools/run-multiplayer-tests.py --filter Blueprint    # one check
+```
+
+Options: `--player`, `--root-src`, `--work` (results in `multiplayer-tests-<time>.json`, with both players' logs), `--keep`, `--hold`. The exit code is 0 when every check passed.
 
 ## Claude Code (`CastleStoryPlus.Mcp`)
 
