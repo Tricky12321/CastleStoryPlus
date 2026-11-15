@@ -1,0 +1,44 @@
+using System;
+using Brix.Assets;
+using CastleStoryPlus.Nature;
+using CastleStoryPlus.Treasure;
+using HarmonyLib;
+
+namespace CastleStoryPlus.DevTools.Testing;
+
+// What the mod adds to a world at random, kept off the tests' ground so a run does not depend on the dice:
+// - no new wild plants seed themselves while tests run (WildPlants tries columns at random every game minute);
+// - Test Island (tools/make_test_island.py), the map the test runner plays on, gets no treasure chests: their
+//   places, ruins and guards are drawn at random (and the chests stay when the run takes the units away).
+internal static class WildPlantsPause
+{
+	internal static bool Paused;
+}
+
+[HarmonyPatch(typeof(WildPlants), "Seed")]
+internal static class WildPlantsPausePatch
+{
+	private static bool Prefix()
+	{
+		return !WildPlantsPause.Paused;
+	}
+}
+
+[HarmonyPatch(typeof(TreasureChests), "Place")]
+internal static class NoTreasureOnTestIslandPatch
+{
+	private static bool Prefix(Asset_Map map)
+	{
+		if (!IsTestIsland(map))
+		{
+			return true;
+		}
+		DevToolsPlugin.Log.LogInfo("Tests: no treasure chests on Test Island");
+		return false;
+	}
+
+	internal static bool IsTestIsland(Asset_Map map)
+	{
+		return map != null && ((map.codename != null && map.codename.StartsWith("TestIsland", StringComparison.Ordinal)) || map.displayName == "Test Island");
+	}
+}

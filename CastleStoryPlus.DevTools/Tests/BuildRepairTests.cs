@@ -10,6 +10,7 @@ using Brix.Input;
 using Brix.Legacy;
 using CastleStoryPlus.DevTools.Building;
 using CastleStoryPlus.DevTools.Endpoints;
+using CastleStoryPlus.DevTools.Pathing;
 using CastleStoryPlus.DevTools.Testing;
 using UnityEngine;
 using FactoryBlocks = Brix.External.Factories.Blocks;
@@ -133,7 +134,8 @@ internal static class BuildRepairTests
 		yield return t.UntilGame(() => Gaps(steps).Count > 0 || (provider.GoalCount() == 0 && BottomDug(provider, steps, data.Bounds, bottom)), 480f, "the quarry to be dug out", 60f, () =>
 		{
 			t.Record("quarry", ProjectEndpoints.Describe(quarry));
-			t.Log("lowest dug " + LowestDug(data.Bounds) + "; steps cut " + Cut(steps) + "/" + steps.Count);
+			t.Record("whyNotDug", TaskTests.WhyNotDug(a, quarry));
+			t.Log("lowest dug " + LowestDug(data.Bounds) + "; steps cut " + Cut(steps) + "/" + steps.Count + "; " + a.name + " " + a.Activity + " at " + Units.VoxelOf(a) + ", task " + ((a.CurrentTask != null) ? a.CurrentTask.GetType().Name : "none"));
 		});
 		t.Record("lowestDug", LowestDug(data.Bounds));
 		t.Record("bottom", bottom);
@@ -144,7 +146,9 @@ internal static class BuildRepairTests
 		t.Record("stepsCut", Cut(steps));
 	}
 
-	[GameTest("Tasks", "A builder with a ground row of 6 stone bricks and a column of 3 beside it builds no column block 2 or more above the ground row before the row is finished", TimeoutSeconds = 420f)]
+	// MaxSpeed 4: at 10x the builder now and then stopped with the row at 5 of 6 and the column at 1 of 3 (about 1 run
+	// in 3); at 4x it built them in every run.
+	[GameTest("Tasks", "A builder with a ground row of 6 stone bricks and a column of 3 beside it builds no column block 2 or more above the ground row before the row is finished", TimeoutSeconds = 420f, MaxSpeed = 4f)]
 	private static IEnumerator BuildsFloorByFloor(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 12, 6);

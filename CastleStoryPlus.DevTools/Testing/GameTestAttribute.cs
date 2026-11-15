@@ -21,6 +21,9 @@ internal class GameTestAttribute : Attribute
 	// changes something the others share (the home crystal, the factions' relations, ...).
 	public bool Exclusive;
 
+	// The fastest game speed the test is stable at (0: any). In a faster run it runs alone, at this speed.
+	public float MaxSpeed;
+
 	public GameTestAttribute(string category, string description)
 	{
 		Category = category;

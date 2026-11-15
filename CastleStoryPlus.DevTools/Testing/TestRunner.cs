@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using Brix.Engine;
-using Brix.Transactions;
 using CastleStoryPlus.DevTools.Speed;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -38,6 +37,9 @@ internal class TestRunner : MonoBehaviour
 
 		// May run next to other tests ([ParallelTests] on its class and not Exclusive).
 		public bool Parallel;
+
+		// The fastest game speed the test is stable at (0: any).
+		public float MaxSpeed;
 
 		// Tests of one group never run at the same time.
 		public string Group;
@@ -87,12 +89,20 @@ internal class TestRunner : MonoBehaviour
 	// (t.Seconds) count game time, their timeouts real time, so a faster game finishes them sooner.
 	private float _speed = 1f;
 
+	// The most game time one frame may advance during a fast run: the game's per-frame logic (the AI's timers, walks,
+	// work steps) behaves the same at 10x as at 1x only while each frame is a small step. When the frame rate cannot
+	// keep up, the game runs slower than the asked speed instead (the tests count game time).
+	private const float MaxFrameSeconds = 0.25f;
+
 	// How many tests may run at the same time (1: one after the other).
 	private int _parallel = 1;
 
 	// Take the world's own units away before the run (the player's bricktrons, roaming enemies), so the tests only
 	// meet their own.
 	private bool _clearUnits;
+
+	// The run keeps a builder of its own on open ground (Scenario.EnsureAnchor).
+	private bool _anchored;
 
 	private void Awake()
 	{
@@ -128,6 +138,7 @@ internal class TestRunner : MonoBehaviour
 					Description = attribute.Description,
 					TimeoutSeconds = attribute.TimeoutSeconds,
 					NeedsHostGame = attribute.NeedsHostGame,
+					MaxSpeed = attribute.MaxSpeed,
 					Method = method
 				});
 			}
@@ -191,27 +202,39 @@ internal class TestRunner : MonoBehaviour
 		bool fast = _speed != 1f && GameSpeed.InGame() && !Neo.multiplayer;
 		if (fast)
 		{
-			GameSpeed.Instance.Set(_speed, 0f);
+			GameSpeed.Instance.Set(_speed, 0f, MaxFrameSeconds);
+		}
+		// The player's units get their routes from the navigation mesh (NavMeshExperiment), which a new world builds a
+		// while after it is loaded: a test that starts before it is ready has workers without routes.
+		float meshUntil = Time.realtimeSinceStartup + 120f;
+		while (CastleStoryPlus.Pathfinding.NavMeshExperiment.Active && !CastleStoryPlus.Pathfinding.NavMeshExperiment.Ready && CastleStoryPlus.Pathfinding.NavMeshExperiment.Phase != "failed" && Time.realtimeSinceStartup < meshUntil)
+		{
+			yield return null;
 		}
 		bool quieted = false;
-		GameObject runBuilder = null;
 		if (_clearUnits && InHostGame())
 		{
 			ClearUnits();
 			Scenario.QuietWorld();
 			quieted = true;
-			// One builder of the run's own for the older tests that use "the player's builder" (Units.Find); the
-			// newer ones bring their own. Given a few seconds to settle into the world.
-			XYZ home = Scenario.Home();
-			runBuilder = Transactor.SpawnUNet(Brix.External.Factories.Test.Bricktron, Scenario.Player, Scenario.Walkable(Scenario.Ground(home.x + 4, home.z + 2)).ToVector3(), Quaternion.identity);
-			if (runBuilder != null)
-			{
-				runBuilder.GetComponent<Brix.Game.AI.Occupation>().SetOccupation(Brix.Game.AI.Occupation.Type.Builder, true);
-				// Only what a test orders it to do: an idle builder takes a free workshop or a chore on its own.
-				runBuilder.GetComponent<Brix.Game.AI.Labor>().Autonomy = Brix.Game.AI.AutonomyStatus.WaitForOrders;
-			}
+			// The world a few seconds without them before the first test.
 			yield return new WaitForSeconds(3f);
+			// A knight of the run's own on open ground far from the tests' ground, standing still: the mod's route map
+			// of where the player's workers can walk (ReachMap) is flooded from where its workers stand, and without
+			// one on open ground it would hold only the pockets other tests' workers stand in (a pit, a walled ring),
+			// so what a test finds reachable would depend on what ran before it. The tests then start once a map
+			// flooded from it is in use.
+			int generation = CastleStoryPlus.Pathfinding.ReachMap.Generation;
+			_anchored = true;
+			Scenario.EnsureAnchor();
+			float until = Time.realtimeSinceStartup + 60f;
+			while (CastleStoryPlus.Pathfinding.ReachMap.Generation <= generation + 1 && Time.realtimeSinceStartup < until)
+			{
+				yield return null;
+			}
 		}
+		// No new plants seed themselves on the tests' ground while they run (WildPlants draws its columns at random).
+		WildPlantsPause.Paused = true;
 		// Tests start in their order as soon as they may: no more than _parallel at once, a test that must run alone
 		// only when nothing else runs (and nothing starts next to it), never two of one group at once.
 		List<int> queue = new List<int>();
@@ -223,6 +246,7 @@ internal class TestRunner : MonoBehaviour
 		List<int> deferred = new List<int>();
 		HashSet<string> busyGroups = new HashSet<string>();
 		bool aloneRunning = false;
+		float nextStrayCheck = 0f;
 		while (queue.Count > 0 || running.Count > 0 || deferred.Count > 0)
 		{
 			if (running.Count == 0 && deferred.Count > 0)
@@ -245,7 +269,7 @@ internal class TestRunner : MonoBehaviour
 			{
 				int index = queue[q];
 				TestInfo test = tests[index];
-				bool alone = !test.Parallel || _parallel == 1;
+				bool alone = !test.Parallel || _parallel == 1 || Slowed(test);
 				if (alone && running.Count > 0)
 				{
 					// Waits for the others; nothing after it starts first, so the order holds.
@@ -284,16 +308,25 @@ internal class TestRunner : MonoBehaviour
 					}
 				}));
 			}
+			// The home crystal makes bricktrons from the fireflies of killed enemies at any time: taken away again at
+			// once, before they take up chores on a running test's ground.
+			if (_anchored && Time.unscaledTime >= nextStrayCheck)
+			{
+				nextStrayCheck = Time.unscaledTime + 0.25f;
+				Scenario.RemoveStrays();
+			}
 			yield return null;
 		}
 		if (quieted)
 		{
 			Scenario.UnquietWorld();
 		}
-		if (runBuilder != null)
+		if (_anchored)
 		{
-			Scenario.Release(runBuilder);
+			_anchored = false;
+			Scenario.ReleaseAnchor();
 		}
+		WildPlantsPause.Paused = false;
 		if (fast && GameSpeed.Instance.Active)
 		{
 			GameSpeed.Instance.Reset("the test run ended");
@@ -307,8 +340,29 @@ internal class TestRunner : MonoBehaviour
 	private IEnumerator RunTracked(TestInfo test, Result result, Action done)
 	{
 		result.Attempts++;
+		if (_anchored)
+		{
+			// Back if a test's enemies killed it; and no unit about that no test brought.
+			Scenario.EnsureAnchor();
+			Scenario.RemoveStrays();
+		}
+		// A test not stable at the run's speed runs alone (Slowed), at its own top speed.
+		bool slowed = Slowed(test) && GameSpeed.Instance.Active;
+		if (slowed)
+		{
+			GameSpeed.Instance.Set(test.MaxSpeed, 0f, MaxFrameSeconds);
+		}
 		yield return StartCoroutine(RunOne(test, result));
+		if (slowed && GameSpeed.InGame())
+		{
+			GameSpeed.Instance.Set(_speed, 0f, MaxFrameSeconds);
+		}
 		done();
+	}
+
+	private bool Slowed(TestInfo test)
+	{
+		return test.MaxSpeed > 0f && test.MaxSpeed < _speed;
 	}
 
 	// Takes every unit the world has now out of it: the player's bricktrons and the map's roaming enemies and beasts.
@@ -328,7 +382,10 @@ internal class TestRunner : MonoBehaviour
 
 	private IEnumerator RunOne(TestInfo test, Result result)
 	{
-		TestContext context = new TestContext();
+		TestContext context = new TestContext { Name = test.Name };
+		// The game's own dice (hits, misses, which way a unit turns, ...) start from the same seed for the same test in
+		// every run; tests running at the same time draw from it too, so it is the same only for the same schedule.
+		UnityEngine.Random.InitState((int)Scenario.StableHash(test.Name));
 		result.Outcome = Outcome.Running;
 		result.Log = context.Lines;
 		result.Data = context.Data;

@@ -18,6 +18,9 @@ internal class TestContext
 
 	internal float Deadline;
 
+	// The test's name (Class.Method): its plot (Scenario.Plot) and its random seed follow from it.
+	internal string Name;
+
 	public void Log(string message)
 	{
 		Lines.Add(Time.realtimeSinceStartup.ToString("0.00", CultureInfo.InvariantCulture) + "  " + message);

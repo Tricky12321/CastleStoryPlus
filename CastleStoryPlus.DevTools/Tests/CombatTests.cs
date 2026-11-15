@@ -63,7 +63,9 @@ internal static class CombatTests
 		t.Record("distanceAtHit", Mathf.Round(Vector3.Distance(knight.transform.position, corruptron.transform.position) * 10f) / 10f);
 	}
 
-	[GameTest("Combat", "A corruptron next to a builder attacks it", TimeoutSeconds = 120f)]
+	// MaxSpeed 4: at 10x the corruptron now and then did not hit the builder within 60 game seconds (1 to 2 runs of 3);
+	// at 4x it did in every run.
+	[GameTest("Combat", "A corruptron next to a builder attacks it", TimeoutSeconds = 120f, MaxSpeed = 4f)]
 	private static IEnumerator CorruptronAttacksBricktron(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 8, 6);
@@ -119,7 +121,7 @@ internal static class CombatTests
 			}
 		});
 		XYZ homeVoxel = Scenario.Home();
-		XYZ start = Scenario.Site(t, 6, 6, 4, 16);
+		XYZ start = Scenario.SiteNearHome(t, 6, 6, 4, 16);
 		t.Log("Raid from " + start + " to the crystal at " + homeVoxel + " (" + before + " hp)");
 		List<Labor> raiders = new List<Labor>();
 		for (int i = 0; i < 3; i++)

@@ -95,8 +95,10 @@ internal class GameSpeed : MonoBehaviour
 		return Architecte.commence && !Architecte.termine && Architecte.instance != null;
 	}
 
-	// Main thread. speed 1 is the same as Reset.
-	internal void Set(float speed, float forSeconds)
+	// Main thread. speed 1 is the same as Reset. maxFrameSeconds, when given, is the most game time one frame may
+	// advance instead (the game then runs slower than asked when the frame rate drops, but its per-frame logic never
+	// sees a bigger step than that).
+	internal void Set(float speed, float forSeconds, float maxFrameSeconds = 0f)
 	{
 		speed = Mathf.Clamp(speed, MinSpeed, MaxSpeed);
 		if (Mathf.Approximately(speed, 1f))
@@ -116,7 +118,7 @@ internal class GameSpeed : MonoBehaviour
 		{
 			ClockConfig.SetTimeScale(DevSpeed);
 		}
-		Time.maximumDeltaTime = Mathf.Max(_savedMaxDelta, speed / MinFps);
+		Time.maximumDeltaTime = (maxFrameSeconds > 0f) ? maxFrameSeconds : Mathf.Max(_savedMaxDelta, speed / MinFps);
 		Active = true;
 		Chosen = speed;
 		ResetAt = (forSeconds > 0f) ? Time.realtimeSinceStartup + forSeconds : 0f;
