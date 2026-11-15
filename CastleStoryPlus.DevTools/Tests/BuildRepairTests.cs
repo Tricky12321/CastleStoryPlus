@@ -146,7 +146,9 @@ internal static class BuildRepairTests
 		t.Record("stepsCut", Cut(steps));
 	}
 
-	[GameTest("Tasks", "A builder with a ground row of 6 stone bricks and a column of 3 beside it builds no column block 2 or more above the ground row before the row is finished", TimeoutSeconds = 420f)]
+	// MaxSpeed 4: at 10x the builder now and then stopped with the row at 5 of 6 and the column at 1 of 3 (about 1 run
+	// in 3); at 4x it built them in every run.
+	[GameTest("Tasks", "A builder with a ground row of 6 stone bricks and a column of 3 beside it builds no column block 2 or more above the ground row before the row is finished", TimeoutSeconds = 420f, MaxSpeed = 4f)]
 	private static IEnumerator BuildsFloorByFloor(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 12, 6);
