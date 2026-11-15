@@ -168,17 +168,16 @@ internal static class WorkerOrderTests
 		t.Record("felled", Felled(treesAtStart));
 	}
 
-	[GameTest("Tasks", "Eight builders put on an 8 x 8 quarry stay on it until it is dug out, also while there are fewer blocks left than workers: none walks off to the gather point or to another quarry of higher priority next to it (#86)", TimeoutSeconds = 300f)]
+	[GameTest("Tasks", "Eight builders put on an 8 x 8 quarry that keeps stone, with no storage for it, stay on it for a minute: none walks off to the gather point or to another quarry of higher priority next to it that can be dug (#86)", TimeoutSeconds = 300f)]
 	private static IEnumerator FullCrewStaysOnBigQuarry(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 20, 14);
 		Scenario.LeavesMess(t);
 		int top = site.y - 1;
-		// 8 x 8, one layer, on the west half, keeping nothing (no storage needed); a small one of higher priority and no
-		// crew on the east half. Towards the end there are fewer blocks than workers: the ones without a block of their
-		// own must wait for the last ones, not leave.
-		MineProject quarry = Quarry(t, new Vector3(site.x - 9, top, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
-		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		// 8 x 8 and 2 deep on the west half, keeping stone with no storage anywhere (a full stockpile, as it often is):
+		// none of its blocks may be dug now, but they are still the task's work. A small quarry of higher priority and no
+		// crew on the east half keeps nothing, so it could be dug.
+		MineProject quarry = Quarry(t, new Vector3(site.x - 9, top - 1, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
 		MineProject other = Quarry(t, new Vector3(site.x + 3, top, site.z - 2), new Vector3(site.x + 6, top + 2, site.z + 1));
 		other.GetComponent<QuarryData>().SetTypesToHarvest(0);
 		Scenario.Groupe.CmdRaisePriority(other.gameObject);
@@ -193,15 +192,12 @@ internal static class WorkerOrderTests
 		yield return t.Frames(2);
 		Vector3 middle = new Vector3(site.x - 5.5f, site.y, site.z - 0.5f);
 		float farthest = 0f;
+		float end = Time.time + 60f;
 		yield return t.UntilGame(() =>
 		{
-			if (QuarryDone(quarry))
-			{
-				return true;
-			}
 			foreach (Labor worker in crew)
 			{
-				t.True(worker.Project == quarry, worker.name + " left the quarry's crew: " + Describe(worker));
+				t.True(worker.Project == quarry, worker.name + " left the quarry's crew" + ((worker.Project == other) ? " for the other quarry" : string.Empty) + ": " + Describe(worker) + "; the quarry has " + GoalCount(quarry) + " goals, alive " + quarry.IsStillAlive);
 				t.True(TaskProject(worker) != other, worker.name + " works in the other quarry: " + Describe(worker));
 				Vector3 at = worker.transform.position;
 				float away = new Vector2(at.x - middle.x, at.z - middle.z).magnitude;
@@ -209,8 +205,8 @@ internal static class WorkerOrderTests
 				// The gather point (the home crystal) is a plot or more away; 20 leaves room for a step aside round the quarry.
 				t.AtMost(20f, away, worker.name + "'s distance from the quarry's middle (" + Describe(worker) + ")");
 			}
-			return false;
-		}, 240f, "the quarry to be dug out", 30f, () => t.Log("quarry " + ProjectEndpoints.Describe(quarry)));
+			return Time.time >= end;
+		}, 70f, "a minute on the quarry", 30f, () => t.Log("quarry " + ProjectEndpoints.Describe(quarry)));
 		t.Record("farthest", Mathf.Round(farthest * 10f) / 10f);
 	}
 
@@ -249,12 +245,18 @@ internal static class WorkerOrderTests
 
 	private static bool QuarryDone(MineProject quarry)
 	{
+		return GoalCount(quarry) == 0;
+	}
+
+	private static int GoalCount(Project project)
+	{
 		List<Goal> goals = new List<Goal>();
-		foreach (IGoalProvider provider in quarry.GetGoalProviders())
+		foreach (IGoalProvider provider in project.GetGoalProviders())
 		{
 			provider?.GetAll(goals);
 		}
-		return goals.Count == 0;
+		// A dug block's goal goes back to its pool a moment later: those no longer count.
+		return goals.FindAll((Goal goal) => goal != null && !goal.IsNullOrReleased() && goal.IsValid()).Count;
 	}
 
 	// ---- helpers
