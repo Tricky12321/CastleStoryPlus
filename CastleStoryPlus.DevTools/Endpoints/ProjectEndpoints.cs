@@ -28,7 +28,7 @@ internal static class ProjectEndpoints
 	{
 		routes.Add(new Route("GET", "/api/projects", "The player's projects: id, type, priority, crew and crew size, goals (blueprints, ...; harvest: the things of its accepted kinds in its circle, harvest.inRange per kind; gameGoals: the game's own count, which fills a few frames after create), committed, position and radius of its marker", Projects)
 		{
-			Parameters = "q (part of the type name)"
+			Parameters = "q (part of the type name), all (true: every faction's, not only the player's)"
 		});
 		routes.Add(new Route("POST", "/api/projects/create", "Makes a project like the task bar does. build: an empty build project (blueprints are added by /api/blueprints/place). quarry: digs out the box from-to with its stairs. harvest: gathers trees, plants, boulders, iron or pyrite around 'at'. treefarm: a tree farm (saplings planted and felled in its box) around 'at'", Create)
 		{
@@ -50,9 +50,9 @@ internal static class ProjectEndpoints
 		{
 			Parameters = "id (project id, required), priority (locked, low, medium or high, required)"
 		});
-		routes.Add(new Route("POST", "/api/projects/crew", "Sets how many bricktrons may work on a project (0 to 8), like the + and - on its task", Crew)
+		routes.Add(new Route("POST", "/api/projects/crew", "Sets how many bricktrons may work on a project (0 to the bricktrons per task, 8 in the game), as the game's add and remove place commands do", Crew)
 		{
-			Parameters = "id (project id, required), size (0 to 8, required)"
+			Parameters = "id (project id, required), size (0 to the bricktrons per task, required)"
 		});
 	}
 
@@ -79,7 +79,7 @@ internal static class ProjectEndpoints
 		List<object> result = new List<object>();
 		foreach (Project project in Object.FindObjectsOfType<Project>())
 		{
-			if (project == null || project.faction != faction || project is IdleProject)
+			if (project == null || (faction != null && project.faction != faction) || project is IdleProject)
 			{
 				continue;
 			}
@@ -104,6 +104,7 @@ internal static class ProjectEndpoints
 		return Obj(
 			"id", project.gameObject.InstanceId(),
 			"type", project.GetType().Name,
+			"faction", (project.faction != null) ? project.faction.name : null,
 			"priority", project.PriorityBias.ToString(),
 			"crew", project.CrewCount(),
 			"maxCrew", project.MaximumCrewSize,
@@ -256,7 +257,7 @@ internal static class ProjectEndpoints
 	private static object Projects(ApiRequest request)
 	{
 		NeedGame();
-		List<object> projects = List(User.LocalUser.faction, request.String("q", string.Empty));
+		List<object> projects = List(request.Bool("all", false) ? null : User.LocalUser.faction, request.String("q", string.Empty));
 		return Obj("count", projects.Count, "projects", projects);
 	}
 
@@ -592,12 +593,13 @@ internal static class ProjectEndpoints
 		NeedHost();
 		Project project = Find(request.Int("id", 0));
 		int size = request.Int("size", -1);
-		if (size < 0 || size > 8)
+		int most = CastleStoryPlus.WorkerAI.TaskCrewSize.Value;
+		if (size < 0 || size > most)
 		{
-			throw new ApiException(400, "'size' must be from 0 to 8");
+			throw new ApiException(400, "'size' must be from 0 to " + most + " (the bricktrons per task)");
 		}
 		UNetGroupe groupe = User.LocalUser.GetComponent<UNetGroupe>();
-		for (int i = 0; i < 8 && project.MaximumCrewSize != size; i++)
+		for (int i = 0; i <= CastleStoryPlus.WorkerAI.TaskCrewSize.Most && project.MaximumCrewSize != size; i++)
 		{
 			if (project.MaximumCrewSize < size)
 			{

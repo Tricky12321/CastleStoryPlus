@@ -294,7 +294,7 @@ internal static class TaskTests
 	{
 		XYZ site = Scenario.Site(t, 8, 6);
 		BuildProject project = Scenario.BuildProject(t, site);
-		for (int i = 0; i < 8 && project.MaximumCrewSize > 1; i++)
+		for (int i = 0; i < CastleStoryPlus.WorkerAI.TaskCrewSize.Most && project.MaximumCrewSize > 1; i++)
 		{
 			Scenario.Groupe.CmdRemoveProjectCapacity(project.gameObject);
 		}

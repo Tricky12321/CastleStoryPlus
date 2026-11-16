@@ -21,6 +21,7 @@ Workers find, share and finish their work on their own.
 | Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting (after digging also when none of the area's blocks fits in the bag any more). | `TaskFlow` |
 | A task can be paused instead of deleted: no bricktron works on it until it is resumed. | `PauseTasks` |
 | Limit how many bricktrons work on a task at a time, e.g. a quarry with 4. | `WorkLimit` |
+| **New (#88):** more than 8 bricktrons per task. "Bricktrons per task" (1 to 31, the game: 8) sets how many a task's crew holds; putting more bricktrons on a task grows its crew up to that. Multiplayer: the host chooses it in the lobby and every player gets it; single player: Settings > Castle Story Plus, `[Workers] BricktronsPerTask`. | `TaskCrewSize` |
 | Give a single blueprint (e.g. a warehouse) top priority from the context wheel over it. | `BuildPriority` |
 | Cleanup and repair round the base are two fixed tasks with their own priority and crew, instead of chores for every idle worker. | `BaseJobs` |
 | Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |

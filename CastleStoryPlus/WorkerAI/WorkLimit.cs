@@ -27,9 +27,6 @@ internal static class WorkLimit
 
 	internal const int Most = Mask;
 
-	// The step down from no limit.
-	private const int FirstLimit = 8;
-
 	private const int SetLimitHash = 1129595235;
 
 	private const float CountSeconds = 0.5f;
@@ -110,7 +107,7 @@ end
 		return (project != null && project.State != null) ? (ProjectFlags.Get(project.State) >> Shift) & Mask : 0;
 	}
 
-	private static void Set(Project project, int limit)
+	internal static void Set(Project project, int limit)
 	{
 		if (project == null || project.State == null || project is IdleProject)
 		{
@@ -153,16 +150,25 @@ end
 		return (max == -1) ? limit : Mathf.Min(max, limit);
 	}
 
-	// All -> 8 -> 7 ... 1 going down; 1 ... 31 -> All going up.
-	internal static int Next(int limit, int direction)
+	// How far the limit steps: the task's crew size (TaskCrewSize: 8 in the game, up to 31), or more when the task
+	// has grown past it.
+	internal static int MostFor(Project project)
 	{
+		int size = (project != null) ? project.MaximumCrewSize : 0;
+		return Mathf.Clamp(Mathf.Max(size, TaskCrewSize.Value), 1, Most);
+	}
+
+	// All -> most -> most - 1 ... 1 going down; 1 ... most -> All going up (most: the task's crew size, MostFor).
+	internal static int Next(int limit, int direction, int most)
+	{
+		most = Mathf.Clamp(most, 1, Most);
 		if (direction < 0)
 		{
-			return (limit == 0) ? FirstLimit : Mathf.Max(1, limit - 1);
+			return (limit == 0) ? most : Mathf.Max(1, Mathf.Min(limit, most + 1) - 1);
 		}
 		if (direction > 0)
 		{
-			return (limit == 0 || limit >= Most) ? 0 : limit + 1;
+			return (limit == 0 || limit >= most) ? 0 : limit + 1;
 		}
 		return limit;
 	}
@@ -175,7 +181,7 @@ end
 			return false;
 		}
 		int limit = Get(project);
-		int next = Next(limit, direction);
+		int next = Next(limit, direction, MostFor(project));
 		if (next == limit)
 		{
 			return false;

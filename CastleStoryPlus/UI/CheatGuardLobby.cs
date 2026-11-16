@@ -19,6 +19,11 @@ internal class CheatGuardLobby : MonoBehaviour
 	// Set by the lobby menu opening and closing (CheatGuardLobbyPatch).
 	internal static bool LobbyOpen;
 
+	// The panel while it is shown, else null: other lobby choices stack above it (TaskCrewSizeLobby).
+	internal static RectTransform ShownPanel;
+
+	private RectTransform _panel;
+
 	private GameObject _canvas;
 
 	private Text _value;
@@ -38,6 +43,7 @@ internal class CheatGuardLobby : MonoBehaviour
 		GameObject panel = CreatePanel("CheatsPanel", _canvas.transform);
 		panel.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
 		RectTransform rect = panel.GetComponent<RectTransform>();
+		_panel = rect;
 		rect.anchorMin = rect.anchorMax = Vector2.zero;
 		rect.pivot = Vector2.zero;
 		rect.anchoredPosition = new Vector2(0f, 200f);
@@ -78,10 +84,16 @@ internal class CheatGuardLobby : MonoBehaviour
 		{
 			_canvas.SetActive(shown);
 		}
+		ShownPanel = shown ? _panel : null;
 		if (shown)
 		{
 			Refresh();
 		}
+	}
+
+	private void OnDisable()
+	{
+		ShownPanel = null;
 	}
 
 	private void Refresh()

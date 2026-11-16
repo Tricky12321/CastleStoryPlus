@@ -9,6 +9,8 @@ game. The checks compare what the client has with what the host has, through the
                           copies of their weapons say otherwise (issue #84)
     BlueprintDeliveries   material delivered to a blueprint reaches the client's blueprint (issue #83)
     WaveRows              the scoreboard's waves (enemies left of each wave) reach the client (issue #85)
+    TaskCrew              the host's 12 bricktrons per task, chosen in the lobby, reach the client, and twelve of the
+                          client's bricktrons put on its own task all join its crew there and on the host (issue #88)
 
     tools/run-multiplayer-tests.py [--filter Cap] [--port 27890] [--player DIR] [--root-src DIR] [--keep] [--hold N]
 
@@ -118,6 +120,12 @@ def join(host, client):
     host.call("POST", "/api/net/host", port=GAME_PORT, name="Host")
     host.wait_for("the lobby", lambda: any(p.get("local") for p in host.call("GET", "/api/net").get("players", [])), 120)
     log("lobby:", host.call("POST", "/api/net/mode", gamemode="invasion"))
+    # The checks use the API's cheats (spawns, enemies), off in every new lobby (CheatGuard).
+    host.call("POST", "/api/net/cheats", value="true")
+    # Chosen in the lobby, as the host's "Bricktrons per task" does (TaskCrew); the setting is saved in the player
+    # folder's config, so it is put back afterwards.
+    TASK_CREW_BEFORE.append(host.call("GET", "/api/net/taskcrew")["value"])
+    log("bricktrons per task:", host.call("POST", "/api/net/taskcrew", value=TASK_CREW)["value"])
     client.call("POST", "/api/net/join", address="127.0.0.1", port=GAME_PORT, name="Client")
     host.wait_for("the client in the lobby", lambda: len(host.call("GET", "/api/net").get("players", [])) >= 2, 120)
     time.sleep(3)
@@ -206,11 +214,59 @@ def check_wave_rows(host, client):
     return True, "client shows %s" % rows()
 
 
+TASK_CREW = 12
+
+TASK_CREW_BEFORE = []
+
+
+def own_projects(player, kind, everyone=False):
+    return player.call("GET", "/api/projects", q=kind, all="true" if everyone else "false")["projects"]
+
+
+def builders(player):
+    return [b for b in player.call("GET", "/api/bricktrons")["bricktrons"] if b["job"] == "Builder"]
+
+
+def check_task_crew(host, client):
+    try:
+        client.wait_for("the host's bricktrons per task", lambda: client.call("GET", "/api/net/taskcrew")["value"] == TASK_CREW, 15)
+    except RuntimeError:
+        return False, "the client has %s" % client.call("GET", "/api/net/taskcrew")
+    # The client's own builders: the host's limit high enough, then the game's spawn command sent by the client (the
+    # API's own spawn cheat is the host's; cheats are allowed in this game).
+    host.call("POST", "/api/net/rules", bricktronCap=60)
+    have = len(builders(client))
+    if have < TASK_CREW:
+        for _ in range(TASK_CREW - have):
+            client.call("POST", "/api/net/cheatprobe", kind="spawn")
+        client.wait_for("%d builders" % TASK_CREW, lambda: len(builders(client)) >= TASK_CREW, 30)
+    before = set(p["id"] for p in own_projects(client, "Build"))
+    client.call("POST", "/api/projects/create", type="build")
+    client.wait_for("its new build task", lambda: len([p for p in own_projects(client, "Build") if p["id"] not in before]) > 0, 30)
+    project = [p for p in own_projects(client, "Build") if p["id"] not in before][0]
+    if project["maxCrew"] != TASK_CREW:
+        return False, "the client's new task takes %d, not %d" % (project["maxCrew"], TASK_CREW)
+    units = ",".join(str(b["id"]) for b in builders(client)[:TASK_CREW])
+    client.call("POST", "/api/projects/hire", id=project["id"], units=units)
+
+    def crew(player, everyone):
+        # The host sees the client's task among every faction's; ids differ between the players.
+        return max([p["crew"] for p in own_projects(player, "Build", everyone)] or [0])
+
+    try:
+        client.wait_for("a crew of %d on its task" % TASK_CREW, lambda: crew(client, False) == TASK_CREW, 20)
+        host.wait_for("a crew of %d on the client's task" % TASK_CREW, lambda: crew(host, True) == TASK_CREW, 20)
+    except RuntimeError:
+        return False, "crew on the client %d, on the host %d (of %d put on it)" % (crew(client, False), crew(host, True), TASK_CREW)
+    return True, "the client's task holds %d on both players" % TASK_CREW
+
+
 CHECKS = [
     ("BricktronCap", check_bricktron_cap),
     ("ArmySelection", check_army_selection),
     ("BlueprintDeliveries", check_blueprint_deliveries),
     ("WaveRows", check_wave_rows),
+    ("TaskCrew", check_task_crew),
 ]
 
 
@@ -255,6 +311,11 @@ def main():
             log("holding the players for %d s" % args.hold)
             time.sleep(args.hold)
     finally:
+        if TASK_CREW_BEFORE:
+            try:
+                host.call("POST", "/api/net/taskcrew", value=TASK_CREW_BEFORE[0])
+            except Exception as e:
+                log("[host]", "bricktrons per task not put back:", repr(e))
         client.quit()
         host.quit()
     path = os.path.join(args.work, "multiplayer-tests-%s.json" % stamp)
