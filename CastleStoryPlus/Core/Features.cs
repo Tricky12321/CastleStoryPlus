@@ -467,6 +467,10 @@ internal static class Features
 
 	public const string WorkLimitInfo = "How many bricktrons work on a task at a time (e.g. a quarry with 4): a Workers at a time button among the task's actions with + and -; All when there is no limit; saved with the task.";
 
+	public const string TaskCrewSize = "TaskCrewSize";
+
+	public const string TaskCrewSizeInfo = "How many bricktrons a task's crew can hold, [Workers] BricktronsPerTask (1 to 31; the game fixes 8): every task starts with that crew size and putting more bricktrons on it grows it up to that. In a multiplayer game the host's choice applies (\"Bricktrons per task\" in the lobby, shown to every player) (#88).";
+
 	public const string PauseTasks = "PauseTasks";
 
 	public const string PauseTasksInfo = "A task can be paused instead of deleted (pause button next to delete): no bricktron works on it until it is resumed, and it keeps its blueprints and zones; its crew are released and put back when it is resumed; saved with the task.";

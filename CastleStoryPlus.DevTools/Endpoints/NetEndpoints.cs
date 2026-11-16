@@ -78,6 +78,11 @@ internal static class NetEndpoints
 		{
 			Parameters = "value (true or false; required)"
 		});
+		routes.Add(new Route("GET", "/api/net/taskcrew", "Bricktrons per task (TaskCrewSize) as this player has it: the value, whether this player chooses it, and the tasks' crew sizes in the world", TaskCrew));
+		routes.Add(new Route("POST", "/api/net/taskcrew", "Single player or host: sets the bricktrons per task, as the lobby's \"Bricktrons per task\" and the mod's settings do (in the lobby or a game; the tasks in the world take it at once)", SetTaskCrew)
+		{
+			Parameters = "value (1 to 31; required)"
+		});
 		routes.Add(new Route("POST", "/api/net/cheatprobe", "Test of the cheat guard: sends the game's spawn command (a builder by the home crystal) or a blueprint placed at once to the host, as a changed game could; the host refuses them while cheats are off", CheatProbe)
 		{
 			Parameters = "kind (spawn or instant; required), key (instant: Factory/Name of the blueprint), at (instant: x,y,z)"
@@ -111,6 +116,46 @@ internal static class NetEndpoints
 			return Obj("sent", "CmdSpawnPlacedBlueprint instant", "at", at.ToString());
 		}
 		throw new ApiException(400, "'kind' takes spawn or instant");
+	}
+
+	private static object TaskCrew(ApiRequest request)
+	{
+		return TaskCrewState();
+	}
+
+	private static object SetTaskCrew(ApiRequest request)
+	{
+		if (!CastleStoryPlus.WorkerAI.TaskCrewSize.CanChoose)
+		{
+			throw new ApiException(409, "Only single player or the host of a multiplayer game (with TaskCrewSize on)");
+		}
+		int value = request.Int("value", 0);
+		if (value < 1 || value > CastleStoryPlus.WorkerAI.TaskCrewSize.Most)
+		{
+			throw new ApiException(400, "'value' must be from 1 to " + CastleStoryPlus.WorkerAI.TaskCrewSize.Most);
+		}
+		CastleStoryPlus.WorkerAI.TaskCrewSize.Set(value);
+		return TaskCrewState();
+	}
+
+	private static object TaskCrewState()
+	{
+		Dictionary<string, int> sizes = new Dictionary<string, int>();
+		foreach (Brix.Game.AI.Project project in Object.FindObjectsOfType<Brix.Game.AI.Project>())
+		{
+			if (CastleStoryPlus.WorkerAI.TaskCrewSize.Applies(project))
+			{
+				string key = project.GetType().Name + " " + project.MaximumCrewSize;
+				sizes.TryGetValue(key, out int n);
+				sizes[key] = n + 1;
+			}
+		}
+		List<object> tasks = new List<object>();
+		foreach (KeyValuePair<string, int> pair in sizes)
+		{
+			tasks.Add(pair.Key + " x" + pair.Value);
+		}
+		return Obj("value", CastleStoryPlus.WorkerAI.TaskCrewSize.Value, "canChoose", CastleStoryPlus.WorkerAI.TaskCrewSize.CanChoose, "tasks", tasks);
 	}
 
 	private static object Cheats(ApiRequest request)

@@ -159,7 +159,8 @@ end
 local function MaxCrew(id)
 	if id == P.idleId then return 15 end
 	if id == P.knightId or id == P.archerId then return 30 end
-	return 8
+	-- A task's crew can hold up to 31 (TaskCrewSize); HasCrew stops at the crew there is.
+	return 31
 end
 
 local function HasCrew(id, n)

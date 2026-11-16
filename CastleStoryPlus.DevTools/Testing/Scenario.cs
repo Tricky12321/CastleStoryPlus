@@ -684,7 +684,7 @@ internal static class Scenario
 				continue;
 			}
 			QuietCrews[project] = project.MaximumCrewSize;
-			for (int i = 0; i < 8 && project.MaximumCrewSize > 0; i++)
+			for (int i = 0; i < CastleStoryPlus.WorkerAI.TaskCrewSize.Most && project.MaximumCrewSize > 0; i++)
 			{
 				Groupe.CmdRemoveProjectCapacity(project.gameObject);
 			}
@@ -706,7 +706,7 @@ internal static class Scenario
 		}
 		foreach (KeyValuePair<Project, int> pair in QuietCrews)
 		{
-			for (int i = 0; i < 8 && pair.Key != null && pair.Key.MaximumCrewSize < pair.Value; i++)
+			for (int i = 0; i < CastleStoryPlus.WorkerAI.TaskCrewSize.Most && pair.Key != null && pair.Key.MaximumCrewSize < pair.Value; i++)
 			{
 				Groupe.CmdAddProjectCapacity(pair.Key.gameObject);
 			}

@@ -334,7 +334,8 @@ internal class GameTaskList : MonoBehaviour
 
 	private static readonly Occupation.Job[] RangedJobs = new Occupation.Job[4] { Occupation.Job.Archer, Occupation.Job.Arbalist, Occupation.Job.Artificer, Occupation.Job.Alchemist };
 
-	// The crew's faces: per bricktron its face, lit when selected (at most MaxCrew).
+	// The crew's faces: per bricktron its face, lit when selected (the idle group at most 15, a task's crew as many as
+	// it can hold: up to 31 with TaskCrewSize).
 	internal static void Crew(RowKey key, List<Sprite> faces)
 	{
 		faces.Clear();
@@ -344,7 +345,7 @@ internal class GameTaskList : MonoBehaviour
 			return;
 		}
 		Project project = key.Operable ? ((GameUiState.Station != null) ? GameUiState.Station.GetComponent<Project>() : null) : key.Project;
-		int max = IsIdle(key) ? 15 : 8;
+		int max = IsIdle(key) ? 15 : CastleStoryPlus.WorkerAI.WorkLimit.Most;
 		if (project == null)
 		{
 			return;
