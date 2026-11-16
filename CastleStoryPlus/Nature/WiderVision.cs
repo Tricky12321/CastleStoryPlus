@@ -11,18 +11,27 @@ namespace CastleStoryPlus.Nature;
 [HarmonyPatch(typeof(LocalFactionVisionConfigurator), "FogDistance", MethodType.Getter)]
 internal static class WiderVision
 {
+	private const float DefaultMultiplier = 1.1f;
+
 	internal static ConfigEntry<float> Multiplier;
 
 	private static void Enable()
 	{
-		Multiplier = Plugin.Cfg.Bind("FogOfWar", "VisionMultiplier", 1.1f, new ConfigDescription("How far units see through the fog of war, times the game's distance for the map size.", new AcceptableValueRange<float>(0.5f, 3f)));
+		Multiplier = Plugin.Cfg.Bind("FogOfWar", "VisionMultiplier", DefaultMultiplier, new ConfigDescription("How far units see through the fog of war, times the game's distance for the map size.", new AcceptableValueRange<float>(0.5f, 3f)));
 	}
 
 	private static void Postfix(ref int __result)
 	{
 		if (Multiplier != null && __result > 0)
 		{
-			__result = UnityEngine.Mathf.RoundToInt(__result * Multiplier.Value);
+			float multiplier = Multiplier.Value;
+			// The fog is each player's own view: in a multiplayer game without cheats no player sees further than the
+			// default lets everyone (CheatGuard).
+			if (multiplier > DefaultMultiplier && Multiplayer.CheatGuard.Restricted)
+			{
+				multiplier = DefaultMultiplier;
+			}
+			__result = UnityEngine.Mathf.RoundToInt(__result * multiplier);
 		}
 	}
 }

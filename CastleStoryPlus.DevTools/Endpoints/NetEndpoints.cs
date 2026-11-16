@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Brix.Assets;
 using Brix.Engine;
 using Brix.Game;
 using Brix.Game.Rules;
@@ -43,6 +44,15 @@ internal static class NetEndpoints
 		{
 			Parameters = "value (required)"
 		});
+		routes.Add(new Route("POST", "/api/net/mode", "Host: picks the lobby's game mode and preset (and a map that has the mode), as the lobby's map and mode lists do", Mode)
+		{
+			Parameters = "gamemode (codename, required, e.g. invasion), preset (codename or name; default the mode's default), map (codename or name; default the lobby's map if it has the mode, else the first official one that has it)"
+		});
+		routes.Add(new Route("GET", "/api/net/rules", "The game's rules as this player has them: the bricktron limit (with the research's Housing; baseCap without it)", Rules));
+		routes.Add(new Route("POST", "/api/net/rules", "Sets the game's bricktron limit as a game mode's settings do when the map loads (the host: for every player; a client: as its own game mode script does, which the host's limit overrides)", SetRules)
+		{
+			Parameters = "bricktronCap (required)"
+		});
 		routes.Add(new Route("GET", "/api/net/nameedit", "The lobby's name box: shown, focused, its text", NameEditState));
 		routes.Add(new Route("POST", "/api/net/nameedit", "Opens the lobby's name box, focuses it and puts text in it as typing does (nothing is sent until Enter)", NameEdit)
 		{
@@ -64,6 +74,58 @@ internal static class NetEndpoints
 		{
 			Parameters = "value (allied, neutral or enemy; required)"
 		});
+		routes.Add(new Route("POST", "/api/net/cheats", "Host: allows cheats for every player of this multiplayer game or not, as the lobby's \"Cheats\" does (off for every new lobby). While they are off, the API's cheats answer 403", Cheats)
+		{
+			Parameters = "value (true or false; required)"
+		});
+		routes.Add(new Route("POST", "/api/net/cheatprobe", "Test of the cheat guard: sends the game's spawn command (a builder by the home crystal) or a blueprint placed at once to the host, as a changed game could; the host refuses them while cheats are off", CheatProbe)
+		{
+			Parameters = "kind (spawn or instant; required), key (instant: Factory/Name of the blueprint), at (instant: x,y,z)"
+		});
+	}
+
+	// Sends a cheat to the host as a player with a changed game could: the game's spawn command, or a blueprint placed
+	// at once. For testing that the host refuses them (CheatGuard); the host's answer shows in its world, not here.
+	private static object CheatProbe(ApiRequest request)
+	{
+		if (User.LocalUser == null || User.LocalUser.faction == null)
+		{
+			throw new ApiException(409, "No game in progress");
+		}
+		string kind = request.Required("kind");
+		if (kind == "spawn")
+		{
+			Vector3 at = WorldEndpoints.HomeVoxel().ToVector3() + new Vector3(3f, 1f, 3f);
+			User.LocalUser.GetComponent<UNetProjectCmd>().CallCmdSpawn(Brix.External.Factories.Test.Bricktron.Factory, Brix.External.Factories.Test.Bricktron.Name, at, Quaternion.identity, User.LocalUser.faction.gameObject, Brix.Game.AI.Occupation.Type.Builder, true);
+			return Obj("sent", "CmdSpawn", "at", at.ToString());
+		}
+		if (kind == "instant")
+		{
+			string[] key = request.Required("key").Split('/');
+			if (key.Length != 2)
+			{
+				throw new ApiException(400, "'key' takes Factory/Name");
+			}
+			Vector3 at = request.Vector("at");
+			User.LocalUser.GetComponent<UNetBlueprint>().CallCmdSpawnPlacedBlueprint(key[0], key[1], at, Quaternion.identity, true, null, false);
+			return Obj("sent", "CmdSpawnPlacedBlueprint instant", "at", at.ToString());
+		}
+		throw new ApiException(400, "'kind' takes spawn or instant");
+	}
+
+	private static object Cheats(ApiRequest request)
+	{
+		if (!CastleStoryPlus.Multiplayer.CheatGuard.CanChoose)
+		{
+			throw new ApiException(409, "Only the host of a multiplayer game or lobby");
+		}
+		CastleStoryPlus.Multiplayer.CheatGuard.SetAllowed(request.Bool("value", false));
+		return CheatsState();
+	}
+
+	private static object CheatsState()
+	{
+		return Obj("hostAllows", CastleStoryPlus.Multiplayer.CheatGuard.HostAllows, "multiplayerGame", CastleStoryPlus.Multiplayer.CheatGuard.InMultiplayerGame, "allowed", CastleStoryPlus.Multiplayer.CheatGuard.Allowed);
 	}
 
 	private static object Relations(ApiRequest request)
@@ -133,7 +195,8 @@ internal static class NetEndpoints
 			"steam", Steam(),
 			"lanSearch", manager != null && manager.networkDiscovery != null && manager.networkDiscovery.running && manager.networkDiscovery.isClient,
 			"lanGames", LanGames,
-			"onlineGames", OnlineGames());
+			"onlineGames", OnlineGames(),
+			"cheats", CheatsState());
 	}
 
 	private static object Host(ApiRequest request)
@@ -194,6 +257,101 @@ internal static class NetEndpoints
 		}
 		LobbyMenu.StartGame();
 		return Obj("starting", true);
+	}
+
+	private static object Mode(ApiRequest request)
+	{
+		RequireLobby();
+		if (!NetworkServer.active)
+		{
+			throw new ApiException(409, "Only the host picks the mode");
+		}
+		string modeName = request.Required("gamemode");
+		string mapName = request.String("map", null);
+		Asset_Map map = null;
+		List<Asset_Map> maps = new List<Asset_Map>(AssetDispensary.maps.SendQuery(AssetQueryParameters.AllSources | AssetQueryParameters.RefreshCache, AssetPlayableContext.Multiplayer, loadSubassets: true));
+		if (mapName == null && GameParam.Map != null && ModeOf(GameParam.Map, modeName) != null)
+		{
+			map = GameParam.Map;
+		}
+		foreach (Asset_Map candidate in maps)
+		{
+			if (map != null)
+			{
+				break;
+			}
+			bool matches = (mapName == null)
+				? candidate.authorType == AssetAuthorType.Official && ModeOf(candidate, modeName) != null
+				: candidate.codename.Equals(mapName, System.StringComparison.OrdinalIgnoreCase) || candidate.displayName.Equals(mapName, System.StringComparison.OrdinalIgnoreCase);
+			if (matches)
+			{
+				map = candidate;
+			}
+		}
+		if (map == null)
+		{
+			throw new ApiException(404, (mapName == null) ? "No official multiplayer map has the mode '" + modeName + "'" : "No multiplayer map '" + mapName + "'");
+		}
+		Asset_Gamemode mode = ModeOf(map, modeName);
+		if (mode == null)
+		{
+			throw new ApiException(404, "The map " + map.displayName + " has no multiplayer mode '" + modeName + "'");
+		}
+		string presetName = request.String("preset", null);
+		Asset_GamemodePreset preset = null;
+		foreach (Asset_GamemodePreset candidate in mode.GetPresets(AssetQueryParameters.AllSources, AssetPlayableContext.Multiplayer))
+		{
+			if (presetName == null ? candidate.isDefault : (candidate.codename.Equals(presetName, System.StringComparison.OrdinalIgnoreCase) || candidate.displayName.Equals(presetName, System.StringComparison.OrdinalIgnoreCase)))
+			{
+				preset = candidate;
+				break;
+			}
+		}
+		if (preset == null)
+		{
+			preset = (presetName == null) ? mode.GetDefaultPreset(AssetQueryParameters.AllSources, AssetPlayableContext.Multiplayer) : null;
+			if (preset == null)
+			{
+				throw new ApiException(404, "The mode " + mode.codename + " has no multiplayer preset '" + presetName + "'");
+			}
+		}
+		GameParam.Map = map;
+		GameParam.Gamemode = mode;
+		GameParam.Preset = preset;
+		return Obj("map", map.displayName, "mapCodename", map.codename, "gamemode", mode.codename, "preset", preset.codename);
+	}
+
+	private static Asset_Gamemode ModeOf(Asset_Map map, string modeName)
+	{
+		foreach (Asset_Gamemode mode in map.GetGamemodes(AssetPlayableContext.Multiplayer))
+		{
+			if (mode != null && (mode.codename.Equals(modeName, System.StringComparison.OrdinalIgnoreCase) || mode.displayName.Equals(modeName, System.StringComparison.OrdinalIgnoreCase)))
+			{
+				return mode;
+			}
+		}
+		return null;
+	}
+
+	private static object Rules(ApiRequest request)
+	{
+		GeneralRules rules = GeneralRules.Main;
+		if (rules == null)
+		{
+			throw new ApiException(409, "No game rules (not in a game)");
+		}
+		return Obj("server", NetworkServer.active, "bricktronCap", rules.bricktronCap, "baseCap", rules._bricktronCap);
+	}
+
+	private static object SetRules(ApiRequest request)
+	{
+		if (GeneralRules.Main == null)
+		{
+			throw new ApiException(409, "No game rules (not in a game)");
+		}
+		// Through the property by reflection, as the game mode's Lua (Rules.bricktronCap = ...) sets it.
+		typeof(GeneralRules).GetProperty(nameof(GeneralRules.bricktronCap)).SetValue(GeneralRules.Main, request.Int("bricktronCap", GeneralRules.Main._bricktronCap), null);
+		return Rules(request);
 	}
 
 	private static object Name(ApiRequest request)

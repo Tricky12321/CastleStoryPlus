@@ -163,11 +163,24 @@ internal class ApiServer
 			{
 				continue;
 			}
+			// The API's cheats are refused in a multiplayer game without cheats (CheatRoutes).
 			if (route.OffMainThread)
 			{
+				if (CheatRoutes.IsCheat(request))
+				{
+					MainThread.Run(() =>
+					{
+						CheatRoutes.Check(request);
+						return null;
+					}, route.TimeoutMs);
+				}
 				return route.Handler(request);
 			}
-			return MainThread.Run(() => route.Handler(request), route.TimeoutMs);
+			return MainThread.Run(() =>
+			{
+				CheatRoutes.Check(request);
+				return route.Handler(request);
+			}, route.TimeoutMs);
 		}
 		if (pathFound)
 		{

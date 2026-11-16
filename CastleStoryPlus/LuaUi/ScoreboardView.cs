@@ -242,6 +242,7 @@ end
 		Patch("Gamemodes/creditisland/ui.lua", "creditisland");
 		LuaInjection.AddPatch(Features.CsMenus, "Gamemodes/grabthegems/Data/Data_Menu.lua", "GS_Scoreboard:LoadMenuFromClosure(self._DoLoadScoreboard)\n", LuaInjection.Mode.Replace, "if not CastleStoryPlus.CsScoreboard(\"grabthegems\", GS_Scoreboard) then GS_Scoreboard:LoadMenuFromClosure(self._DoLoadScoreboard) end\n");
 		GameSession.OnLeave(Drop);
+		GameSession.OnLeave(Invasion.WaveCountsSync.Forget);
 	}
 
 	private static string ModeKey(string mode)
@@ -670,14 +671,37 @@ end
 		Active(_nextButton, LuaBridge.Bool(LuaBridge.Get(data, "server"), false));
 		if (withWaves)
 		{
-			Waves(LuaBridge.GetTable(data, "waves"));
+			// The raids are the host's alone: a client shows the host's rows (WaveCountsSync).
+			int[] rows = Rows(LuaBridge.GetTable(data, "waves"));
+			Invasion.WaveCountsSync.Listen();
+			if (UnityEngine.Networking.NetworkServer.active)
+			{
+				Invasion.WaveCountsSync.Send(rows);
+			}
+			else if (Invasion.WaveCountsSync.Rows != null)
+			{
+				rows = Invasion.WaveCountsSync.Rows;
+			}
+			Waves(rows);
 		}
 	}
 
-	// Rows of nine numbers: wave, then left and seen of minitrons, corruptrons, biftrons and magitrons.
-	private void Waves(Table waves)
+	// The Lua side's rows as numbers.
+	private static int[] Rows(Table waves)
 	{
-		int count = (waves != null) ? waves.Length / 9 : 0;
+		int count = (waves != null) ? waves.Length / 9 * 9 : 0;
+		int[] rows = new int[count];
+		for (int i = 0; i < count; i++)
+		{
+			rows[i] = (int)LuaBridge.Number(waves.Get(i + 1), 0f);
+		}
+		return rows;
+	}
+
+	// Rows of nine numbers: wave, then left and seen of minitrons, corruptrons, biftrons and magitrons.
+	private void Waves(int[] waves)
+	{
+		int count = waves.Length / 9;
 		for (int i = 0; i < count; i++)
 		{
 			if (i >= _waveRows.Count)
@@ -687,13 +711,13 @@ end
 			WaveRow row = _waveRows[i];
 			Active(row.Root, true);
 			int at = i * 9;
-			int wave = (int)LuaBridge.Number(waves.Get(at + 1), 0f);
+			int wave = waves[at];
 			int left = 0;
 			int seen = 0;
 			for (int k = 0; k < 4; k++)
 			{
-				int kindLeft = (int)LuaBridge.Number(waves.Get(at + 2 + k), 0f);
-				int kindSeen = (int)LuaBridge.Number(waves.Get(at + 6 + k), 0f);
+				int kindLeft = waves[at + 1 + k];
+				int kindSeen = waves[at + 5 + k];
 				left += kindLeft;
 				seen += kindSeen;
 				Set(row.Kinds[k], kindLeft + "/" + kindSeen);

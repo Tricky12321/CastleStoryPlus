@@ -21,6 +21,9 @@ namespace CastleStoryPlus.Building;
 // class, the game's way), saved with the stand's storage (an extra "rackFilter") and synced to the other players:
 // the host sends every stand's filter when one changes and every few seconds (players who join get it then);
 // clients send their changes to the host.
+// The game's placed weapon stands cannot be selected at all (their UISelectable has Selectable off, and the selection
+// type of a forge), so a click on one did nothing and the window never showed (#77): RackFilterSelectablePatch makes
+// them selectable, as a "Toolrack" selection of their own.
 [Feature(Features.RackFilter, Features.RackFilterInfo)]
 internal static class RackFilter
 {
@@ -95,7 +98,11 @@ internal static class RackFilter
 	internal static ToolRack Selected()
 	{
 		List<GameObject> selected = new List<GameObject>();
-		UIGameSelector.GetSelectedInTrack(ref selected, SelectionTrackID.Storage);
+		if (UIGameSelector.instance == null)
+		{
+			return null;
+		}
+		UIGameSelector.GetSelectedOfType(ref selected, SelectionType.Toolrack);
 		foreach (GameObject go in selected)
 		{
 			ToolRack rack = (go != null) ? go.GetComponent<ToolRack>() : null;
@@ -301,6 +308,25 @@ internal class RackFilterSync : MonoBehaviour
 			Plugin.Log.LogWarning("RackFilter: " + ex.Message);
 			enabled = false;
 		}
+	}
+}
+
+// A placed weapon stand can be selected (a click on it opens the filter window): the game made it hoverable only, with
+// the selection type of a forge. Set before the stand's selection behaviour is made from them.
+[Feature(Features.RackFilter, Features.RackFilterInfo)]
+[HarmonyPatch(typeof(UISelectable), nameof(UISelectable.ResetSelectableParent))]
+internal static class RackFilterSelectablePatch
+{
+	private static readonly AccessTools.FieldRef<UISelectable, SelectionType> Type = AccessTools.FieldRefAccess<UISelectable, SelectionType>("selectionType");
+
+	private static void Prefix(UISelectable __instance)
+	{
+		if (__instance.useInjector || __instance.GetComponent<ToolRack>() == null || __instance.GetComponent<Brix.Game.Components.Blueprint>() != null)
+		{
+			return;
+		}
+		__instance.Selectable = true;
+		Type(__instance) = SelectionType.Toolrack;
 	}
 }
 
