@@ -566,7 +566,7 @@ internal static class AutoCleanupPatch
 	private static bool Prefix(IdleProject __instance, Labor labor, Var<OrderPackage<Labor>> result, bool __runOriginal)
 	{
 		// An earlier patch already gave the worker an order: keep it.
-		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor))
+		if (!__runOriginal || !labor.recepteur.IsEmpty() || !__instance.GatherAtIdlePoint(labor) || !AssignedWork.IdleChoresFor(labor))
 		{
 			return __runOriginal;
 		}

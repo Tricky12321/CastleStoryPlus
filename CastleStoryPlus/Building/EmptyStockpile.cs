@@ -457,7 +457,7 @@ internal static class EmptyStockpileIdlePatch
 			result.Set(OrderPackage<Labor>.Empty);
 			return false;
 		}
-		if (!__instance.GatherAtIdlePoint(labor))
+		if (!__instance.GatherAtIdlePoint(labor) || !WorkerAI.AssignedWork.IdleChoresFor(labor))
 		{
 			return true;
 		}

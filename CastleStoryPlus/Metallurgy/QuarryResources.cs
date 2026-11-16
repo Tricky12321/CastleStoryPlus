@@ -11,15 +11,40 @@ namespace CastleStoryPlus.Metallurgy;
 // project's setting (anything not kept is broken without a drop). Coal and blue crystal get a button each. Their flags
 // are "off" flags (set = not kept), so the game's default (stone, orange crystal and iron: 7) keeps them too, also in
 // projects of older saves; the unmodded game ignores the extra flags.
+// A setting of 0 keeps nothing, as in the game itself (and in a project of an older save where everything was switched
+// off): coal and blue crystal are kept only when one of the game's three is, or with the ExtrasKept flag, which the
+// buttons set when coal or blue crystal is kept without any of the three (QuarryResourceTogglePatch). Before, 0 kept
+// coal and blue crystal, and a quarry set to keep nothing waited for storage for its coal for ever.
 internal static class QuarryResources
 {
 	internal const int CoalOff = 8;
 
 	internal const int BlueOff = 16;
 
+	// Coal or blue crystal is kept while none of stone, orange crystal and iron is.
+	internal const int ExtrasKept = 32;
+
+	private const int GameKept = (int)GroundResource.All;
+
 	internal static bool Keeps(GroundResource types, int offFlag)
 	{
-		return ((int)types & offFlag) == 0;
+		return ((int)types & offFlag) == 0 && ((int)types & (GameKept | ExtrasKept)) != 0;
+	}
+
+	// The setting after a button toggled the flag, from what it was before and what the game's toggle made of it:
+	// from keeping nothing, the coal or blue crystal button keeps that one alone; a setting that would keep coal or blue
+	// crystal without any of the game's three gets ExtrasKept, so it does not read as "nothing" (0).
+	internal static int AfterToggle(int before, int flag, int after)
+	{
+		if ((before & (GameKept | ExtrasKept)) == 0 && (flag == CoalOff || flag == BlueOff))
+		{
+			return ExtrasKept | ((CoalOff | BlueOff) & ~flag);
+		}
+		if ((after & (GameKept | ExtrasKept)) == 0 && (after & (CoalOff | BlueOff)) != (CoalOff | BlueOff))
+		{
+			return after | ExtrasKept;
+		}
+		return after;
 	}
 
 	internal static GroundResource TypesOf(object project)
@@ -64,7 +89,7 @@ internal static class QuarryResources
 			+ "h.IconSize = ||64\n"
 			+ "h.Label = ||\"Keep " + (name == "Coal" ? "coal" : "blue crystal") + "\"\n"
 			+ "h.OnAction = function() if not UIGame.IsPaused() and " + selected + " then Data.Project:GetSelected():ToggleResourceTypeFlag(" + flag + ") end end\n"
-			+ "h.Highlight = function() if " + selected + " and not Data.Project:GetSelected():GetResourceTypeFlag(" + flag + ") then return HighlightMode.All end return HighlightMode.None end\n"
+			+ "h.Highlight = function() if " + selected + " and " + LuaKeeps(flag) + " then return HighlightMode.All end return HighlightMode.None end\n"
 			+ "h.TooltipPath = ||{\"Task\", \"Quarry\", \"KeepBrimstone\"}\n"
 			+ "h.onRefreshHighlight = Event.New()\n"
 			+ "\n"
@@ -74,6 +99,13 @@ internal static class QuarryResources
 			+ "_m.mg.projectContext:AddChild(h)\n"
 			+ (limits ? Economy.QuarryLimit.CountAndPlus(flag) : string.Empty)
 			+ "end\n";
+	}
+
+	// Keeps() in the Lua menu: the off flag clear and one of the game's three or ExtrasKept set.
+	private static string LuaKeeps(int flag)
+	{
+		string p = "Data.Project:GetSelected()";
+		return "not " + p + ":GetResourceTypeFlag(" + flag + ") and (" + p + ":GetResourceTypeFlag(1) or " + p + ":GetResourceTypeFlag(2) or " + p + ":GetResourceTypeFlag(4) or " + p + ":GetResourceTypeFlag(" + ExtrasKept + "))";
 	}
 
 	internal static void AddMenuPatches(string owner, bool coal, bool blue)
@@ -230,6 +262,47 @@ internal static class QuarryBlueCrystalStoragePatch
 		if (__result != null && QuarryResources.Keeps(QuarryResources.TypesOf(__instance), QuarryResources.BlueOff))
 		{
 			__result.Add(RawResources.RawBlueCrystal);
+		}
+	}
+}
+
+// A quarry's or tunnel's resource button on the host (the game's Toggle flips one flag): see QuarryResources.AfterToggle.
+[Feature]
+[HarmonyPatch(typeof(QuarryData), nameof(QuarryData.Toggle))]
+internal static class QuarryResourceTogglePatch
+{
+	private static void Prefix(QuarryData __instance, out int __state)
+	{
+		__state = (int)__instance.TypesToHarvest;
+	}
+
+	private static void Postfix(QuarryData __instance, GroundResource type, int __state)
+	{
+		int after = (int)__instance.TypesToHarvest;
+		int fixedValue = QuarryResources.AfterToggle(__state, (int)type, after);
+		if (fixedValue != after)
+		{
+			__instance.SetTypesToHarvest(fixedValue);
+		}
+	}
+}
+
+[Feature]
+[HarmonyPatch(typeof(TunnelData), nameof(TunnelData.Toggle))]
+internal static class TunnelResourceTogglePatch
+{
+	private static void Prefix(TunnelData __instance, out int __state)
+	{
+		__state = (int)__instance.TypesToHarvest;
+	}
+
+	private static void Postfix(TunnelData __instance, GroundResource type, int __state)
+	{
+		int after = (int)__instance.TypesToHarvest;
+		int fixedValue = QuarryResources.AfterToggle(__state, (int)type, after);
+		if (fixedValue != after)
+		{
+			__instance.Set(fixedValue);
 		}
 	}
 }
