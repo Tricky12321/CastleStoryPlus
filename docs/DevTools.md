@@ -57,7 +57,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `POST /api/net/relations?value=allied\|neutral\|enemy` | Host: how the players' factions stand to each other in a game in progress (the game mode's rule); rebuilds who is sent what |
 | `POST /api/net/mode?gamemode=&preset=&map=` | Host, in the lobby: picks the game mode and preset (default the mode's default), and a map that has the mode, as the lobby's lists do |
 | `GET`/`POST /api/net/rules?bricktronCap=` | The bricktron limit as this player has it (`baseCap` without the research's Housing); sets it as a game mode's script does: on the host for every player, on a client as its own script does (the host's limit wins) |
-| `GET`/`POST /api/net/taskcrew?value=` | Bricktrons per task (`TaskCrewSize`) as this player has it, with the tasks' crew sizes; sets it on the host or in single player (1 to 31), as the lobby's choice does |
+| `GET`/`POST /api/net/taskcrew?value=` | Max bricktrons per task (`TaskCrewSize`) as this player has it, with the tasks' crew sizes; sets it on the host or in single player (1 to 31), as the lobby's choice does |
 | `POST /api/net/join?address=&port=&name=` | Joins by address, as the custom server window's join does |
 | `POST /api/net/ready?value=`, `POST /api/net/start?button=`, `POST /api/net/leave` | The lobby's ready, the host's start (`button=true`: as the start button does, the loading screen on every player first, then the host's ready), leaving |
 | `POST /api/net/name?value=`, `GET`/`POST /api/net/nameedit?text=` | Renames this player as Enter in the lobby's name box does; the name box (shown, focused, text), and typing into it without Enter |
@@ -94,7 +94,7 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/projects?q=&all=` | The player's projects (`all=true`: every faction's): type, faction, priority, crew and crew size, goals |
 | `POST /api/projects/create?type=build\|quarry\|harvest\|treefarm&at=&from=&to=` | Makes a build project, a quarry digging out a box, a harvest project, or a tree farm around `at` |
 | `POST /api/projects/priority?id=&priority=` | Sets a project's priority (locked, low, medium, high) |
-| `POST /api/projects/crew?id=&size=` | Sets a project's crew size (0 to the bricktrons per task, 8 in the game) |
+| `POST /api/projects/crew?id=&size=` | Sets a project's crew size (0 to the max bricktrons per task, 8 in the game) |
 | `GET /api/tests?filter=` | The in-game tests |
 | `POST /api/tests/run?filter=&speed=&parallel=&clearUnits=` | Starts a run (answers at once), at `speed` if given (back to 1x when it ends). `parallel`: tests at the same time (1-8). `clearUnits=true`: the world's own units are taken away first |
 | `GET /api/tests/results` | Progress, and each test's outcome, message, log and recorded values |
@@ -292,7 +292,7 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 | `WorkerOrderTests.AssignedWorkerStaysOnTask` | A worker put on a tree harvest fells two of its trees and never works in a quarry of higher priority next to it |
 | `WorkerOrderTests.RightClickedWorkerStaysOnTask` | The same for a free worker right-clicked onto a tree of the harvest (`DirectTask`): it joins the harvest's crew and stays on it |
 | `WorkerOrderTests.FullCrewStaysOnBigQuarry` | Eight builders put on an 8 x 8 quarry that keeps stone, with no storage for it, stay in its crew and within 20 voxels of its middle for a game minute, with a quarry of higher priority that keeps nothing and has no crew next to it (#86) |
-| `WorkerOrderTests.TwelveOnOneQuarry` | With 12 bricktrons per task a new quarry (keeping nothing) takes 12: twelve builders put on it join its crew, a thirteenth does not, more than 8 work on it at once, "Workers at a time" steps up to 12, and a limit of 5 cuts the crew to 5 (#88) |
+| `WorkerOrderTests.TwelveOnOneQuarry` | With at most 12 bricktrons per task a new quarry (keeping nothing) starts at 8 and grows to 12: twelve builders put on it join its crew, a thirteenth does not, more than 8 work on it at once, "Workers at a time" steps up to 12, and a limit of 5 cuts the crew to 5 (#88) |
 | `WorkerOrderTests.AssignedWorkerLeavesLooseLogs` | Two builders put on a quarry leave loose logs by a stockpile next to it alone (no idle cleanup for workers on a task) (#81) |
 
 ### Multiplayer checks
@@ -305,7 +305,7 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 | `ArmySelection` | The ranged row selects all of the host's 6 archers, also with 4 of them holding empty weapons in the client's copy (#84) |
 | `BlueprintDeliveries` | The same bricks and planks in a warehouse blueprint as the host's, after the host's builders deliver them (#83) |
 | `WaveRows` | The scoreboard's row of a wave (a cheat raid numbered 7) the host counts (#85) |
-| `TaskCrew` | The host's 12 bricktrons per task, chosen in the lobby; twelve of the client's own builders put on its new task all join its crew, on the client and on the host (#88) |
+| `TaskCrew` | The host's max of 12 bricktrons per task, chosen in the lobby; twelve of the client's own builders put on its new task all join its crew, on the client and on the host (#88) |
 
 ```sh
 tools/run-multiplayer-tests.py                       # all checks

@@ -168,7 +168,7 @@ internal static class WorkerOrderTests
 		t.Record("felled", Felled(treesAtStart));
 	}
 
-	[GameTest("Tasks", "With 12 bricktrons per task (TaskCrewSize, #88) a new quarry (keeping nothing) takes 12: twelve builders put on it all join its crew (a thirteenth does not) and stay on it, more than 8 work on it at once, and a work limit of 5 cuts the crew down to 5", TimeoutSeconds = 240f, Exclusive = true)]
+	[GameTest("Tasks", "With at most 12 bricktrons per task (TaskCrewSize, #88) a new quarry (keeping nothing) starts at 8 and takes 12: twelve builders put on it all join its crew (a thirteenth does not) and stay on it, more than 8 work on it at once, and a work limit of 5 cuts the crew down to 5", TimeoutSeconds = 240f, Exclusive = true)]
 	private static IEnumerator TwelveOnOneQuarry(TestContext t)
 	{
 		int setting = CastleStoryPlus.WorkerAI.TaskCrewSize.Setting.Value;
@@ -188,7 +188,7 @@ internal static class WorkerOrderTests
 		quarry = Quarry(t, new Vector3(site.x - 9, top - 1, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
 		// It keeps nothing, so its ground can be dug without a storage for the stone.
 		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
-		t.Equal(12, quarry.MaximumCrewSize, "A new quarry's crew size");
+		t.Equal(8, quarry.MaximumCrewSize, "A new quarry's crew size");
 		Labor[] crew = new Labor[13];
 		for (int i = 0; i < crew.Length; i++)
 		{

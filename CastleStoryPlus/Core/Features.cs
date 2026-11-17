@@ -469,7 +469,7 @@ internal static class Features
 
 	public const string TaskCrewSize = "TaskCrewSize";
 
-	public const string TaskCrewSizeInfo = "How many bricktrons a task's crew can hold, [Workers] BricktronsPerTask (1 to 31; the game fixes 8): every task starts with that crew size and putting more bricktrons on it grows it up to that. In a multiplayer game the host's choice applies (\"Bricktrons per task\" in the lobby, shown to every player) (#88).";
+	public const string TaskCrewSizeInfo = "The most bricktrons a task's crew can hold, [Workers] MaxBricktronsPerTask (1 to 31, default 15; the game fixes 8): a task starts with 8 and putting more bricktrons on it grows it up to the maximum. In a multiplayer game the host's choice applies (\"Max bricktrons per task\" in the lobby, shown to every player) (#88).";
 
 	public const string PauseTasks = "PauseTasks";
 
