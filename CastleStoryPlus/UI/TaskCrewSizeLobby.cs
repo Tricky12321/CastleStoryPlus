@@ -11,8 +11,8 @@ using static CastleStoryPlus.UI.UiKit;
 
 namespace CastleStoryPlus.UI;
 
-// The lobby's "Bricktrons per task" choice (TaskCrewSize), in the left column above "Cheats": the host steps it with
-// - and + (1 to 31, the game's 8 to start with: the host's [Workers] BricktronsPerTask), the other players see what
+// The lobby's "Max bricktrons per task" choice (TaskCrewSize), in the left column above "Cheats": the host steps it
+// with - and + (1 to 31, 15 to start with: the host's [Workers] MaxBricktronsPerTask), the other players see what
 // the host chose. Single player has the same value in the Castle Story Plus settings.
 [Feature(Features.TaskCrewSize, Features.TaskCrewSizeInfo)]
 internal class TaskCrewSizeLobby : MonoBehaviour
@@ -62,7 +62,7 @@ internal class TaskCrewSizeLobby : MonoBehaviour
 
 		Transform header = CreateRow(panel.transform, 28f);
 		// Smaller than "CHEATS": the name fits on one line next to the buttons.
-		Text title = CreateText(header, "BRICKTRONS PER TASK", 17, Yellow, TextAnchor.MiddleLeft);
+		Text title = CreateText(header, "MAX BRICKTRONS PER TASK", 17, Yellow, TextAnchor.MiddleLeft);
 		title.fontStyle = FontStyle.Bold;
 		Flexible(title.gameObject);
 		_less = CreateButton(header, "-", 28f, () => Step(-1));
@@ -113,7 +113,7 @@ internal class TaskCrewSizeLobby : MonoBehaviour
 		}
 		_less.interactable = host && value > 1;
 		_more.interactable = host && value < TaskCrewSize.Most;
-		_info.text = "A task's crew holds up to " + value + " bricktrons (the game: " + TaskCrewSize.GameValue + ")." + (host ? " Host only." : " The host decides.");
+		_info.text = "A task starts with " + Mathf.Min(TaskCrewSize.GameValue, value) + " and holds up to " + value + " bricktrons (the game: " + TaskCrewSize.GameValue + ")." + (host ? " Host only." : " The host decides.");
 	}
 }
 

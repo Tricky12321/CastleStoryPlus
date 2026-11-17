@@ -9,7 +9,7 @@ game. The checks compare what the client has with what the host has, through the
                           copies of their weapons say otherwise (issue #84)
     BlueprintDeliveries   material delivered to a blueprint reaches the client's blueprint (issue #83)
     WaveRows              the scoreboard's waves (enemies left of each wave) reach the client (issue #85)
-    TaskCrew              the host's 12 bricktrons per task, chosen in the lobby, reach the client, and twelve of the
+    TaskCrew              the host's max of 12 bricktrons per task, chosen in the lobby, reach the client, and twelve of the
                           client's bricktrons put on its own task all join its crew there and on the host (issue #88)
 
     tools/run-multiplayer-tests.py [--filter Cap] [--port 27890] [--player DIR] [--root-src DIR] [--keep] [--hold N]
@@ -244,8 +244,8 @@ def check_task_crew(host, client):
     client.call("POST", "/api/projects/create", type="build")
     client.wait_for("its new build task", lambda: len([p for p in own_projects(client, "Build") if p["id"] not in before]) > 0, 30)
     project = [p for p in own_projects(client, "Build") if p["id"] not in before][0]
-    if project["maxCrew"] != TASK_CREW:
-        return False, "the client's new task takes %d, not %d" % (project["maxCrew"], TASK_CREW)
+    if project["maxCrew"] != 8:
+        return False, "the client's new task starts at %d, not 8" % project["maxCrew"]
     units = ",".join(str(b["id"]) for b in builders(client)[:TASK_CREW])
     client.call("POST", "/api/projects/hire", id=project["id"], units=units)
 

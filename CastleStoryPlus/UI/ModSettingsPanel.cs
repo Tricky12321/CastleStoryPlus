@@ -325,7 +325,7 @@ end
 		if (TaskCrewSize.Setting != null)
 		{
 			AddSection("TASKS");
-			AddIntStepper("Bricktrons per task (game 8; multiplayer: the host's)", TaskCrewSize.Setting, 1, 1, TaskCrewSize.Most);
+			AddIntStepper("Max bricktrons per task (game 8; multiplayer: the host's)", TaskCrewSize.Setting, 1, 1, TaskCrewSize.Most);
 		}
 
 		if (AutoCleanup.Radius != null)
