@@ -35,6 +35,25 @@ internal static class SavedTeams
 	// Players who picked their team in the lobby: they keep it.
 	internal static readonly HashSet<LobbyPlayer> Chosen = new HashSet<LobbyPlayer>();
 
+	// The teams before the game's lobby check ran (a player who picked his team is put back to it afterwards).
+	private static readonly Dictionary<LobbyPlayer, int> BeforeFix = new Dictionary<LobbyPlayer, int>();
+
+	internal static void SnapshotTeams()
+	{
+		BeforeFix.Clear();
+		if (UNetManager.instance == null || UNetManager.instance.LobbyPlayerList == null)
+		{
+			return;
+		}
+		foreach (LobbyPlayer player in UNetManager.instance.LobbyPlayerList)
+		{
+			if (player != null)
+			{
+				BeforeFix[player] = player.TeamNumber;
+			}
+		}
+	}
+
 	// Host: called when the game has written a save into its folder.
 	internal static void Write(string folder)
 	{
@@ -171,6 +190,22 @@ internal static class SavedTeams
 			repaired[i] = players[i].TeamNumber;
 		}
 		ApplyAll();
+		// A player who picked his team keeps it, also when the game's check moved him.
+		Applying = true;
+		try
+		{
+			foreach (LobbyPlayer player in players)
+			{
+				if (Chosen.Contains(player) && BeforeFix.TryGetValue(player, out int before) && player.TeamNumber != before)
+				{
+					player.NetworkTeamNumber = before;
+				}
+			}
+		}
+		finally
+		{
+			Applying = false;
+		}
 		if (SavedAreValid(players))
 		{
 			return;
@@ -198,7 +233,7 @@ internal static class SavedTeams
 		{
 			teams[i] = players[i].TeamNumber;
 		}
-		var limits = GameParam.instance.Parameters;
+		GameParam.GameParameters limits = GameParam.instance.Parameters;
 		return TeamRules.IsValid(teams, GameParam.CurrentTeamInfos.Length, GameParam.MinTeamCount, GameParam.MaxTeamCount, limits.MinPlayersPerTeam, limits.MaxPlayersPerTeam);
 	}
 
@@ -331,6 +366,11 @@ internal static class SavedTeams
 [HarmonyPatch(typeof(GameParam), "FixTeams")]
 internal static class SavedTeamsFixPatch
 {
+	private static void Prefix()
+	{
+		SavedTeams.SnapshotTeams();
+	}
+
 	private static void Postfix()
 	{
 		SavedTeams.KeepSaved();

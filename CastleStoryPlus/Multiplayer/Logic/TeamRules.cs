@@ -4,8 +4,8 @@ namespace CastleStoryPlus.Multiplayer;
 
 // Whether the lobby's teams are acceptable for the game mode, as a pure function (no Unity, no game): SavedTeams reads
 // the mode's limits and the players' team numbers and calls this. Unit tests: CastleStoryPlus.UnitTests/Multiplayer.
-// The game's own check (GameParam.AreTeamsValid) cannot be used for this: it also wants every one of the map's teams
-// to have a player (MP_MinPlayersPerTeam 1 against four team slots), so it calls any lobby with fewer players than
+// The game's own check (GameParam.AreTeamsValid) cannot be used for this: it also wants every one of the game's four team
+// slots (the fixed GameParam.CurrentTeamInfos) to have a player (MP_MinPlayersPerTeam 1), so it calls any lobby with fewer players than
 // slots invalid and its repair (FixTeams) shuffles the players again at every join.
 internal static class TeamRules
 {

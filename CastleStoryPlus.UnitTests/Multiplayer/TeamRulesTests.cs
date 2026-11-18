@@ -32,8 +32,15 @@ public class TeamRulesTests
 	[Test]
 	public void TwoPlayersInOneTeamAreValidWhenTheModeAllowsOneTeam()
 	{
-		// Co-op: one to four teams (the reporter's two-player save).
+		// PVE: one to four teams (the reporter's two-player save).
 		Assert.That(TeamRules.IsValid(new[] { 0, 0 }, 4, 1, 4, 1, -1), Is.True);
+	}
+
+	[Test]
+	public void CoopNeedsOneTeam()
+	{
+		Assert.That(TeamRules.IsValid(new[] { 0, 0 }, 4, 1, 1, 1, -1), Is.True);
+		Assert.That(TeamRules.IsValid(new[] { 0, 1 }, 4, 1, 1, 1, -1), Is.False);
 	}
 
 	[Test]
