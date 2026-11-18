@@ -99,6 +99,70 @@ internal static class BuildRepairTests
 		t.Record("doorHealthAfter", health.CurrentHP + "/" + health.MaxHP);
 	}
 
+	[GameTest("Repairs", "A door destroyed inside a repair zone is put back up as the zone's blueprint of the same door, which builds a new door in its place (#100)", TimeoutSeconds = 120f)]
+	private static IEnumerator RepairZoneRebuildsDestroyedDoor(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 8, 6);
+		BuildProject build = Scenario.BuildProject(t, site);
+		Porte door = null;
+		yield return Scenario.Building(t, Blueprints.Door, site, build, made => door = made.GetComponent<Porte>());
+		t.NotNull(door, "The door");
+		Vector3 position = door.transform.position;
+		Quaternion rotation = door.transform.rotation;
+		GameObject old = door.gameObject;
+		RepairProject zone = Scenario.NewProject<RepairProject>(t, () => Scenario.Groupe.CmdSpawnGoupe("Groupes", "Repair", site.ToVector3(), Quaternion.identity, false));
+		ProjectEndpoints.Commit(zone);
+		yield return t.Frames(5);
+		IDamageReceiver health = door.damageReceiver;
+		t.NotNull(health, "The door's health");
+		health.ApplyDamage(health.MaxHP + 1f, null);
+		yield return t.Until(() => old == null || !old.activeInHierarchy, 5f, "the door to be destroyed");
+		Blueprint rebuilt = null;
+		yield return t.Until(() =>
+		{
+			foreach (Blueprint blueprint in Object.FindObjectsOfType<Blueprint>())
+			{
+				if (blueprint != null && blueprint.Project == zone && blueprint.BlueprintResult != null && blueprint.BlueprintResult.Name == ObjetsDynamiques.Porte.Name && Vector3.Distance(blueprint.transform.position, position) < 0.1f)
+				{
+					rebuilt = blueprint;
+					return true;
+				}
+			}
+			return false;
+		}, 10f, "a door blueprint of the repair zone where the door stood");
+		t.Cleanup(() =>
+		{
+			if (rebuilt != null && rebuilt.gameObject.activeInHierarchy)
+			{
+				Scenario.Discard(rebuilt.gameObject);
+			}
+		});
+		t.True(Quaternion.Angle(rebuilt.transform.rotation, rotation) < 1f, "The blueprint is turned " + rebuilt.transform.rotation.eulerAngles + ", the door was " + rotation.eulerAngles);
+		InstantBuild.Complete(new[] { rebuilt });
+		Porte again = null;
+		yield return t.Until(() =>
+		{
+			foreach (Porte candidate in Object.FindObjectsOfType<Porte>())
+			{
+				// The old door may come back from the object pool as the new one.
+				if (candidate != null && candidate.gameObject.activeInHierarchy && Vector3.Distance(candidate.transform.position, position) < 0.1f)
+				{
+					again = candidate;
+					return true;
+				}
+			}
+			return false;
+		}, 15f, "a new door where the old one stood");
+		t.Cleanup(() =>
+		{
+			if (again != null && again.gameObject.activeInHierarchy)
+			{
+				Scenario.Discard(again.gameObject);
+			}
+		});
+		t.Record("rebuiltAt", XYZ.FromVector3(again.transform.position));
+	}
+
 	[GameTest("Tasks", "A quarry of 5 x 5, 5 deep, dug by three builders: every stair step above the dug floor is cut, none is dug away", TimeoutSeconds = 600f)]
 	private static IEnumerator QuarryStairsHaveNoGaps(TestContext t)
 	{

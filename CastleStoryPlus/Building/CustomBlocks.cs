@@ -506,6 +506,16 @@ internal static class CustomBlocks
 			Object.DestroyImmediate(old);
 		}
 		fitter._oneRotationPerAxis = false;
+		// The brick's dragger lays a row along the ground; a ladder is dragged up, as the game's wooden column is.
+		if (shape.Ladder)
+		{
+			DefaultDragger dragger = go.GetComponent<DefaultDragger>();
+			if (dragger != null && !(dragger is VerticalDragger))
+			{
+				Object.DestroyImmediate(dragger);
+				go.AddComponent<VerticalDragger>();
+			}
+		}
 		Recepteur recepteur = go.GetComponent<Recepteur>();
 		if (recepteur != null)
 		{
