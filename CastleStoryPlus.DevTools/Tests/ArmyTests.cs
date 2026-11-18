@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using Brix.Components;
 using Brix.Engine;
 using Brix.External.Factories;
+using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.AI.Nodes;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
+using Brix.Legacy;
 using Brix.Transactions;
 using CastleStoryPlus.Army;
 using CastleStoryPlus.Building;
@@ -187,5 +189,87 @@ internal static class ArmyTests
 		yield return t.UntilGame(() => RangedFlat(knight.transform.position - post) < 1.5f, 30f, "the knight to be back at its post");
 		SoldierPosts.Clear(new[] { knight });
 		t.False(SoldierPosts.Has(knight), "The knight still has a post after Clear post");
+	}
+
+	// The buttons and sub-wheels a wheel of the game's compiled wheels names.
+	private static List<string> WheelTerms(string name)
+	{
+		List<string> terms = new List<string>();
+		if (!PieContenu.menus.TryGetValue(name, out PieContenu.Menu menu))
+		{
+			return null;
+		}
+		foreach (PieContenu.Instruction instruction in menu.instructions)
+		{
+			if (instruction.args != null)
+			{
+				terms.AddRange(instruction.args);
+			}
+		}
+		return terms;
+	}
+
+	[GameTest("Army", "The artificer's wheel over itself has Set post, Back to post and Clear post, as the other soldiers' have (#103)", TimeoutSeconds = 30f)]
+	private static IEnumerator ArtificerWheelHasPosts(TestContext t)
+	{
+		if (!Plugin.IsEnabled(Features.SoldierPosts))
+		{
+			t.Skip("SoldierPosts is switched off");
+		}
+		yield return null;
+		List<string> artificer = WheelTerms("Artificer");
+		t.NotNull(artificer, "The artificer's wheel");
+		t.Record("artificer", string.Join(" ", artificer.ToArray()));
+		t.True(artificer.Exists((string term) => term.Trim() == "PlusArtificerSelf"), "The artificer's wheel opens no wheel over itself");
+		List<string> self = WheelTerms("PlusArtificerSelf");
+		t.NotNull(self, "The artificer's wheel over itself");
+		t.Record("self", string.Join(" ", self.ToArray()));
+		foreach (string button in new[] { "PlusSetPost", "PlusBackToPost", "PlusClearPost" })
+		{
+			t.True(self.Exists((string term) => term.Trim() == button), button + " is not in the artificer's wheel over itself");
+		}
+		t.NotNull(WheelTerms("PlusArtificerMain"), "The artificer's wheel anywhere else");
+	}
+
+	[GameTest("Army", "A guarding archer shows the guard's icon in its name tag, and its own icon again after Stop guarding (#98)", TimeoutSeconds = 60f)]
+	private static IEnumerator GuardingArcherIcon(TestContext t)
+	{
+		if (!Plugin.IsEnabled(Features.RangedGuard))
+		{
+			t.Skip("RangedGuard is switched off");
+		}
+		XYZ site = Scenario.Site(t, 6, 6);
+		Labor archer = Scenario.Bricktron(t, Occupation.Type.Archer, site);
+		yield return t.Frames(10);
+		archer.Autonomy = AutonomyStatus.InstinctOnly;
+		Sprite guard = Brix.UI.Icons.IconKeys._Defend_Area.Get32();
+		t.NotNull(guard, "The guard's icon");
+		t.True(archer.Autonomy.GetIcon(archer) != guard, "The archer shows the guard's icon before guarding");
+		SoldierOrdersNetwork.SendGuard(archer.gameObject, true);
+		t.True(RangedGuard.IsGuarding(archer), "The archer is not guarding");
+		t.True(archer.Autonomy.GetIcon(archer) == guard, "The guarding archer does not show the guard's icon");
+		SoldierOrdersNetwork.SendGuard(archer.gameObject, false);
+		t.True(archer.Autonomy.GetIcon(archer) != guard, "The archer still shows the guard's icon after Stop guarding");
+	}
+
+	[GameTest("Army", "A looping kit order's stock limit counts the kits soldiers of the class wear, as the call to arms counts its sets (#99)", TimeoutSeconds = 60f)]
+	private static IEnumerator WornKitsCountForLoopLimit(TestContext t)
+	{
+		if (!Plugin.IsEnabled(Features.KitBundles) || !Plugin.IsEnabled(Features.CraftLoopLimit))
+		{
+			t.Skip("KitBundles or CraftLoopLimit is switched off");
+		}
+		KitBundles.Bundle kit = System.Array.Find(KitBundles.All, (KitBundles.Bundle b) => b.Job == Occupation.Job.Archer);
+		t.NotNull(kit, "The archer kit");
+		Faction faction = Scenario.Player;
+		int before = CastleStoryPlus.Economy.CraftLoopLimit.Worn(faction, kit.Resource);
+		XYZ site = Scenario.Site(t, 6, 6);
+		Labor archer = Scenario.Bricktron(t, Occupation.Type.Archer, site);
+		yield return t.Frames(10);
+		t.Equal(Occupation.Job.Archer, archer.Occupation.CurrentJob, "The archer's class");
+		t.Equal(before + 1, CastleStoryPlus.Economy.CraftLoopLimit.Worn(faction, kit.Resource), "Archer kits worn");
+		int coming = CastleStoryPlus.Economy.CraftLoopLimit.Coming(faction, kit.Resource, kit.Key, cached: false);
+		t.Record("coming", coming);
+		t.True(coming >= before + 1, "The worn kits are not counted with the kits on the way");
 	}
 }
