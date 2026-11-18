@@ -139,6 +139,10 @@ internal static class Features
 
 	public const string WornPathsInfo = "Paths wear into the grass: grass the players' units walk much turns to earth, and worn ground nobody walks any more grows its grass back over time; grass also spreads slowly onto bare earth beside it (steps, half life and spread time in [WornPaths]).";
 
+	public const string Rain = "Rain";
+
+	public const string RainInfo = "Weather: now and then (about every 3 game days, for a few game hours: [Rain] DaysBetween, Hours) it rains, decided by the host and told to the other players, saved with the world: drops fall round the camera, the light and sky darken, a rain noise plays and a message shows when it starts and stops. While it rains grass spreads and worn paths grow over faster ([Rain] GrassBoost) and plants seed and grow faster ([Rain] PlantBoost). No rain in a desert world (mostly sand); in a snow world it snows (only shown).";
+
 	public const string WiderVision = "WiderVision";
 
 	public const string WiderVisionInfo = "Units see 10% further through the fog of war ([FogOfWar] VisionMultiplier).";

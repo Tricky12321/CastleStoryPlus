@@ -7,6 +7,7 @@ using Brix.Engine.Nature;
 using Brix.Legacy;
 using Brix.Network;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Weather;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -154,7 +155,9 @@ internal sealed class WildPlants : MonoBehaviour
 			return;
 		}
 		PlantsMessage message = new PlantsMessage();
-		for (int i = 0; i < _tries.Value; i++)
+		// Rain brings more tries.
+		int tries = (int)(_tries.Value * Rain.PlantBoost);
+		for (int i = 0; i < tries; i++)
 		{
 			int x = start.x + NearRadius + Random.Next(size.x - 2 * NearRadius);
 			int z = start.z + NearRadius + Random.Next(size.z - 2 * NearRadius);
@@ -190,7 +193,7 @@ internal sealed class WildPlants : MonoBehaviour
 		{
 			return;
 		}
-		float step = GrowSeconds / 60f / _growMinutes.Value;
+		float step = GrowSeconds / 60f / _growMinutes.Value * Rain.PlantBoost;
 		List<KeyValuePair<XYZ, PlantData>> growing = new List<KeyValuePair<XYZ, PlantData>>();
 		foreach (KeyValuePair<XYZ, PlantData> plant in BrixSingleton<PlantRegistry>.Instance._data)
 		{
