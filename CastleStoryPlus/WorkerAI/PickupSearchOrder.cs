@@ -21,6 +21,8 @@ namespace CastleStoryPlus.WorkerAI;
 // the same.
 [Feature(Features.FasterTaskSearch, Features.FasterTaskSearchInfo)]
 [HarmonyPatch(typeof(Knowledge), nameof(Knowledge.ClosestObjectToPickup))]
+// Low: the prefixes that note who searches (reservations, research) must run first, the loop below reads their state.
+[HarmonyPriority(Priority.Low)]
 internal static class PickupSearchOrder
 {
 	private static readonly Func<Labor, IGameComponent, float> Distance = KnowledgeUtility.GetPickupDistance();

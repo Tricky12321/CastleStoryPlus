@@ -25,7 +25,6 @@ public class HarmonyPatchAuditTests
 	// is known to be fine. Key: "<Target type>.<method>|<skipping patch class>", value: why it is fine.
 	private static readonly Dictionary<string, string> SkipWhitelist = new Dictionary<string, string>
 	{
-		{ "AnimatedProgression.Update|ProgressionOffscreen", AnimIdempotent },
 		{ "Asset_Map.Disk_ReadThumbnail|RandomWorldThumbnailPatch", WaitOnly },
 		{ "BlueprintMapper.AddMappings|LargeStockpileBlueprintMappingPatch", BlueprintGuard },
 		{ "BlueprintMapper.AddMappings|MarketBlueprintMappingPatch", BlueprintGuard },
@@ -40,8 +39,6 @@ public class HarmonyPatchAuditTests
 		{ "GoalSelector.ProcessGoalAndReturnIsBest|UnreachableTasksSkipPatch", SameAnswer },
 		{ "HarvestProject.SelectBestGoal|OreMineSelectPatch", OreFirst },
 		{ "Instructions.Execute|GlobalBuildJobNewTaskPatch", DisjointExecute },
-		{ "Knowledge.ClosestObjectToPickup|PickupSearchOrder", Unreviewed },
-		{ "Labor.ClosestResource|ResearchClosestResourcePatch", ExclusiveClosestResource },
 		{ "Labor.ClosestResource|ResourcePriorityIngredients", ExclusiveClosestResource },
 		{ "Labor.ClosestResource|TaskFlowClosestResourcePatch", ExclusiveClosestResource },
 		{ "Labor.HasToFight|ArtificerHealingFightPatch", HasToFightOr },
@@ -51,7 +48,7 @@ public class HarmonyPatchAuditTests
 		{ "Labor.SendOrder|PlayerOrdersFirstSendPatch", ExclusiveSource },
 		{ "LuaMenuComponent.Load|CsGameMenuLoadPatch", ExclusiveMenu },
 		{ "LuaMenuComponent.Load|CsWorldEditorLoadPatch", ExclusiveMenu },
-		{ "PickUpNode.TakeSome|ResearchTakePatch", Unreviewed },
+		{ "PickUpNode.TakeSome|ResearchTakePatch", FetchAmount },
 		{ "PickUpNode._GoPickUp|StockpilePickup", ReservationOnWalk },
 		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|RepairNoRebuildPatch", RebuildMarks },
 		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|TreeStumpsNoRebuildPatch", RebuildMarks },
@@ -62,10 +59,9 @@ public class HarmonyPatchAuditTests
 		{ "ResourceConverter.get_CurrentConvertRule|EmptyStockpileConvertPatch", SameResult },
 		{ "ResourceConverter.get_CurrentConvertRule|WarehouseConvertPatch", SameResult },
 		{ "Script.LoadFile|LuaChunkReuse", ChunkTiming },
-		{ "SearchPathRequest.LoopImprovePath|SearchFrameBudget", Unreviewed },
-		{ "SearchPathRequest.Work|SearchFrameBudget", Unreviewed },
+		{ "SearchPathRequest.LoopImprovePath|SearchFrameBudget", SearchBudget },
+		{ "SearchPathRequest.Work|SearchFrameBudget", SearchBudget },
 		{ "SharedFactionVision.BrixUpdate|VisionRate", VisionStep },
-		{ "ToolRack.GetKit|MixedRackGetKitPatch", KitFirst },
 	};
 
 	// Found by the first run of this audit (18-11-2026): each of these prefixes replaces the original (sets __result and
@@ -76,7 +72,9 @@ public class HarmonyPatchAuditTests
 	// as OR, so the order does not matter and a later prefix that runs on is harmless.
 	private const string HasToFightOr = "only sets false: the prefixes combine as OR";
 
-	private const string Unreviewed = "baseline 18-11-2026, not reviewed";
+	private const string FetchAmount = "the later prefix (WorkshopFetchAmount) only lowers upTo, which is harmless on an already replaced call";
+
+	private const string SearchBudget = "the later prefixes check __runOriginal (NavMeshRoutes) or only set a flag that their finalizer restores (HeuristicAiSearchPatch)";
 
 	private const string BlueprintGuard = "all the prefixes are the same pure test (the key is mapped already) with no side effects: running on is harmless";
 
@@ -258,6 +256,7 @@ public class HarmonyPatchAuditTests
 	{
 		List<string> failures = new List<string>();
 		List<string> shared = new List<string>();
+		HashSet<string> hit = new HashSet<string>();
 		foreach (KeyValuePair<MethodBase, List<PatchMethod>> group in PrefixesByTarget())
 		{
 			if (group.Value.Count < 2)
@@ -285,6 +284,7 @@ public class HarmonyPatchAuditTests
 					string key = Describe(group.Key) + "|" + skipper.PatchClass.Name;
 					if (SkipWhitelist.ContainsKey(key))
 					{
+						hit.Add(key);
 						continue;
 					}
 					failures.Add(Describe(group.Key) + ": " + skipper.PatchClass.Name + " can skip the original, then " + later.PatchClass.Name + " can run without looking at __runOriginal (whitelist key: " + key + ")");
@@ -292,6 +292,13 @@ public class HarmonyPatchAuditTests
 			}
 		}
 		TestContext.Out.WriteLine("Targets with prefixes from several patch classes (" + shared.Count + "):\n" + string.Join("\n", shared.ToArray()));
+		foreach (string key in SkipWhitelist.Keys)
+		{
+			if (!hit.Contains(key))
+			{
+				failures.Add("stale whitelist entry (no later prefix ignores __runOriginal any more): " + key);
+			}
+		}
 		Assert.That(failures, Is.Empty, "Prefixes that skip the original before a prefix that does not check __runOriginal:\n" + string.Join("\n", failures.ToArray()));
 	}
 
@@ -426,7 +433,8 @@ public class HarmonyPatchAuditTests
 		return type.GetCustomAttributes(typeof(HarmonyPatch), false).Length > 0;
 	}
 
-	// The class's [HarmonyPatch] and [HarmonyPriority] attributes (class-level priority applies to every patch method) merged as Harmony does (a later attribute's set values win). Harmony's own
+	// The class's [HarmonyPatch] and [HarmonyPriority] attributes (a class-level priority applies to every patch
+	// method) merged as Harmony does (a later attribute's set values win). Harmony's own
 	// HarmonyMethod.Merge needs AccessTools, which does not start on .NET 8.
 	private static HarmonyMethod ClassInfo(Type type)
 	{

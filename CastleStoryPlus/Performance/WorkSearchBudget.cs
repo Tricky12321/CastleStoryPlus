@@ -64,7 +64,17 @@ internal static class WorkSearchBudget
 	{
 		if (!__runOriginal)
 		{
-			// Another patch (IdleSearchBackoff) already skipped this round: it is no search to count or put off.
+			// Another patch (IdleSearchBackoff) already skipped this round: it is no search to count or put off, and a
+			// worker put off earlier gives up its place in the queue (and its reserved slot).
+			int queued = Queue.IndexOf(__instance);
+			if (queued >= 0)
+			{
+				Queue.RemoveAt(queued);
+				if (queued < _reserved)
+				{
+					_reserved--;
+				}
+			}
 			return false;
 		}
 		int budget = _perTick != null ? _perTick.Value : DefaultPerTick;
