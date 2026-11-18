@@ -23,16 +23,30 @@ internal static class AchievementHooks
 		// Every peer: the colony's research (the faction's tiers changed, on the host or received) and the rain.
 		Upgrades.TeamUpgrades.Changed += (Faction faction) =>
 		{
-			if (faction != null && faction == AchievementTracker.LocalFaction)
+			try
 			{
-				AchievementTracker.LocalMax(AchievementCounter.Research, Upgrades.UpgradeLines.ResearchedTiers(faction));
+				if (faction != null && faction == AchievementTracker.LocalFaction)
+				{
+					AchievementTracker.LocalMax(AchievementCounter.Research, Upgrades.UpgradeLines.ResearchedTiers(faction));
+				}
+			}
+			catch (System.Exception ex)
+			{
+				Plugin.Log.LogError("Achievements: research hook: " + ex);
 			}
 		};
 		Rain.Changed += (WeatherKind from, WeatherKind to, bool announce) =>
 		{
-			if (to == WeatherKind.Rain && announce)
+			try
 			{
-				AchievementTracker.Local(AchievementCounter.Rains);
+				if (to == WeatherKind.Rain && announce)
+				{
+					AchievementTracker.Local(AchievementCounter.Rains);
+				}
+			}
+			catch (System.Exception ex)
+			{
+				Plugin.Log.LogError("Achievements: rain hook: " + ex);
 			}
 		};
 	}
@@ -61,6 +75,18 @@ internal static class AchievementCraftPatch
 {
 	private static void Prefix(CraftingLabor __instance)
 	{
+		try
+		{
+			Count(__instance);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Achievements: craft hook: " + ex);
+		}
+	}
+
+	private static void Count(CraftingLabor __instance)
+	{
 		if (!NetworkServer.active || __instance == null)
 		{
 			return;
@@ -85,6 +111,18 @@ internal static class AchievementBuiltPatch
 {
 	private static void Postfix(Blueprint __instance, GameObject __result)
 	{
+		try
+		{
+			Count(__instance, __result);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Achievements: built hook: " + ex);
+		}
+	}
+
+	private static void Count(Blueprint __instance, GameObject __result)
+	{
 		if (NetworkServer.active && __result != null && !__instance.IsAnti && __instance.BlueprintResult != null && __instance.BlueprintResult.ToString().StartsWith("PlacedBlock."))
 		{
 			AchievementTracker.Add(Faction.GetFaction(__instance.gameObject), AchievementCounter.Blocks);
@@ -99,9 +137,16 @@ internal static class AchievementDugPatch
 {
 	private static void Prefix(GameObject murderer)
 	{
-		if (NetworkServer.active && murderer != null)
+		try
 		{
-			AchievementTracker.Add(Faction.GetFaction(murderer), AchievementCounter.Dug);
+			if (NetworkServer.active && murderer != null)
+			{
+				AchievementTracker.Add(Faction.GetFaction(murderer), AchievementCounter.Dug);
+			}
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Achievements: dug hook: " + ex);
 		}
 	}
 }
@@ -113,9 +158,35 @@ internal static class AchievementGatherPatch
 {
 	// When each tree or plant last counted (game seconds): objects come from a pool, so only a repeat within a few
 	// seconds is the same one.
-	private static readonly System.Collections.Generic.Dictionary<int, float> Counted = new System.Collections.Generic.Dictionary<int, float>();
+	private static readonly System.Collections.Generic.Dictionary<Goal, float> Counted = new System.Collections.Generic.Dictionary<Goal, float>(new ReferenceComparer());
+
+	// By the managed object: a destroyed Unity object has no id any more (Unity 6 gives them all the same one).
+	private sealed class ReferenceComparer : System.Collections.Generic.IEqualityComparer<Goal>
+	{
+		public bool Equals(Goal a, Goal b)
+		{
+			return ReferenceEquals(a, b);
+		}
+
+		public int GetHashCode(Goal goal)
+		{
+			return System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(goal);
+		}
+	}
 
 	private static void Prefix(Goal __instance, Task work)
+	{
+		try
+		{
+			Count(__instance, work);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Achievements: gather hook: " + ex);
+		}
+	}
+
+	private static void Count(Goal __instance, Task work)
 	{
 		if (!NetworkServer.active || work == null || work.result != TaskResult.Succes || work.Status != TaskProgression.Finished)
 		{
@@ -126,14 +197,13 @@ internal static class AchievementGatherPatch
 			Labor labor = work.Worker as Labor;
 			// Several workers (or goals) can end work on the same tree or plant: each one counts once.
 			// The goal itself, not its game object: the felled tree's goal is already destroyed here, and its game object throws.
-			int id = __instance.InstanceId();
-			if (labor != null && (!Counted.TryGetValue(id, out float last) || Time.time - last > 10f))
+			if (labor != null && (!Counted.TryGetValue(__instance, out float last) || Time.time - last > 10f))
 			{
 				if (Counted.Count > 2000)
 				{
 					Counted.Clear();
 				}
-				Counted[id] = Time.time;
+				Counted[__instance] = Time.time;
 				AchievementTracker.Add(labor.faction, AchievementCounter.Gathered);
 			}
 		}

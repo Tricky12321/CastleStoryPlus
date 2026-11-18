@@ -15,6 +15,7 @@ namespace CastleStoryPlus.WorkerAI;
 // checked every round as before, and a worker coming off a task starts at full pace again.
 [Feature(Features.WorkerAI, Features.WorkerAIInfo)]
 [HarmonyPatch(typeof(Labor), "CheckProjectForWork")]
+[HarmonyPriority(Priority.High)]
 internal static class IdleSearchBackoff
 {
 	private const float ShortSeconds = 3f;
