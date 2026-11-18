@@ -6,7 +6,9 @@ using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.Game.Components.Volumes;
 using Brix.Input;
+using Brix.Lua;
 using Brix.Pathfinding.Test;
+using BepInEx.Configuration;
 using CastleStoryPlus.Building;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Diagnostics;
@@ -31,7 +33,8 @@ namespace CastleStoryPlus.WorkerAI;
 //   to a spot beside the block: the blueprint is the one of the worker's task).
 // - A marked task goes 10 places down the list a worker picks its next task from and is only taken when none before
 //   it can be ("Can't reach my destination" otherwise); the idle workers' cleanup skips a marked item.
-// - A marked blueprint is drawn red; other marked tasks and items get a red ring.
+// - A marked blueprint is drawn red; other marked tasks get a red ring while their task is selected (Rings: also
+//   always, or never). Rings on every marked voxel of a deep quarry or tunnel covered the view (#101).
 // - A mark is only taken away when a voxel within 3 of the thing changes (a block built or removed, terrain dug, a
 //   ladder or bridge placed); the next map then decides again.
 // - A blueprint left hanging is drawn red as well: one that is not valid, or one waiting for support that only other
@@ -57,6 +60,15 @@ internal static class UnreachableTasks
 	private const int MaxRings = 200;
 
 	private static readonly Color Red = new Color(1f, 0.08f, 0.05f, 1f);
+
+	internal enum RingMode
+	{
+		Off,
+		SelectedTask,
+		All
+	}
+
+	internal static ConfigEntry<RingMode> Rings;
 
 	private struct Box
 	{
@@ -84,6 +96,9 @@ internal static class UnreachableTasks
 		public List<Renderer> Tinted;
 
 		public bool Ringed;
+
+		// The task it belongs to (null: a loose item); its ring shows while that task is selected.
+		public Project Project;
 
 		// Passed by but not ringed: a block of an ore mine (much of its ore is out of reach on purpose, and the rings
 		// covered the area).
@@ -132,6 +147,7 @@ internal static class UnreachableTasks
 	private static void Enable()
 	{
 		_enabled = true;
+		Rings = Plugin.Cfg.Bind("UnreachableTasks", "Rings", RingMode.SelectedTask, "Red rings over the marked tasks no worker can reach (dig voxels, trees, repairs, loose items). SelectedTask: only those of the selected task. All: every one (at most 200). Off: none. Marked blueprints are drawn red either way.");
 		GameSession.OnLeave(() =>
 		{
 			Marked.Clear();
@@ -184,14 +200,14 @@ internal static class UnreachableTasks
 
 	// ---- Marking ----
 
-	private static void Add(GameObject go, Box box, bool blueprint, string why, Labor labor)
+	private static void Add(GameObject go, Box box, bool blueprint, string why, Labor labor, Project project = null)
 	{
 		if (Marked.ContainsKey(go))
 		{
 			return;
 		}
 		SoftFailed.Remove(go);
-		Marked[go] = new Mark { Box = box, Blueprint = blueprint, Why = why, Since = Time.time, FromMap = ByMap(why), Generation = ReachMap.Generation, Quiet = InOreMine(go) };
+		Marked[go] = new Mark { Box = box, Blueprint = blueprint, Why = why, Since = Time.time, FromMap = ByMap(why), Generation = ReachMap.Generation, Quiet = InOreMine(go), Project = project ?? go.GetComponentInParent<Project>() };
 		if (WorkerTrace.Active)
 		{
 			string message = "unreachable: " + go.name + " at " + go.transform.position.ToString("0") + " (" + why + "), skipped until something changes within " + Reach;
@@ -377,7 +393,7 @@ internal static class UnreachableTasks
 					}
 					if (!CanReach(faction, goal))
 					{
-						Add(goal.gameObject, BoxOf(goal.gameObject, goal.volume), goal is BuildGoal, NoRoute, null);
+						Add(goal.gameObject, BoxOf(goal.gameObject, goal.volume), goal is BuildGoal, NoRoute, null, project);
 					}
 				}
 			}
@@ -678,6 +694,8 @@ internal static class UnreachableTasks
 			}
 		}
 		int rings = 0;
+		RingMode mode = (Rings != null) ? Rings.Value : RingMode.SelectedTask;
+		Project selected = (mode == RingMode.SelectedTask) ? SelectedTask() : null;
 		foreach (KeyValuePair<GameObject, Mark> entry in Marked)
 		{
 			Mark mark = entry.Value;
@@ -691,6 +709,12 @@ internal static class UnreachableTasks
 			}
 			if (mark.Quiet)
 			{
+				continue;
+			}
+			bool shown = mode == RingMode.All || (mode == RingMode.SelectedTask && selected != null && mark.Project == selected);
+			if (!shown)
+			{
+				Unring(entry.Key, mark);
 				continue;
 			}
 			if (mark.Ringed)
@@ -713,6 +737,45 @@ internal static class UnreachableTasks
 			{
 				Plugin.Log.LogWarning("UnreachableTasks: ring on " + entry.Key.name + ": " + ex.Message);
 			}
+		}
+	}
+
+	// The task selected by the player (not the idle group), or null.
+	private static Project SelectedTask()
+	{
+		if (UIGameObserver.projects == null || UIGameObserver.projects.all == null)
+		{
+			return null;
+		}
+		foreach (Project project in UIGameObserver.projects.all)
+		{
+			if (project != null && project.selection && !(project is IdleProject))
+			{
+				return project;
+			}
+		}
+		return null;
+	}
+
+	internal static bool IsRinged(GameObject go)
+	{
+		return go != null && Marked.TryGetValue(go, out Mark mark) && mark.Ringed;
+	}
+
+	// Marks a thing of a task by hand (DevTools tests of the rings); it stays until Forget or a change nearby.
+	internal static void MarkByHand(GameObject go, Project project, string why)
+	{
+		if (go != null)
+		{
+			Add(go, BoxOf(go, null), blueprint: false, why, null, project);
+		}
+	}
+
+	internal static void Forget(GameObject go)
+	{
+		if (go != null && Marked.TryGetValue(go, out Mark mark))
+		{
+			Remove(go, mark);
 		}
 	}
 

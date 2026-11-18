@@ -123,7 +123,8 @@ internal static class SoldierOrdersNetwork
 // - ranged soldiers: "Guard here" / "Stop guarding" in a free slot of their wheel over the ground, over themselves and
 //   anywhere (RangedGuard);
 // - knights and ranged soldiers, wheel over themselves: "Set post", "Back to post", "Clear post"; a mixed group, wheel
-//   over the ground: "Set post", "Back to post" (SoldierPosts).
+//   over the ground: "Set post", "Back to post" (SoldierPosts). The artificer, whose one wheel has no room for them,
+//   gets a wheel over itself (SplitArtificer).
 [Feature]
 [HarmonyPatch(typeof(Livre), nameof(Livre.Split))]
 internal static class SoldierOrdersWheel
@@ -135,6 +136,10 @@ internal static class SoldierOrdersWheel
 	private const string BackToPostButton = "PlusBackToPost";
 
 	private const string ClearPostButton = "PlusClearPost";
+
+	private const string ArtificerMain = "PlusArtificerMain";
+
+	private const string ArtificerSelf = "PlusArtificerSelf";
 
 	private static void Prefix(ref string contenu)
 	{
@@ -260,11 +265,12 @@ internal static class SoldierOrdersWheel
 			return text;
 		}
 		List<string> lines = new List<string>(text.Replace("\r\n", "\n").Split('\n'));
+		string artificer = (posts && SplitArtificer(lines, guard)) ? ArtificerMain : "Artificer";
 		if (guard)
 		{
 			FillHoles(lines, "ArcherMain", new[] { GuardButton });
 			FillHoles(lines, "ArcherAnywhere", new[] { GuardButton });
-			FillHoles(lines, "Artificer", new[] { GuardButton });
+			FillHoles(lines, artificer, new[] { GuardButton });
 		}
 		if (posts)
 		{
@@ -273,6 +279,55 @@ internal static class SoldierOrdersWheel
 		}
 		FillHoles(lines, "ArcherSelf", new[] { posts ? SetPostButton : null, posts ? BackToPostButton : null, posts ? ClearPostButton : null, guard ? GuardButton : null });
 		return string.Join("\n", lines.ToArray());
+	}
+
+	// The artificer has one wheel for everything, with a single free slot (the guard's): no room for the posts (#103).
+	// As the archer's, its wheel becomes one over itself (posts, guard, fire or heal) and the game's wheel anywhere
+	// else, renamed.
+	private static bool SplitArtificer(List<string> lines, bool guard)
+	{
+		int start = lines.FindIndex((string l) => l.Trim() == "MENU Artificer");
+		if (start < 0)
+		{
+			Plugin.Log.LogWarning("SoldierOrders: no wheel Artificer");
+			return false;
+		}
+		lines[start] = "MENU " + ArtificerMain;
+		// The title stays on the wheel the game opens (as the archer's: its sub-wheels have none).
+		if (start + 1 < lines.Count && lines[start + 1].Trim().StartsWith("Title:"))
+		{
+			lines.RemoveAt(start + 1);
+		}
+		lines.InsertRange(start, new[]
+		{
+			"MENU Artificer",
+			"\tTitle: Artificer",
+			"\tHover: Bricktron",
+			"\t\tIf: Condition_IsSelf",
+			"\t\t\tMenu: " + ArtificerSelf,
+			"\t\tElse:",
+			"\t\t\tMenu: " + ArtificerMain,
+			"\t\tEnd",
+			"\tElse:",
+			"\t\tMenu: " + ArtificerMain,
+			"\tEnd",
+			"",
+			"MENU " + ArtificerSelf,
+			"\tButton: " + SetPostButton,
+			"\tButton: " + BackToPostButton,
+			"\tButton: " + ClearPostButton,
+			guard ? "\tButton: " + GuardButton : "\tHole",
+			"\tIf: Condition_HoldingPosition",
+			"\t\tButton: Artificer_Fire",
+			"\tElse",
+			"\t\tButton: Artificer_Heal",
+			"\tEnd",
+			"\tButtonOff: Turn To",
+			"\tButtonOff: Move To",
+			"\tHole",
+			""
+		});
+		return true;
 	}
 
 	// Puts the buttons in the menu's first free slots in order (null keeps that slot free).
