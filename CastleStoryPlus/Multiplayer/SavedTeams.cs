@@ -25,6 +25,10 @@ internal static class SavedTeams
 {
 	private const string SaveFile = "castlestoryplus_teams.json";
 
+	// Teams are being put back: the game's own lobby check (GameParam.RefreshTeams) must not look at the lobby until
+	// all of them are, or it moves players out of the half made teams (each team change refreshes the lobby at once).
+	internal static bool Applying { get; private set; }
+
 	// Host: called when the game has written a save into its folder.
 	internal static void Write(string folder)
 	{
@@ -97,6 +101,8 @@ internal static class SavedTeams
 		{
 			return;
 		}
+		bool outer = Applying;
+		Applying = true;
 		try
 		{
 			int team = TeamOf(map, player.factionNumber);
@@ -104,12 +110,17 @@ internal static class SavedTeams
 			{
 				return;
 			}
+			int was = player.TeamNumber;
 			player.NetworkTeamNumber = team;
-			Plugin.Log.LogInfo("SavedTeams: " + player.playerName + " is in team " + (team + 1) + " as in the save");
+			Plugin.Log.LogInfo("SavedTeams: faction " + player.factionNumber + " is in team " + (team + 1) + " as in the save (was " + (was + 1) + ")");
 		}
 		catch (Exception ex)
 		{
 			Plugin.Log.LogWarning("SavedTeams: could not read the save's teams: " + ex.Message);
+		}
+		finally
+		{
+			Applying = outer;
 		}
 	}
 
@@ -119,9 +130,51 @@ internal static class SavedTeams
 		{
 			return;
 		}
-		foreach (LobbyPlayer player in UNetManager.instance.LobbyPlayerList)
+		bool outer = Applying;
+		Applying = true;
+		try
 		{
-			Apply(player);
+			foreach (LobbyPlayer player in new List<LobbyPlayer>(UNetManager.instance.LobbyPlayerList))
+			{
+				Apply(player);
+			}
+		}
+		finally
+		{
+			Applying = outer;
+		}
+	}
+
+	// After the game's own lobby check (GameParam.FixTeams) has moved players to make the teams valid: the saved teams
+	// are put back if they are valid too (all the players of the save are there), else the game's repair stays.
+	internal static void KeepSaved()
+	{
+		if (!NetworkServer.active || Applying || UNetManager.instance == null || UNetManager.instance.LobbyPlayerList == null)
+		{
+			return;
+		}
+		List<LobbyPlayer> players = new List<LobbyPlayer>(UNetManager.instance.LobbyPlayerList);
+		int[] repaired = new int[players.Count];
+		for (int i = 0; i < repaired.Length; i++)
+		{
+			repaired[i] = players[i].TeamNumber;
+		}
+		ApplyAll();
+		if (GameParam.AreTeamsValid())
+		{
+			return;
+		}
+		Applying = true;
+		try
+		{
+			for (int i = 0; i < repaired.Length; i++)
+			{
+				players[i].NetworkTeamNumber = repaired[i];
+			}
+		}
+		finally
+		{
+			Applying = false;
 		}
 	}
 
@@ -168,6 +221,28 @@ internal static class SavedTeams
 	}
 }
 
+// The game's lobby check waits while the teams are put back.
+[Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
+[HarmonyPatch(typeof(GameParam), "RefreshTeams")]
+internal static class SavedTeamsRefreshPatch
+{
+	private static bool Prefix()
+	{
+		return !SavedTeams.Applying;
+	}
+}
+
+// The game's lobby check has moved players: the saved teams come back if they are valid.
+[Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
+[HarmonyPatch(typeof(GameParam), "FixTeams")]
+internal static class SavedTeamsFixPatch
+{
+	private static void Postfix()
+	{
+		SavedTeams.KeepSaved();
+	}
+}
+
 // Saves the teams with the game.
 [Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
 [HarmonyPatch(typeof(Asset_Map), "Disk_Save")]
@@ -182,7 +257,10 @@ internal static class SavedTeamsSavePatch
 	}
 }
 
-// A player joining the lobby: the game has just put him in the first free team.
+// A player joining the lobby: the game has just put him in the first free team. Every player already there is put
+// back in his saved team too: while the first players join, the lobby is not valid for the mode yet (Conquest
+// Versus needs two teams, so two players who shared a team were split by the game's own lobby check, RefreshTeams),
+// and the team that check moved would otherwise stay where it was moved to when the last player of the save joins.
 [Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
 [HarmonyPatch(typeof(LobbyPlayer), nameof(LobbyPlayer.Start))]
 internal static class SavedTeamsJoinPatch
@@ -190,6 +268,7 @@ internal static class SavedTeamsJoinPatch
 	private static void Postfix(LobbyPlayer __instance)
 	{
 		SavedTeams.Apply(__instance);
+		SavedTeams.ApplyAll();
 	}
 }
 
