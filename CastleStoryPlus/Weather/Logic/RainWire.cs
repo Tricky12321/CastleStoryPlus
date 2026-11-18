@@ -33,10 +33,11 @@ internal static class RainWire
 		}
 	}
 
-	internal static byte[] EncodeMessage(WeatherKind kind, float hours)
+	// The message's bytes (WeatherNetMessage writes and reads exactly these).
+	internal static byte[] EncodeMessage(byte kind, float hours)
 	{
 		byte[] bytes = new byte[MessageBytes];
-		bytes[0] = (byte)kind;
+		bytes[0] = kind;
 		byte[] value = BitConverter.GetBytes(hours);
 		if (!BitConverter.IsLittleEndian)
 		{
@@ -46,9 +47,10 @@ internal static class RainWire
 		return bytes;
 	}
 
-	internal static bool TryDecodeMessage(byte[] bytes, out WeatherKind kind, out float hours)
+	// The kind and hours as sent, not yet checked (TryValidate); false for a wrong length.
+	internal static bool DecodeMessage(byte[] bytes, out byte kind, out float hours)
 	{
-		kind = WeatherKind.None;
+		kind = 0;
 		hours = 0f;
 		if (bytes == null || bytes.Length != MessageBytes)
 		{
@@ -60,7 +62,9 @@ internal static class RainWire
 		{
 			Array.Reverse(value);
 		}
-		return TryValidate(bytes[0], BitConverter.ToSingle(value, 0), out kind, out hours);
+		kind = bytes[0];
+		hours = BitConverter.ToSingle(value, 0);
+		return true;
 	}
 
 	// A message from the host is only used when its kind is one we know and its hours are a real, not negative number

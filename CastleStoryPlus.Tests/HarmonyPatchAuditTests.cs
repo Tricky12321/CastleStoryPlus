@@ -27,7 +27,6 @@ public class HarmonyPatchAuditTests
 	{
 		{ "BlueprintMapper.AddMappings|LargeStockpileBlueprintMappingPatch", Unreviewed },
 		{ "BlueprintMapper.AddMappings|MarketBlueprintMappingPatch", Unreviewed },
-		{ "BuildGoal.GetWorkNode|FreeBlueprintsWorkPatch", Unreviewed },
 		{ "Container.ItemClick|ContinueClickPatch", Unreviewed },
 		{ "CraftingInstructions.FindResource|MarketFetchPatch", Unreviewed },
 		{ "DigGoal.MustOverkill|QuarryBlueCrystalOverkillPatch", Unreviewed },
@@ -36,9 +35,9 @@ public class HarmonyPatchAuditTests
 		{ "Knowledge.ClosestObjectToPickup|PickupSearchOrder", Unreviewed },
 		{ "Labor.CheckProjectForWork|WorkSearchBudget", Unreviewed },
 		{ "Labor.ClosestResource|ResearchClosestResourcePatch", Unreviewed },
-		{ "Labor.HasToFight|ArtificerHealingFightPatch", Unreviewed },
-		{ "Labor.HasToFight|PlayerOrdersFirstFightPatch", Unreviewed },
-		{ "Labor.HasToFight|RetreatInstinctPatch", Unreviewed },
+		{ "Labor.HasToFight|ArtificerHealingFightPatch", HasToFightOr },
+		{ "Labor.HasToFight|PlayerOrdersFirstFightPatch", HasToFightOr },
+		{ "Labor.HasToFight|RetreatInstinctPatch", HasToFightOr },
 		{ "LuaMenuComponent.Load|CsGameMenuLoadPatch", Unreviewed },
 		{ "PickUpNode.TakeSome|ResearchTakePatch", Unreviewed },
 		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|RepairNoRebuildPatch", Unreviewed },
@@ -58,6 +57,10 @@ public class HarmonyPatchAuditTests
 	// returns false) behind a condition of its own, and a later prefix on the same target does not ask __runOriginal.
 	// Whether the conditions can both be true, and what then wins, has not been reviewed: review one, give it its own
 	// reason here (or fix it with __runOriginal) and the list shrinks. New pairs are not on this list and fail.
+	// Each of the four HasToFight prefixes only ever sets the result to false (a reason not to fight): the answers combine
+	// as OR, so the order does not matter and a later prefix that runs on is harmless.
+	private const string HasToFightOr = "only sets false: the prefixes combine as OR";
+
 	private const string Unreviewed = "baseline 18-11-2026, not reviewed";
 
 	// Patches that are known not to match their target (a game version that has none of it, or a target that is
@@ -80,6 +83,9 @@ public class HarmonyPatchAuditTests
 
 		// Set when the method has [HarmonyPatch] attributes of its own (its own target); else the class's.
 		public List<MethodBase> OwnTargets;
+
+		// [HarmonyBefore] or [HarmonyAfter] on the method.
+		public bool HasOrdering;
 	}
 
 	private sealed class PatchClass
@@ -207,24 +213,28 @@ public class HarmonyPatchAuditTests
 			}
 			List<PatchMethod> order = group.Value.OrderByDescending(p => p.Priority).ThenBy(p => p.PatchClass.FullName, StringComparer.Ordinal).ToList();
 			shared.Add(Describe(group.Key) + ": " + string.Join(", ", order.Select(p => p.PatchClass.Name + "(" + p.Priority + (p.CanSkipOriginal ? ", can skip" : string.Empty) + ")").ToArray()));
-			for (int i = 0; i < order.Count; i++)
+			// HarmonyX runs prefixes by priority (high first), then [HarmonyBefore]/[HarmonyAfter], then in the order the patch
+			// classes were registered (not known here). So a skipping prefix is checked against every prefix that can run after
+			// it: a lower priority one, or one of equal priority (in either order) unless an ordering attribute fixes the order.
+			foreach (PatchMethod skipper in order.Where(m => m.CanSkipOriginal))
 			{
-				if (!order[i].CanSkipOriginal)
+				foreach (PatchMethod later in order)
 				{
-					continue;
-				}
-				for (int j = i + 1; j < order.Count; j++)
-				{
-					if (order[j].PatchClass == order[i].PatchClass || HasParameter(order[j].Method, "__runOriginal"))
+					if (later.PatchClass == skipper.PatchClass || HasParameter(later.Method, "__runOriginal") || later.Priority > skipper.Priority)
 					{
 						continue;
 					}
-					string key = Describe(group.Key) + "|" + order[i].PatchClass.Name;
+					if (later.Priority == skipper.Priority && (later.HasOrdering || skipper.HasOrdering) && !skipper.HasOrdering)
+					{
+						// [HarmonyBefore] on the later one puts it first: it does not run after the skipper.
+						continue;
+					}
+					string key = Describe(group.Key) + "|" + skipper.PatchClass.Name;
 					if (SkipWhitelist.ContainsKey(key))
 					{
 						continue;
 					}
-					failures.Add(Describe(group.Key) + ": " + order[i].PatchClass.Name + " can skip the original, then " + order[j].PatchClass.Name + " runs without looking at __runOriginal (whitelist key: " + key + ")");
+					failures.Add(Describe(group.Key) + ": " + skipper.PatchClass.Name + " can skip the original, then " + later.PatchClass.Name + " can run without looking at __runOriginal (whitelist key: " + key + ")");
 				}
 			}
 		}
@@ -520,6 +530,7 @@ public class HarmonyPatchAuditTests
 			patch.Methods.Add(new PatchMethod
 			{
 				OwnTargets = ownTargets,
+				HasOrdering = method.GetCustomAttributes(false).Any(a => a is HarmonyBefore || a is HarmonyAfter),
 				PatchClass = patch.Type,
 				Method = method,
 				Kind = kind,
@@ -541,7 +552,9 @@ public class HarmonyPatchAuditTests
 		return null;
 	}
 
-	// A bool prefix can skip the original when its IL has a "ldc.i4.0" (false) at all; one without can only return true.
+	// A heuristic on the IL bytes: a bool prefix can skip the original unless it returns nothing but the constant true
+	// (every "ret" comes straight after "ldc.i4.1" and there is no "ldc.i4.0"). A "return Check();" or "return x == null;"
+	// counts as able to skip. Operand bytes that look like a "ret" make it flag a little too much, never too little.
 	private static bool CanReturnFalse(MethodInfo method)
 	{
 		MethodBody body = method.GetMethodBody();
@@ -550,7 +563,18 @@ public class HarmonyPatchAuditTests
 			return true;
 		}
 		byte[] il = body.GetILAsByteArray();
-		return il.Any(b => b == 0x16);
+		if (il.Any(b => b == 0x16))
+		{
+			return true;
+		}
+		for (int i = 0; i < il.Length; i++)
+		{
+			if (il[i] == 0x2A && (i == 0 || il[i - 1] != 0x17))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static bool HasParameter(MethodInfo method, string name)

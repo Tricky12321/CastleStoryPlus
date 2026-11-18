@@ -19,8 +19,6 @@ internal static class RoadRules
 	// The game's graph: a flat step weighs this and the A* ranks a step by length * 10 + weight * 2 (PathAStarQueue).
 	internal const int FlatWeight = 10;
 
-	internal const int FlatLength = 1;
-
 	// How many times faster a road is than the ground. The host's bonus counts when there is one (a client), else the
 	// player's setting, else the default (the setting is not bound yet).
 	internal static float Factor(int? hostBonus, int? setting)
@@ -32,12 +30,6 @@ internal static class RoadRules
 	internal static int ClampBonus(int percent)
 	{
 		return Math.Min(MaxBonus, Math.Max(MinBonus, percent));
-	}
-
-	// The A*'s rank of a step (PathAStarQueue.Evaluate without the distance to the goal).
-	internal static int Rank(int length, int weight)
-	{
-		return length * 10 + weight * 2;
 	}
 
 	// The weight of a plain step between two voxels, scaled by the road under them. A flat step has weight 10 and each

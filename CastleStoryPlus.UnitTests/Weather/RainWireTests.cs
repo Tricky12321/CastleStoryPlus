@@ -95,7 +95,7 @@ public class RainWireTests
 	[Test]
 	public void MessageIsFiveBytesKindThenALittleEndianFloat()
 	{
-		byte[] bytes = RainWire.EncodeMessage(WeatherKind.Snow, 1.5f);
+		byte[] bytes = RainWire.EncodeMessage((byte)WeatherKind.Snow, 1.5f);
 		// 1.5f = 0x3FC00000
 		Assert.That(bytes, Is.EqualTo(new byte[] { 2, 0x00, 0x00, 0xC0, 0x3F }));
 	}
@@ -103,11 +103,11 @@ public class RainWireTests
 	[TestCase(0, 0f)]
 	[TestCase(1, 3.25f)]
 	[TestCase(2, 0.05f)]
-	[TestCase(1, 4.2e3f)]
+	[TestCase(255, 4.2e3f)]
 	public void MessageRoundTrips(int kind, float hours)
 	{
-		byte[] bytes = RainWire.EncodeMessage((WeatherKind)kind, hours);
-		Assert.That(RainWire.TryDecodeMessage(bytes, out WeatherKind readKind, out float readHours), Is.True);
+		byte[] bytes = RainWire.EncodeMessage((byte)kind, hours);
+		Assert.That(RainWire.DecodeMessage(bytes, out byte readKind, out float readHours), Is.True);
 		Assert.That((int)readKind, Is.EqualTo(kind));
 		Assert.That(readHours, Is.EqualTo(hours));
 	}
@@ -115,19 +115,17 @@ public class RainWireTests
 	[Test]
 	public void DecodeRejectsTheWrongLength()
 	{
-		Assert.That(RainWire.TryDecodeMessage(null, out _, out _), Is.False);
-		Assert.That(RainWire.TryDecodeMessage(new byte[0], out _, out _), Is.False);
-		Assert.That(RainWire.TryDecodeMessage(new byte[4], out _, out _), Is.False);
-		Assert.That(RainWire.TryDecodeMessage(new byte[6], out _, out _), Is.False);
+		Assert.That(RainWire.DecodeMessage(null, out _, out _), Is.False);
+		Assert.That(RainWire.DecodeMessage(new byte[0], out _, out _), Is.False);
+		Assert.That(RainWire.DecodeMessage(new byte[4], out _, out _), Is.False);
+		Assert.That(RainWire.DecodeMessage(new byte[6], out _, out _), Is.False);
 	}
 
 	[Test]
-	public void DecodeRejectsAnUnknownKind()
+	public void ADecodedUnknownKindFailsTheValidation()
 	{
-		byte[] bytes = RainWire.EncodeMessage((WeatherKind)7, 1f);
-		Assert.That(RainWire.TryDecodeMessage(bytes, out WeatherKind kind, out float hours), Is.False);
-		Assert.That(kind, Is.EqualTo(WeatherKind.None));
-		Assert.That(hours, Is.EqualTo(0f));
+		RainWire.DecodeMessage(RainWire.EncodeMessage(7, 1f), out byte kind, out float hours);
+		Assert.That(RainWire.TryValidate(kind, hours, out _, out _), Is.False);
 	}
 
 	[TestCase(float.NaN)]

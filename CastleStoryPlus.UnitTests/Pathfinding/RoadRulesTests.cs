@@ -40,12 +40,16 @@ public class RoadRulesTests
 		Assert.That(RoadRules.ClampBonus(percent), Is.EqualTo(expected));
 	}
 
-	[Test]
-	public void RankIsTenPerLengthAndTwoPerWeight()
+	// The A*'s rank of a step of length 1 (PathAStarQueue.Evaluate without the distance to the goal): length * 10 + weight * 2.
+	private static int Rank(int weight)
 	{
-		Assert.That(RoadRules.Rank(1, 10), Is.EqualTo(30));
-		Assert.That(RoadRules.Rank(2, 12), Is.EqualTo(44));
-		Assert.That(RoadRules.Rank(0, 0), Is.EqualTo(0));
+		return 1 * 10 + weight * 2;
+	}
+
+	[Test]
+	public void AFlatStepRanksThirty()
+	{
+		Assert.That(Rank(RoadRules.FlatWeight), Is.EqualTo(30));
 	}
 
 	[Test]
@@ -71,7 +75,7 @@ public class RoadRulesTests
 		int weight = RoadRules.Scale(10, true, true, factor);
 		Assert.That(weight, Is.EqualTo(expectedWeight));
 		// The rank of a flat step is 30; the road's is 30 / factor, to within the rounding of the weight (2 per weight step).
-		Assert.That(RoadRules.Rank(RoadRules.FlatLength, weight), Is.EqualTo(30f / factor).Within(2f));
+		Assert.That(Rank(weight), Is.EqualTo(30f / factor).Within(2f));
 	}
 
 	[Test]

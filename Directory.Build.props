@@ -1,13 +1,15 @@
 <Project>
-  <!-- CastleStoryPlus.Tests (local tests with the game's assemblies) always use the Unity 6 port player's assemblies: the
-       mod no longer builds for the old net35 game (-p:PlayerDir=<player>/ to use another player folder). -->
+  <!-- CastleStoryPlus.Tests (local tests with the game's assemblies) always use the Unity 6 port player's assemblies, as the
+       mod is built for the port only (net35 / Unity 5.6 is dropped: releases ship the port since 0.8.1). So that project gets
+       the player's references and UNITY6, and needs the Unity editor install (UnityEditorDir) for the net48 reference
+       assemblies. -p:PlayerDir=<player>/ uses another player folder. -->
   <PropertyGroup Condition="'$(UnityTarget)' == '' And '$(MSBuildProjectName)' == 'CastleStoryPlus.Tests'">
     <UnityTarget>player</UnityTarget>
   </PropertyGroup>
   <!-- Unity 6 build (dotnet build -p:UnityTarget=6): the mod built for a Unity 6 reconstruction of the game
        (UnityProjectDir, private), against that project's compiled game code and Unity 6's engine assemblies, and
        installed into its BepInEx folder. The references are swapped in Directory.Build.targets; UNITY6 marks the
-       code that differs. The normal build (Unity 5.6, the real game) is unchanged. -->
+       code that differs. The plain build (Unity 5.6, net35) is legacy: it no longer compiles. -->
   <PropertyGroup Condition="'$(UnityTarget)' == '6'">
     <UnityEditorDir Condition="'$(UnityEditorDir)' == ''">$(HOME)/Unity/Hub/Editor/6000.6.7f1/Editor/Data/</UnityEditorDir>
     <UnityProjectDir Condition="'$(UnityProjectDir)' == ''">$(HOME)/Projects/CastleStoryUnity/ExportedProject/</UnityProjectDir>

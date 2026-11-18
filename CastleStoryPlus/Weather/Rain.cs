@@ -78,14 +78,12 @@ internal sealed class Rain : MonoBehaviour
 
 		public override void Serialize(NetworkWriter writer)
 		{
-			writer.Write(Kind);
-			writer.Write(Hours);
+			writer.Write(RainWire.EncodeMessage(Kind, Hours), RainWire.MessageBytes);
 		}
 
 		public override void Deserialize(NetworkReader reader)
 		{
-			Kind = reader.ReadByte();
-			Hours = reader.ReadSingle();
+			RainWire.DecodeMessage(reader.ReadBytes(RainWire.MessageBytes), out Kind, out Hours);
 		}
 	}
 

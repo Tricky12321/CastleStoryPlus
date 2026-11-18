@@ -73,7 +73,7 @@
   <!-- The folders the game's assemblies are in, for the tests' assembly resolver (assemblies that are not copied next to the tests). -->
   <Target Name="WriteGameFolders" AfterTargets="Build">
     <ItemGroup>
-            <GameFolder Include="$(PlayerManagedDir)" Condition="'$(UnityTarget)' == 'player'" />
+      <GameFolder Include="$(PlayerManagedDir)" Condition="'$(UnityTarget)' == 'player'" />
       <GameFolder Include="$(BepInExCoreDir)" />
     </ItemGroup>
     <WriteLinesToFile File="$(OutDir)gamefolders.txt" Lines="@(GameFolder)" Overwrite="true" />

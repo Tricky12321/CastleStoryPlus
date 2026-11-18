@@ -38,7 +38,7 @@ Finding what is slow or what fills memory: see [Performance](Performance.md) and
 ### Releasing
 
 1. Bump `Version` in `CastleStoryPlus/Plugin.cs`, update [`CHANGELOG.md`](../CHANGELOG.md) and commit.
-2. Run `tools/release.sh`. It builds the plugin once and packs one package per system with `tools/package.sh`:
+2. Run `tools/release.sh`. It builds the plugin once and packs one package per system with `tools/package-port.sh`:
    - `dist/CastleStoryPlus-v<version>-linux.zip`: `install.sh` and BepInEx linux_x64;
    - `dist/CastleStoryPlus-v<version>-windows.zip`: `install.bat`, `install.ps1` and BepInEx win_x64.
 

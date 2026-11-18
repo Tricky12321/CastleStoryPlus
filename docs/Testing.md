@@ -42,7 +42,7 @@ slip in.
 Why this and not a separate class library or mocking:
 
 - A source link needs no extra assembly to ship, load or reload (the mod is one DLL, `ModReload` swaps it as before),
-  and the code is built for the net35 and Unity 6 (net48) targets exactly as the rest.
+  and the code is built for the port (net48) exactly as the rest.
 - The tests run on .NET 8 with no game DLL, so GitHub Actions can run them. The game's assemblies are not in the
   repository and must never be.
 - No interfaces or mocks are needed (the project avoids interfaces): the logic takes plain values.
@@ -53,8 +53,8 @@ Why this and not a separate class library or mocking:
   it; the test project takes it from NuGet).
 - Not allowed: `UnityEngine` (also structs such as `Vector3` and `Mathf`: use `System.Math`, floats, or a small value
   type of your own), `Brix.*`, `BepInEx`, `HarmonyLib`, `GameObject`, `Time`, `Physics`, networking.
-- Must compile for net35: no `Math.Clamp`, `string.IsNullOrWhiteSpace`, `Tuple`, `Enum.TryParse`, `ConditionalWeakTable`.
-  Keep the maths identical to Unity's where it was Unity's (`RainRules.Repeat` is `Mathf.Repeat`, `RoadRules.RoundToInt`
+- The mod targets the Unity 6 port (net48, `UNITY6`); the old net35 build is dropped (releases ship the port since 0.8.1), so
+  net48 APIs are fine. Keep the maths identical to Unity's where it was Unity's (`RainRules.Repeat` is `Mathf.Repeat`, `RoadRules.RoundToInt`
   is `Mathf.RoundToInt`: halves round to even).
 - Classes are `internal`; the test project compiles them itself. Test classes must be public, so keep the pure types
   out of the signatures of test methods (use `int` and cast to an enum inside the test).
@@ -110,7 +110,7 @@ assemblies, without patching anything:
   `___field` (the field exists), `__n`, or the name of one of the target's parameters, with a compatible type; a prefix
   returns void or bool, a transpiler an `IEnumerable`.
 - **Skipping prefixes:** where several patch classes have a prefix on the same target (listed in the test output), a
-  prefix that can skip the original (bool, with a `false` in it) before one that does not take `__runOriginal` fails.
+  prefix that can skip the original (a bool prefix that is not just `return true`; a heuristic on its IL, it may flag a little too much) before one that does not take `__runOriginal` fails. HarmonyX orders by priority, then `[HarmonyBefore]`/`[HarmonyAfter]`, then registration order, so for equal priority both orders are checked.
   Later prefixes still run and may overwrite `__result`; either the later one takes `__runOriginal` and respects it, or
   the pair is added to `SkipWhitelist` with the reason it is fine. The first run listed 27 pairs that are on the list
   as "baseline, not reviewed": review one, write its reason or fix it, and the list shrinks. A new pair fails.

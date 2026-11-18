@@ -74,7 +74,7 @@ When building, `CastleStoryPlus.Bootstrap.csproj` references `MonoMod.RuntimeDet
 
 Not part of the bootstrap, but the same old runtime shapes the rest of the mod:
 
-- **Target framework `net35`.** The plugin, the bootstrap and the developer tools are built for .NET 3.5 (`Directory.Build.props`), with a modern C# language version. Language features that need newer runtime types cannot be used.
+- **Target framework `net35` (legacy, dropped for the mod).** This describes the original game's Mono 2.6 runtime: the plugin, the bootstrap and the developer tools were built for .NET 3.5; the mod is now built for the Unity 6 port only (net48), and the plain build no longer compiles. The bootstrap still targets net35. They were built for .NET 3.5 (`Directory.Build.props`), with a modern C# language version. Language features that need newer runtime types cannot be used.
 - **Built against the original game DLLs.** The plugin references `Castle Story_Data/Managed.orig/` and uses `BepInEx.AssemblyPublicizer.MSBuild` (`Publicize="true"`), so patches can reach private members without reflection. No game code is shipped.
 - **No new fields on game classes.** Harmony cannot add fields, so data per object (worker XP, call to arms role, 3x tier) lives in side tables and is saved as extra JSON properties that the unmodded game ignores.
 - **Network commands registered by hand.** New UNet commands (for example the move command) are registered with `NetworkBehaviour.RegisterCommandDelegate` and a fixed hash, since the game's generated network code cannot be extended.
