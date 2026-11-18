@@ -78,7 +78,7 @@ internal static class GuardianSounds
 	// For the tests and the API: what was played last, and how many sounds of each guardian and event.
 	internal static readonly int[,] Played = new int[4, 6];
 
-	internal static string LastClip = string.Empty;
+	internal static AudioClip LastClip;
 
 	internal static float LastVolume;
 
@@ -92,17 +92,40 @@ internal static class GuardianSounds
 
 	internal static string Folder => Path.Combine(Path.Combine(Path.Combine(Plugin.Directory, "Assets"), "Sounds"), "Guardians");
 
+	private static bool _hooked;
+
+	private static bool _folderLogged;
+
 	private static void Enable()
 	{
 		Bind();
-		GameSession.OnLeave(ModAudio.StopAll);
+		// Once, however often the feature is switched on or the mod reloaded in this session.
+		if (!_hooked)
+		{
+			_hooked = true;
+			GameSession.OnLeave(ModAudio.StopAll);
+			// The clips are read when a game is ready, not at the first sound, so no sound causes a hitch.
+			GameSession.OnLevelReady(Preload);
+		}
+	}
+
+	// Reads the clips of all guardians (once).
+	internal static void Preload()
+	{
+		foreach (BeastInfo info in BeastKinds.All)
+		{
+			if (info != null)
+			{
+				Load(info);
+			}
+		}
 	}
 
 	private static void Bind()
 	{
 		if (_volume == null)
 		{
-			_volume = Plugin.Cfg.Bind("Treasure.Sounds", "Volume", 1f, new ConfigDescription("How loud the guardians' sounds are (1: as made, 0: silent). The game's own sound volume and mute apply on top.", new AcceptableValueRange<float>(0f, 2f)));
+			_volume = Plugin.Cfg.Bind("Treasure.Sounds", "Volume", 1f, new ConfigDescription("How loud the guardians' sounds are (1: as made, 0: silent). The game's own sound volume and mute apply on top.", new AcceptableValueRange<float>(0f, 1f)));
 		}
 	}
 
@@ -128,7 +151,7 @@ internal static class GuardianSounds
 			return false;
 		}
 		Played[(int)info.Kind, (int)sound]++;
-		LastClip = clip.name;
+		LastClip = clip;
 		LastVolume = volume;
 		LastPitch = pitch;
 		LastMinDistance = setting.MinDistance;
@@ -169,6 +192,11 @@ internal static class GuardianSounds
 		}
 		AudioClip[][] kind = new AudioClip[6][];
 		Bank[(int)info.Kind] = kind;
+		if (!Directory.Exists(Folder) && !_folderLogged)
+		{
+			_folderLogged = true;
+			Plugin.Log.LogWarning("Guardian sounds: the folder " + Folder + " is missing, the guardians stay silent");
+		}
 		for (int i = 0; i < kind.Length; i++)
 		{
 			List<AudioClip> clips = new List<AudioClip>();
@@ -230,9 +258,18 @@ internal static class GuardianSounds
 				}
 				int count = size / bytes;
 				float[] samples = new float[count];
-				for (int i = 0; i < count; i++)
+				if (bits == 32)
 				{
-					samples[i] = (bits == 16) ? BitConverter.ToInt16(data, body + i * 2) / 32768f : BitConverter.ToSingle(data, body + i * 4);
+					Buffer.BlockCopy(data, body, samples, 0, count * 4);
+				}
+				else
+				{
+					short[] pcm = new short[count];
+					Buffer.BlockCopy(data, body, pcm, 0, count * 2);
+					for (int i = 0; i < count; i++)
+					{
+						samples[i] = pcm[i] / 32768f;
+					}
 				}
 				AudioClip clip = AudioClip.Create(Path.GetFileNameWithoutExtension(file), count / channels, channels, rate, false);
 				clip.SetData(samples, 0);

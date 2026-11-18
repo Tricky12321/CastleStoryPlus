@@ -126,7 +126,11 @@ internal sealed class BeastBody : MonoBehaviour
 		if (Dead)
 		{
 			_ragdoll = BeastRagdoll.Create(_root.transform, _parts, gameObject);
-			GuardianSounds.Play(Info, GuardianSound.Death, transform.position);
+			// Heard only where the beast was seen (not from the fog: that would tell where something died).
+			if (_visibility == null || (_visibility.enabled && _visibility.gameObject.activeInHierarchy))
+			{
+				GuardianSounds.Play(Info, GuardianSound.Death, transform.position);
+			}
 		}
 		else
 		{

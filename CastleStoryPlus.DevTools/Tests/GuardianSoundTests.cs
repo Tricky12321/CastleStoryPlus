@@ -41,6 +41,23 @@ internal static class GuardianSoundTests
 		return GuardianSounds.Played[(int)kind, (int)sound];
 	}
 
+	// The test sets the game's sound settings (they go to Wwise): the player's own are put back afterwards.
+	private static void Isolate(TestContext t, Action also = null)
+	{
+		bool mute = SoundEngine.mute;
+		float master = SoundEngine.volumeMaster;
+		float sfx = SoundEngine.volumeSFX;
+		t.Cleanup(() =>
+		{
+			ModAudio.StopAll();
+			SoundEngine.mute = mute;
+			SoundEngine.volumeMaster = master;
+			SoundEngine.volumeSFX = sfx;
+			also?.Invoke();
+		});
+		ResetAudio();
+	}
+
 	private static void ResetAudio()
 	{
 		ModAudio.StopAll();
@@ -83,8 +100,7 @@ internal static class GuardianSoundTests
 	private static IEnumerator EventsPlayTheRightClips(TestContext t)
 	{
 		NeedSounds(t);
-		t.Cleanup(ResetAudio);
-		ResetAudio();
+		Isolate(t);
 		XYZ site = Scenario.Site(t, 40, 10);
 		Faction enemy = Scenario.EnemyFaction();
 		if (enemy == null)
@@ -155,15 +171,14 @@ internal static class GuardianSoundTests
 
 	private static void Named(TestContext t, BeastInfo info, string ev)
 	{
-		t.True(GuardianSounds.LastClip.StartsWith(info.Name + "_" + ev + "_"), "The last sound was " + GuardianSounds.LastClip + ", not a " + info.Name + " " + ev);
+		t.True(GuardianSounds.LastClip.name.StartsWith(info.Name + "_" + ev + "_"), "The last sound was " + GuardianSounds.LastClip.name + ", not a " + info.Name + " " + ev);
 	}
 
 	[GameTest("GuardianSounds", "A guardian's sound is a 3D sound at the guardian that fades out with distance", TimeoutSeconds = 60f, NeedsHostGame = false)]
 	private static IEnumerator SoundIsPositioned(TestContext t)
 	{
 		NeedSounds(t);
-		t.Cleanup(ResetAudio);
-		ResetAudio();
+		Isolate(t);
 		BeastInfo info = Info(BeastKind.Boulderback);
 		Vector3 at = new Vector3(1000f, 50f, 1000f);
 		t.True(GuardianSounds.Play(info, GuardianSound.Roar, at), "The roar did not play");
@@ -226,8 +241,7 @@ internal static class GuardianSoundTests
 	private static IEnumerator FollowsGameVolume(TestContext t)
 	{
 		NeedSounds(t);
-		t.Cleanup(ResetAudio);
-		ResetAudio();
+		Isolate(t);
 		BeastInfo info = Info(BeastKind.Ironhorn);
 		Vector3 at = new Vector3(1000f, 50f, 1000f);
 		GuardianSounds.Play(info, GuardianSound.Death, at);
@@ -271,12 +285,7 @@ internal static class GuardianSoundTests
 	private static IEnumerator ListenerLifecycle(TestContext t)
 	{
 		NeedSounds(t);
-		t.Cleanup(() =>
-		{
-			ResetAudio();
-			Rain.Begin(WeatherKind.None, 0f);
-		});
-		ResetAudio();
+		Isolate(t, () => Rain.Begin(WeatherKind.None, 0f));
 		yield return t.Until(() => !ModAudio.ListenerPresent, 8f, "the mod's listener to be gone");
 		int others = Listeners();
 		t.Record("listeners before", others);
@@ -304,18 +313,25 @@ internal static class GuardianSoundTests
 		{
 			t.Log("No rain in this game: listener shared with the rain not checked");
 		}
-		// Everything has stopped: the listener goes.
+		// Everything has stopped: the listener stays a few seconds, then goes.
 		ModAudio.StopAll();
 		yield return t.Until(() => Listeners() == 0 && !ModAudio.ListenerPresent, 8f, "the listener to be removed");
 		t.Equal(0, ModAudio.VoicesPlaying, "Voices still playing");
+		// A sound right after the listener went finds a listener at once (not up to two seconds later).
+		GuardianSounds.Play(info, GuardianSound.Hit, new Vector3(1000f, 50f, 1000f));
+		yield return t.Frames(3);
+		t.True(ModAudio.ListenerPresent || Listeners() >= 1, "No listener three frames after a sound that followed a pause");
+		// And a sound that follows within the linger time keeps the same listener (no churn).
+		ModAudio.StopAll();
+		yield return t.Seconds(1.5f);
+		t.True(ModAudio.ListenerPresent, "The listener went at once when the sound ended");
 	}
 
 	[GameTest("GuardianSounds", "At most 16 sounds play at once; a flood cuts the less important ones and allocates nothing per sound", TimeoutSeconds = 60f, NeedsHostGame = false)]
 	private static IEnumerator VoiceCapAndAllocations(TestContext t)
 	{
 		NeedSounds(t);
-		t.Cleanup(ResetAudio);
-		ResetAudio();
+		Isolate(t);
 		BeastInfo info = Info(BeastKind.Spirestalker);
 		Vector3 at = new Vector3(1000f, 50f, 1000f);
 		// Warm up: the clips load and the voices are made once.
@@ -359,12 +375,7 @@ internal static class GuardianSoundTests
 	private static IEnumerator FeatureOffIsSilent(TestContext t)
 	{
 		NeedSounds(t);
-		t.Cleanup(() =>
-		{
-			FeatureToggle.Set(Features.GuardianSounds, true);
-			ResetAudio();
-		});
-		ResetAudio();
+		Isolate(t, () => FeatureToggle.Set(Features.GuardianSounds, true));
 		FeatureToggle.Set(Features.GuardianSounds, false);
 		BeastInfo info = Info(BeastKind.Cindermane);
 		int before = ModAudio.Started;
@@ -373,5 +384,47 @@ internal static class GuardianSoundTests
 		FeatureToggle.Set(Features.GuardianSounds, true);
 		t.True(GuardianSounds.Play(info, GuardianSound.Roar, Vector3.zero), "No sound with the feature back on");
 		yield return null;
+	}
+
+	[GameTest("GuardianSounds", "PlayUi plays a 2D sound at the game's UI volume; any number of owners can need the listener", TimeoutSeconds = 60f, NeedsHostGame = false)]
+	private static IEnumerator UiSoundAndOwners(TestContext t)
+	{
+		Isolate(t);
+		AudioClip clip = GuardianSounds.Clips(Info(BeastKind.Ironhorn), GuardianSound.Hit)[0];
+		float uiBefore = SoundEngine.volumeUI;
+		t.Cleanup(() => SoundEngine.volumeUI = uiBefore);
+		SoundEngine.volumeUI = 100f;
+		// A 3D sound first, so the voice that PlayUi gets was left at spatialBlend 1.
+		GuardianSounds.Play(Info(BeastKind.Ironhorn), GuardianSound.Hit, new Vector3(1000f, 50f, 1000f));
+		ModAudio.StopAll();
+		t.True(ModAudio.PlayUi(clip, 0.8f), "PlayUi did not play");
+		AudioSource source = Busy();
+		t.NotNull(source, "The voice");
+		t.Equal(0f, source.spatialBlend, "spatialBlend of a UI sound (2D)");
+		t.True(Mathf.Abs(source.volume - 0.8f) < 0.01f, "UI volume at 100: " + source.volume);
+		SoundEngine.volumeUI = 50f;
+		yield return t.Frames(3);
+		t.True(Mathf.Abs(source.volume - 0.4f) < 0.02f, "UI volume 50: " + source.volume);
+		SoundEngine.volumeUI = 100f;
+		SoundEngine.volumeSFX = 0f;
+		yield return t.Frames(3);
+		t.True(source.volume > 0.7f, "The effects volume changed a UI sound: " + source.volume);
+		SoundEngine.mute = true;
+		yield return t.Frames(3);
+		t.Equal(0f, source.volume, "UI volume while muted");
+		// More owners than any fixed table.
+		int before = ModAudio.OwnerCount;
+		object[] owners = new object[20];
+		for (int i = 0; i < owners.Length; i++)
+		{
+			owners[i] = new object();
+			ModAudio.Need(owners[i], true);
+		}
+		t.Equal(before + 20, ModAudio.OwnerCount, "Owners after 20 more");
+		foreach (object owner in owners)
+		{
+			ModAudio.Need(owner, false);
+		}
+		t.Equal(before, ModAudio.OwnerCount, "Owners after they let go");
 	}
 }

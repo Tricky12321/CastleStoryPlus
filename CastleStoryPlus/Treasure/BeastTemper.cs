@@ -54,7 +54,12 @@ internal static class BeastTemper
 				ProvokedUntil[labor] = until;
 				if (wasCalm)
 				{
-					labor.GetComponent<BeastBody>()?.Voice?.Provoked();
+					// Host only (the temper is not synced): other players hear the roar when it goes into combat.
+					BeastBody body = labor.GetComponent<BeastBody>();
+					if (body != null && body.Voice != null)
+					{
+						body.Voice.Provoked();
+					}
 				}
 			}
 		}

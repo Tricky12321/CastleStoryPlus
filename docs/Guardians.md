@@ -79,13 +79,13 @@ Every guardian has sounds of its own (`GuardianSounds`, `BeastVoice`), so a new 
 - **The set per guardian:** six events, each with at least one clip (two or three for the ones heard often, so they
   do not repeat):
   - `idle`: a call now and then (every 14-35 seconds) while it is not fighting;
-  - `roar`: when a player's unit comes within 16 blocks of it, when it is provoked and when it goes into combat (at
-    most one every 25 seconds);
+  - `roar`: when a player's unit comes within 16 blocks of it, when it is provoked (the host only, the temper is not synced) and when it goes into combat (at
+    most one every 25 seconds, in real time);
   - `step`: one for every half stride of its gait, quieter when it walks slowly; the clip and `StepLevel` (in
     `GuardianSounds`) must fit its size and weight, so the Spirestalker paces lightly and the Boulderback thuds;
   - `attack`: as the blow starts (the wind-up is silent, the sound comes with the swing);
   - `hit`: when its health goes down;
-  - `death`: when its corpse appears.
+  - `death`: when its corpse appears (only where it is seen, not from the fog).
 - **The material is heard in every event,** not only in the voice: crystal chimes (Spirestalker), crackling embers
   (Cindermane), grinding and crumbling stone (Boulderback), clanking and ringing iron (Ironhorn). A new material gets
   its own sound character the same way. The voice fits the animal (a giraffe's high hum, a lion's roar, a gorilla's

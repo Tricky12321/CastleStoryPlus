@@ -15,7 +15,8 @@ internal static class ModAudio
 	internal enum Channel
 	{
 		Sfx,
-		Ambience
+		Ambience,
+		Ui
 	}
 
 	private const int Voices = 16;
@@ -33,13 +34,32 @@ internal static class ModAudio
 		public float Started;
 
 		public bool Busy;
+
+		public bool Spatial;
+
+		// Volume after the fall off from the listener (the camera): what is least audible is cut first.
+		public float Audibility()
+		{
+			if (!Spatial)
+			{
+				return Volume;
+			}
+			Camera camera = Camera.main;
+			if (camera == null)
+			{
+				return Volume;
+			}
+			float distance = Vector3.Distance(camera.transform.position, Source.transform.position);
+			float span = Mathf.Max(1f, Source.maxDistance - Source.minDistance);
+			return Volume * Mathf.Clamp01(1f - (distance - Source.minDistance) / span);
+		}
 	}
 
 	private static ModAudioDriver _driver;
 
 	private static readonly Voice[] Pool = new Voice[Voices];
 
-	private static readonly object[] Owners = new object[8];
+	private static readonly System.Collections.Generic.List<object> Owners = new System.Collections.Generic.List<object>();
 
 	// Sounds started and not started (no free voice) since the game began, for the tests.
 	internal static int Started;
@@ -81,7 +101,7 @@ internal static class ModAudio
 		{
 			return 0f;
 		}
-		float volume = (channel == Channel.Ambience) ? Brix.Audio.SoundEngine.volumeAmbience : Brix.Audio.SoundEngine.volumeSFX;
+		float volume = (channel == Channel.Ambience) ? Brix.Audio.SoundEngine.volumeAmbience : (channel == Channel.Ui) ? Brix.Audio.SoundEngine.volumeUI : Brix.Audio.SoundEngine.volumeSFX;
 		return Mathf.Clamp01(Brix.Audio.SoundEngine.volumeMaster / 100f) * Mathf.Clamp01(volume / 100f);
 	}
 
@@ -94,7 +114,7 @@ internal static class ModAudio
 		return _driver;
 	}
 
-	// The owner needs the listener while it plays something (it says so every frame or when it starts and stops).
+	// The owner needs the listener while it plays something (any number of owners).
 	internal static void Need(object owner, bool needed)
 	{
 		ModAudioDriver driver = Driver();
@@ -102,46 +122,46 @@ internal static class ModAudio
 		{
 			return;
 		}
-		int free = -1;
-		for (int i = 0; i < Owners.Length; i++)
+		bool has = Owners.Contains(owner);
+		if (needed && !has)
 		{
-			if (Owners[i] == owner)
-			{
-				if (!needed)
-				{
-					Owners[i] = null;
-				}
-				driver.Wake();
-				return;
-			}
-			if (Owners[i] == null && free < 0)
-			{
-				free = i;
-			}
+			Owners.Add(owner);
 		}
-		if (needed && free >= 0)
+		else if (!needed && has)
 		{
-			Owners[free] = owner;
-			driver.Wake();
+			Owners.Remove(owner);
 		}
+		driver.Wake();
 	}
+
+	internal static int OwnerCount => Owners.Count;
 
 	internal static bool AnyOwner()
 	{
-		for (int i = 0; i < Owners.Length; i++)
-		{
-			if (Owners[i] != null)
-			{
-				return true;
-			}
-		}
-		return false;
+		return Owners.Count > 0;
 	}
 
-	// A one-shot at a place: volume (0-1, before the game's settings), pitch, linear fall off between min and max
-	// distance (blocks). When all voices are busy the quietest of a lower or equal priority is cut, else the sound is
-	// not played. Returns whether it plays.
+	// A user interface sound (2D, the game's UI volume): a click, a jingle.
+	internal static bool PlayUi(AudioClip clip, float volume)
+	{
+		return Start(clip, Vector3.zero, false, Channel.Ui, volume, 1f, 1f, 2f, 2);
+	}
+
+	// A one-shot at a place in the world (3D): volume (0-1, before the game's settings), pitch, linear fall off between
+	// min and max distance (blocks). When all voices are busy the least audible voice (by volume and distance to the
+	// listener) of a lower or equal priority is cut, else the sound is not played. Returns whether it plays.
 	internal static bool Play(AudioClip clip, Vector3 at, Channel channel, float volume, float pitch, float minDistance, float maxDistance, int priority)
+	{
+		return Start(clip, at, true, channel, volume, pitch, minDistance, maxDistance, priority);
+	}
+
+	// A one-shot without a place (2D, the same everywhere): a message, a jingle.
+	internal static bool Play2D(AudioClip clip, Channel channel, float volume, float pitch, int priority)
+	{
+		return Start(clip, Vector3.zero, false, channel, volume, pitch, 1f, 2f, priority);
+	}
+
+	private static bool Start(AudioClip clip, Vector3 at, bool spatial, Channel channel, float volume, float pitch, float minDistance, float maxDistance, int priority)
 	{
 		ModAudioDriver driver = Driver();
 		if (clip == null || driver == null || GameVolume(channel) <= 0f)
@@ -163,14 +183,15 @@ internal static class ModAudio
 		}
 		if (voice == null)
 		{
-			// Cut the quietest voice that is not more important than this sound.
+			// Cut the least audible voice that is not more important than this sound.
 			float quietest = float.MaxValue;
 			for (int i = 0; i < Voices; i++)
 			{
 				Voice candidate = Pool[i];
-				if (candidate.Priority <= priority && candidate.Volume < quietest)
+				float level = candidate.Audibility();
+				if (candidate.Priority <= priority && level < quietest)
 				{
-					quietest = candidate.Volume;
+					quietest = level;
 					voice = candidate;
 				}
 			}
@@ -186,12 +207,13 @@ internal static class ModAudio
 		source.transform.position = at;
 		source.clip = clip;
 		source.pitch = pitch;
-		source.spatialBlend = 1f;
+		source.spatialBlend = spatial ? 1f : 0f;
 		source.rolloffMode = AudioRolloffMode.Linear;
 		source.minDistance = minDistance;
 		source.maxDistance = Mathf.Max(maxDistance, minDistance + 1f);
 		source.dopplerLevel = 0f;
 		voice.Volume = volume;
+		voice.Spatial = spatial;
 		voice.Priority = priority;
 		voice.Started = Time.unscaledTime;
 		voice.Busy = true;
@@ -235,6 +257,24 @@ internal static class ModAudio
 		return any;
 	}
 
+	// The driver is gone (the mod was reloaded): its voices go with it.
+	internal static void Release(ModAudioDriver driver)
+	{
+		if (_driver != driver)
+		{
+			return;
+		}
+		for (int i = 0; i < Voices; i++)
+		{
+			if (Pool[i] != null && Pool[i].Source != null)
+			{
+				Object.Destroy(Pool[i].Source.gameObject);
+			}
+			Pool[i] = null;
+		}
+		_driver = null;
+	}
+
 	// Stops everything (a feature switched off, a game left).
 	internal static void StopAll()
 	{
@@ -258,11 +298,29 @@ internal sealed class ModAudioDriver : MonoBehaviour
 
 	private float _nextLook;
 
+	private float _lastLook;
+
+	private float _lastNeed;
+
+	// Seconds the listener stays after the last sound, so sounds that follow find it.
+	private const float Linger = 4f;
+
 	internal bool HasListener => _listener != null;
 
 	internal void Wake()
 	{
 		enabled = true;
+		_lastNeed = Time.unscaledTime;
+		// A sound after a pause: look for a listener now, not at the next two second look.
+		if (_listener == null && Time.unscaledTime - _lastLook > 0.25f)
+		{
+			_nextLook = 0f;
+		}
+	}
+
+	private void OnDestroy()
+	{
+		ModAudio.Release(this);
 	}
 
 	private void Update()
@@ -270,6 +328,10 @@ internal sealed class ModAudioDriver : MonoBehaviour
 		bool voices = ModAudio.Tick();
 		bool need = voices || ModAudio.AnyOwner();
 		UpdateListener(need);
+		if (need)
+		{
+			_lastNeed = Time.unscaledTime;
+		}
 		if (!need && _listener == null)
 		{
 			enabled = false;
@@ -291,7 +353,12 @@ internal sealed class ModAudioDriver : MonoBehaviour
 
 	private void OnDisable()
 	{
-		UpdateListener(false);
+		if (_listenerObject != null)
+		{
+			Destroy(_listenerObject);
+			_listenerObject = null;
+			_listener = null;
+		}
 	}
 
 	// The game's sounds go through Wwise, which has its own listener: Unity's audio needs one to be heard. Ours is
@@ -301,7 +368,7 @@ internal sealed class ModAudioDriver : MonoBehaviour
 	{
 		if (!playing)
 		{
-			if (_listenerObject != null)
+			if (_listenerObject != null && (Time.unscaledTime - _lastNeed > Linger || !enabled))
 			{
 				Destroy(_listenerObject);
 				_listenerObject = null;
@@ -314,6 +381,7 @@ internal sealed class ModAudioDriver : MonoBehaviour
 			return;
 		}
 		_nextLook = Time.unscaledTime + 2f;
+		_lastLook = Time.unscaledTime;
 		int count = FindObjectsOfType<AudioListener>().Length;
 		if (_listener == null && count == 0)
 		{
