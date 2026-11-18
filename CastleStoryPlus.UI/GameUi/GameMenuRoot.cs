@@ -2,6 +2,7 @@ using System;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.LuaUi;
 using CastleStoryPlus.UI;
+using CastleStoryPlus.WorkerAI;
 using UnityEngine;
 
 namespace CastleStoryPlus.GameUi;
@@ -95,6 +96,10 @@ internal class GameMenuRoot : MonoBehaviour
 		if (ResourceList.Enabled)
 		{
 			ResourceListView.Create(parent, Model);
+		}
+		if (ResourcePriority.Enabled)
+		{
+			ResourcePriorityView.Create(parent, Model);
 		}
 		CsBarView.Create(parent, Model.LeftBar, rightSide: false, LuiStyle.BgDefault);
 		CsBarView.Create(parent, Model.RightBar, rightSide: true, LuiStyle.BgDefault);

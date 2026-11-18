@@ -87,6 +87,10 @@ internal static class Features
 
 	public const string ResourceListInfo = "Resource list (icon, name, count) in the top-right corner instead of the icon grid under the minimap; a resource stays listed from the first time it is stocked (saved with the world), with storage used and free (also as a percentage); a \"Resources\" button on the right-hand bar shows and hides it.";
 
+	public const string ResourcePriority = "ResourcePriority";
+
+	public const string ResourcePriorityInfo = "A priority from 0 to 5 per resource (stone, bricks, wood, planks, raw iron, iron, orange and blue crystal, coal, plants; saved with the world, per team), set in a small table beside the resource list. Workers weigh it against distance where they choose between resources: which block a quarry digs, which tree, rock or loose item a harvest or clean-up area takes, which loose item an idle worker tidies, and which ingredient a workshop's worker fetches first. 0 means never, 3 is neutral.";
+
 	public const string CallToArms = "CallToArms";
 
 	public const string CallToArmsInfo = "Call to arms with soldiers per class, ranged/melee rally points and a role per worker (settings button next to the call to arms button).";

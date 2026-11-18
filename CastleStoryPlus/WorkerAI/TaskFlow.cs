@@ -63,6 +63,11 @@ internal static class TaskFlow
 	// keyed by resource only and would return the source picked for another destination.
 	internal static GameObject FindForDestination(Labor labor, Description wanted)
 	{
+		// A workshop's ingredients at different resource priorities: the lowest cost first (ResourcePriority).
+		if (Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.TryChoose(labor, wanted, cached: false, out GameObject chosen, out _))
+		{
+			return chosen;
+		}
 		foreach (Ressource resource in wanted.GetRessources().ToList())
 		{
 			if (resource.quantifiable.valeur == 0)
