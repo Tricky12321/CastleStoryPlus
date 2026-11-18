@@ -1197,17 +1197,15 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		filter.areaMask = mask;
 		// Every area but the road costs the speed factor (the pallets' extra on top), the road costs 1.
 		float factor = Roads.Factor;
-		if (factor > 1.001f)
+		for (int area = 0; area < 32; area++)
 		{
-			for (int area = 0; area < 32; area++)
+			float? cost = RoadRules.AreaCost(area, AreaRoad, 1, factor);
+			if (cost.HasValue)
 			{
-				if (area != AreaRoad && area != 1)
-				{
-					filter.SetAreaCost(area, factor);
-				}
+				filter.SetAreaCost(area, cost.Value);
 			}
 		}
-		filter.SetAreaCost(AreaStockpile, StockpileCost * factor);
+		filter.SetAreaCost(AreaStockpile, RoadRules.StockpileCost(StockpileCost, factor));
 		return filter;
 	}
 

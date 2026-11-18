@@ -1,7 +1,7 @@
 using CastleStoryPlus.Upgrades;
 using NUnit.Framework;
 
-namespace CastleStoryPlus.Tests;
+namespace CastleStoryPlus.UnitTests.Upgrades;
 
 [TestFixture]
 public class SprintRulesTests

@@ -4,13 +4,14 @@ Three projects for testing Castle Story Plus and for letting Claude Code look in
 
 | Project | What | Runs |
 |---|---|---|
-| `CastleStoryPlus.Tests` | Unit tests of the mod's pure logic (NUnit) | `dotnet test CastleStoryPlus.Tests`, no game needed |
+| `CastleStoryPlus.UnitTests` | Unit tests of the mod's pure logic (NUnit), also in CI | `dotnet test CastleStoryPlus.UnitTests`, no game needed |
+| `CastleStoryPlus.Tests` | Local tests that need the game's assemblies: the Harmony patch audit | `dotnet test CastleStoryPlus.Tests -p:UnityTarget=player -p:PlayerDir=<player>/` |
 | `CastleStoryPlus.DevTools` | BepInEx plugin: HTTP API into the game, in-game test runner and tests | in the game, installed by the build into `BepInEx/plugins/CastleStoryPlus.DevTools/` |
 | `CastleStoryPlus.Mcp` | MCP server (stdio) with the API as tools for Claude Code | started by Claude Code from `.mcp.json` |
 
-## Unit tests (`CastleStoryPlus.Tests`)
+## Unit tests (`CastleStoryPlus.UnitTests`, `CastleStoryPlus.Tests`)
 
-They test the mod's code that does not call into Unity's engine. Unity's native methods (GameObjects, physics, rendering) only exist inside the game, so such code is tested in the game instead. Code worth testing is moved into small classes of its own without game objects, e.g. `QuarryDepthSteps` and `WorldSearchQuery`. The mod lets the test project reach its `internal` classes (`Core/AssemblyInfo.cs`).
+Most of the mod's logic is tested by fast unit tests that need neither the game nor Unity: the logic lives in `Logic` folders of the mod project and is compiled into the test project from the source. How the code is split, how to write the tests and the local patch audit are in [Testing](Testing.md). The in-game tests below are the slow integration tests of what the unit tests cannot reach (the game's own objects, patches working together, multiplayer); run them rarely.
 
 ## In-game API (`CastleStoryPlus.DevTools`)
 
@@ -213,7 +214,10 @@ tools/run-game-tests.py                    # every test, 2 players, 10x speed, n
 tools/run-game-tests.py --filter Combat    # one category or test
 tools/run-game-tests.py --workers 1        # one player
 tools/run-game-tests.py --parallel 1       # one test after the other in each player
+tools/run-game-tests.py --headless         # players without windows (-batchmode -nographics)
 ```
+
+`--headless` starts the players with `-batchmode -nographics`: no window is opened and nothing is drawn, which also makes the run lighter. A test that needs rendering (drops, lights, screenshots) declares `[GameTest(..., NeedsGraphics = true)]` (for example `WeatherTests.RainIsShown`): the runner leaves it out of a headless run, and a player that runs headless skips it itself (`GET /api/tests` shows `needsGraphics`).
 
 Options: `--workers` (players at once, default from the CPU cores and free memory: 2 on a 16-core, 32 GB machine), `--port` (API port of the first player, default 27870; the others count up; never 27860, the port of your own game), `--speed` (default 10), `--parallel` (tests at the same time in each player, default 4), `--keep-units` (leave the world's own units in it), `--map` (default `Test Island`, remade in each run's copy of the game root with `tools/make_test_island.py`, radius `--island-radius`, default 400, so every plot is on it; another map, e.g. `Tortuga`, runs too, but tests whose plot is not flat there search round the home crystal and the results can depend on the order), `--settle` (extra seconds before the tests; the runner waits for the route graph over the island anyway), `--hold` (keep the players running for a look into them), `--trace` (the worker trace on, `BepInEx/workertrace.log` in the player), `--lock FILE` (an exclusive lock on the file for the whole run, so runs from several places take turns).
 
@@ -312,6 +316,7 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 ```sh
 tools/run-multiplayer-tests.py                       # all checks
 tools/run-multiplayer-tests.py --filter Blueprint    # one check
+tools/run-multiplayer-tests.py --headless            # both players without windows
 ```
 
 Options: `--player`, `--root-src`, `--work` (results in `multiplayer-tests-<time>.json`, with both players' logs), `--keep`, `--hold`. The exit code is 0 when every check passed.

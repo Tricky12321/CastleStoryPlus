@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Unit tests of the mod's pure logic (no running game): dotnet test CastleStoryPlus.Tests.
-       Only code that does not call into Unity's engine can run here; the in-game tests are in CastleStoryPlus.DevTools. -->
+  <!-- Local-only tests that need the game's assemblies (never run in CI): dotnet test CastleStoryPlus.Tests
+       - the mod's own types that refer to the game's (a few helpers that are not in a Logic folder yet),
+       - the Harmony patch audit (every patch's target exists, prefixes that skip the original, message ids).
+       The tests that run anywhere, from the pure logic, are in CastleStoryPlus.UnitTests (see docs/Testing.md).
+       Uses the Unity 6 port player's assemblies (default CastleStoryPlus.Player/Build/Linux, after an install; or -p:PlayerDir=<player folder>/). -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>CastleStoryPlus.Tests</AssemblyName>
@@ -10,6 +13,7 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <VanillaManagedDir>$(GameDir)Castle Story_Data/Managed.orig/</VanillaManagedDir>
+    <BepInExCoreDir>$(GameDir)BepInEx/core/</BepInExCoreDir>
     <!-- The mod is a .NET Framework 3.5 assembly; its pure code runs fine on .NET 8. -->
     <NoWarn>$(NoWarn);NU1701;MSB3277</NoWarn>
   </PropertyGroup>
@@ -17,17 +21,27 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="NUnit" Version="4.2.2" />
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="Lib.Harmony" Version="2.3.3" />
   </ItemGroup>
+  <!-- The mod, built for the port's player (net48, Directory.Build.props sets UnityTarget=player for this project). Not
+       installed into the player by this build. -->
   <ItemGroup>
-    <ProjectReference Include="..\CastleStoryPlus\CastleStoryPlus.csproj">
-      <SetTargetFramework>TargetFramework=net35</SetTargetFramework>
+    <ProjectReference Include="..\CastleStoryPlus\CastleStoryPlus.csproj" AdditionalProperties="SkipInstall=true;UnityTarget=$(UnityTarget);PlayerDir=$(PlayerDir)">
+      <SetTargetFramework>TargetFramework=net48</SetTargetFramework>
       <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
     </ProjectReference>
   </ItemGroup>
-  <!-- The game assemblies the mod's types refer to, copied next to the tests so those types can load. -->
+  <!-- The game assemblies the mod's types refer to, copied next to the tests so those types can load (the player build's
+       paths are set in Directory.Build.targets). -->
   <ItemGroup>
     <Reference Include="UnityEngine">
       <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameManagedDir)UnityEngine.UI.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.Networking">
+      <HintPath>$(GameManagedDir)UnityEngine.Networking.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
       <HintPath>$(VanillaManagedDir)Assembly-CSharp-firstpass.dll</HintPath>
@@ -35,5 +49,33 @@
     <Reference Include="Brix.Core">
       <HintPath>$(VanillaManagedDir)Brix.Core.dll</HintPath>
     </Reference>
+    <Reference Include="brix-common">
+      <HintPath>$(VanillaManagedDir)brix-common.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GameManagedDir)Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="MoonSharp.Interpreter">
+      <HintPath>$(GameManagedDir)MoonSharp.Interpreter.dll</HintPath>
+    </Reference>
+    <Reference Include="Smooth.Foundations">
+      <HintPath>$(GameManagedDir)Smooth.Foundations.dll</HintPath>
+    </Reference>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(GameManagedDir)Rewired_Core.dll</HintPath>
+    </Reference>
+    <!-- BepInEx for the plugin type. The game's HarmonyX (0Harmony.dll) does not start on .NET 8 (its AccessTools fails), so the tests use
+         the Lib.Harmony package, which has the same API for the attributes and lookups the audit and the mod's TargetMethod(s) use. -->
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)BepInEx.dll</HintPath>
+    </Reference>
   </ItemGroup>
+  <!-- The folders the game's assemblies are in, for the tests' assembly resolver (assemblies that are not copied next to the tests). -->
+  <Target Name="WriteGameFolders" AfterTargets="Build">
+    <ItemGroup>
+      <GameFolder Include="$(PlayerManagedDir)" Condition="'$(UnityTarget)' == 'player'" />
+      <GameFolder Include="$(BepInExCoreDir)" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(OutDir)gamefolders.txt" Lines="@(GameFolder)" Overwrite="true" />
+  </Target>
 </Project>

@@ -77,8 +77,8 @@
     <None Include="Assets/**/*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets/**/*.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <!-- Copies the built plugin and its Lua files into the game's BepInEx/plugins folder. -->
-  <Target Name="InstallPlugin" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins')">
+  <!-- Copies the built plugin and its Lua files into the game's BepInEx/plugins folder (not for a build the tests make: SkipInstall). -->
+  <Target Name="InstallPlugin" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins') And '$(SkipInstall)' != 'true'">
     <ItemGroup>
       <ModLua Include="Lua/**/*.lua" />
       <ModAssets Include="Assets/**/*.png;Assets/**/*.json;Assets/**/*.wav" />

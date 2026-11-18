@@ -206,8 +206,13 @@ internal static class BuildGoalCoveredPatch
 [HarmonyPatch(typeof(BuildGoal), nameof(BuildGoal.GetWorkNode))]
 internal static class BuildPickUpAmountPatch
 {
-	private static bool Prefix(BuildGoal __instance, Labor labor, ref Node __result)
+	private static bool Prefix(BuildGoal __instance, Labor labor, ref Node __result, bool __runOriginal)
 	{
+		// An earlier prefix (FreeBlueprintsWorkPatch) already made the work node: no second search, no second reservation.
+		if (!__runOriginal)
+		{
+			return false;
+		}
 		if (__instance.IsNullOrReleased() || labor.IsNullOrReleased() || __instance.IsAnti || labor.recepteur.FirstThatFitsIn(__instance.recepteur) != null)
 		{
 			return true;

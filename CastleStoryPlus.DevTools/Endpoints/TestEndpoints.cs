@@ -32,7 +32,7 @@ internal static class TestEndpoints
 		List<object> tests = new List<object>();
 		foreach (TestRunner.TestInfo test in TestRunner.Matching(request.String("filter", null)))
 		{
-			tests.Add(Obj("name", test.Name, "category", test.Category, "description", test.Description, "timeoutSeconds", test.TimeoutSeconds, "needsHostGame", test.NeedsHostGame, "parallel", test.Parallel, "group", test.Group));
+			tests.Add(Obj("name", test.Name, "category", test.Category, "description", test.Description, "timeoutSeconds", test.TimeoutSeconds, "needsHostGame", test.NeedsHostGame, "needsGraphics", test.NeedsGraphics, "parallel", test.Parallel, "group", test.Group));
 		}
 		return Obj("count", tests.Count, "tests", tests);
 	}

@@ -89,7 +89,7 @@ internal sealed class RoadsSync : MonoBehaviour
 		BonusNetMessage message = netMsg.ReadMessage<BonusNetMessage>();
 		if (!NetworkServer.active)
 		{
-			HostBonus = Mathf.Clamp(message.Percent, 0, 200);
+			HostBonus = RoadRules.ClampBonus(message.Percent);
 		}
 	}
 }

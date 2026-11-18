@@ -17,6 +17,10 @@ internal class GameTestAttribute : Attribute
 	// Needs a game in progress, on the host (single player counts); skipped otherwise.
 	public bool NeedsHostGame = true;
 
+	// Needs the game to render (drops, lights, screenshots, anything read back from a camera or a renderer); skipped in a
+	// headless player (-batchmode -nographics, tools/run-game-tests.py --headless), where nothing is drawn.
+	public bool NeedsGraphics;
+
 	// Runs alone even in a parallel run, when its class allows parallel runs ([ParallelTests]) but this test
 	// changes something the others share (the home crystal, the factions' relations, ...).
 	public bool Exclusive;
