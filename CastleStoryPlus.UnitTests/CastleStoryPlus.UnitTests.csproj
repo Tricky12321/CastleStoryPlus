@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The unit tests that run anywhere (also in CI): no game, no Unity, no game assemblies. They compile the mod's pure
+       logic (every file under a Logic folder of the mod project, see docs/Testing.md) straight from the source.
+         dotnet test CastleStoryPlus.UnitTests
+       Tests that need the game's assemblies are in CastleStoryPlus.Tests (local only). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>CastleStoryPlus.UnitTests</AssemblyName>
+    <RootNamespace>CastleStoryPlus.UnitTests</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="4.2.2" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <!-- The game has Newtonsoft.Json too; Logic code may use it (and nothing else from outside the framework). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\CastleStoryPlus\**\Logic\**\*.cs" LinkBase="Logic" />
+  </ItemGroup>
+</Project>

@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CastleStoryPlus.Port.Cli", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CastleStoryPlus.PortLauncher", "CastleStoryPlus.PortLauncher\CastleStoryPlus.PortLauncher.csproj", "{204C3B1B-AC5C-4980-872D-E639B3A4FD2B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CastleStoryPlus.UnitTests", "CastleStoryPlus.UnitTests\CastleStoryPlus.UnitTests.csproj", "{D0744E51-59E2-44C3-BB1B-12CD4209EF73}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -139,6 +141,18 @@ Global
 		{204C3B1B-AC5C-4980-872D-E639B3A4FD2B}.Release|x64.Build.0 = Release|Any CPU
 		{204C3B1B-AC5C-4980-872D-E639B3A4FD2B}.Release|x86.ActiveCfg = Release|Any CPU
 		{204C3B1B-AC5C-4980-872D-E639B3A4FD2B}.Release|x86.Build.0 = Release|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Debug|x64.Build.0 = Debug|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Debug|x86.Build.0 = Debug|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Release|x64.ActiveCfg = Release|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Release|x64.Build.0 = Release|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Release|x86.ActiveCfg = Release|Any CPU
+		{D0744E51-59E2-44C3-BB1B-12CD4209EF73}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

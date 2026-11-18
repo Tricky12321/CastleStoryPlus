@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# LEGACY: packs the mod for the original Castle Story (Unity 5.6, net35). It is no longer released and the plain build
+# no longer compiles; releases use tools/package-port.sh (see tools/release.sh).
 # Builds Castle Story Plus once and packs one release zip per system:
 #   dist/CastleStoryPlus-<version>-linux.zip     install.sh
 #   dist/CastleStoryPlus-<version>-windows.zip   install.bat + install.ps1

@@ -4,7 +4,7 @@ copy of a game root (never the real saves), a new sandbox world on a map, the te
 the player saves and closes and the copy is removed.
 
     tools/run-game-tests.py [--filter Combat] [--workers N] [--speed 10] [--parallel 4] [--map "Test Island"]
-                            [--keep-units] [--player DIR] [--root-src DIR] [--keep] [--lock FILE]
+                            [--keep-units] [--player DIR] [--root-src DIR] [--keep] [--lock FILE] [--headless]
 
 --workers starts that many players at once (default: from the CPU cores and the free memory), each on its own copy of
 the game root and its own API port (--port, 27870 and up; never 27860, the port of the player's own game). The tests
@@ -17,6 +17,10 @@ depend on what ran before or next to it. The tests that need trees plant their o
 
 --speed is the game speed during the tests (default 10); a frame advances the game by at most 0.25 s, so a player
 whose frame rate cannot keep up runs slower than that rather than in bigger steps (the tests count game time).
+
+--headless starts the players with -batchmode -nographics: no window, nothing drawn (the tests that need rendering,
+[GameTest(..., NeedsGraphics = true)], are left out of the run and listed as skipped). Gameplay tests do not need a
+screen; the players use less memory and CPU, and a run does not take the desktop.
 
 --player is a player folder with run_bepinex.sh and the mod (default: the Unity 6 port's
 CastleStoryPlus.Player/Build/Linux). --root-src is a folder holding the game's Info (maps, Lua), copied for the run
@@ -129,6 +133,8 @@ class Player:
             subprocess.run([sys.executable, script, "--game", self.root, "--radius", str(args.island_radius)], check=True, stdout=subprocess.DEVNULL)
         env = dict(os.environ, CSP_GAME_ROOT=self.root, CSP_API_PORT=str(self.port))
         command = ["./run_bepinex.sh", "-force-vulkan" if args.vulkan else "-force-glcore", "-logFile", self.log_file]
+        if args.headless:
+            command += ["-batchmode", "-nographics"]
         started = time.time()
         for attempt in range(3):
             # The players share the player folder and its BepInEx config, which each one reads and writes back while
@@ -273,6 +279,7 @@ def main():
     parser.add_argument("--hold", type=int, default=0, help="keep the players running this many seconds after the tests, to look into them")
     parser.add_argument("--settle", type=int, default=0, help="extra seconds to let the new world settle before the tests (the runner waits for the route graph anyway)")
     parser.add_argument("--trace", action="store_true", help="switch the worker trace on for the run (BepInEx/workertrace.log in the player)")
+    parser.add_argument("--headless", action="store_true", help="start the players with -batchmode -nographics (no windows); tests that need rendering are left out")
     parser.add_argument("--vulkan", action="store_true", help="run the players on Vulkan instead of OpenGL Core")
     parser.add_argument("--lock", default="", help="file to hold an exclusive lock on for the whole run")
     args = parser.parse_args()
@@ -307,7 +314,14 @@ def main():
             raise RuntimeError("; ".join("%s: %s" % (p.name, p.error) for p in failed))
         ready = time.time()
         log("players ready after %d s" % (ready - begun))
-        names = sorted(t["name"] for t in players[0].call("GET", "/api/tests?" + urllib.parse.urlencode({"filter": args.filter}))["tests"])
+        listed = players[0].call("GET", "/api/tests?" + urllib.parse.urlencode({"filter": args.filter}))["tests"]
+        if args.headless:
+            # What needs rendering cannot run without it: left out here (the test would skip itself in the player too).
+            left_out = sorted(t["name"] for t in listed if t.get("needsGraphics"))
+            if left_out:
+                log("headless: %d tests need rendering and are left out: %s" % (len(left_out), ", ".join(left_out)))
+            listed = [t for t in listed if not t.get("needsGraphics")]
+        names = sorted(t["name"] for t in listed)
         if not names:
             raise RuntimeError("no test matches " + repr(args.filter))
         # Sorted by name and dealt out in turn: the same share for each player in every run.

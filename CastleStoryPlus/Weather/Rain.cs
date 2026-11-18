@@ -6,18 +6,10 @@ using Brix.Engine;
 using Brix.Network;
 using CastleStoryPlus.Core;
 using HarmonyLib;
-using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Weather;
-
-internal enum WeatherKind
-{
-	None = 0,
-	Rain = 1,
-	Snow = 2
-}
 
 // Rain as a natural event. The host rolls it: every in-game hour (the game's clock, Journee.Heure, so a pause or a
 // faster game speed counts) there is a chance that makes it start on average every [Rain] DaysBetween days
@@ -36,13 +28,7 @@ internal sealed class Rain : MonoBehaviour
 
 	private const string SaveFile = "castlestoryplus_weather.json";
 
-	// Game hours of rest after a rain before the next may start.
-	private const float RestHours = 6f;
-
 	private const float ResendSeconds = 30f;
-
-	// Columns looked at to see what the ground of the world is.
-	private const int GroundSamples = 600;
 
 	private static ConfigEntry<float> _daysBetween;
 
@@ -56,11 +42,8 @@ internal sealed class Rain : MonoBehaviour
 
 	private static bool _active;
 
-	private static float _lastClock = float.NaN;
-
-	private static float _hourCarry;
-
-	private static float _rest;
+	// The weather's state and roll (pure, see Logic/RainWeather.cs); this class is the adapter to the game.
+	private static readonly RainWeather State = new RainWeather();
 
 	private static WeatherKind _fall = WeatherKind.Rain;
 
@@ -71,18 +54,18 @@ internal sealed class Rain : MonoBehaviour
 	// Whether a game is loaded and its weather runs.
 	internal static bool Active => _active;
 
-	internal static WeatherKind Current { get; private set; }
+	internal static WeatherKind Current => State.Current;
 
 	// Game hours left of what falls now.
-	internal static float HoursLeft { get; private set; }
+	internal static float HoursLeft => State.HoursLeft;
 
 	// What falls in this world when the weather comes by itself: Rain, Snow, or None (desert).
 	internal static WeatherKind Fall => _fall;
 
 	// How much faster grass spreads and paths grow over, and plants seed and grow, now.
-	internal static float GrassBoost => (Current == WeatherKind.Rain && _grassBoost != null) ? _grassBoost.Value : 1f;
+	internal static float GrassBoost => RainRules.Boost(Current, (_grassBoost != null) ? _grassBoost.Value : (float?)null);
 
-	internal static float PlantBoost => (Current == WeatherKind.Rain && _plantBoost != null) ? _plantBoost.Value : 1f;
+	internal static float PlantBoost => RainRules.Boost(Current, (_plantBoost != null) ? _plantBoost.Value : (float?)null);
 
 	// A change of weather: from, to, and whether the players are told (not for the weather a save was loaded with).
 	internal static event Action<WeatherKind, WeatherKind, bool> Changed;
@@ -95,14 +78,12 @@ internal sealed class Rain : MonoBehaviour
 
 		public override void Serialize(NetworkWriter writer)
 		{
-			writer.Write(Kind);
-			writer.Write(Hours);
+			writer.Write(RainWire.EncodeMessage(Kind, Hours), RainWire.MessageBytes);
 		}
 
 		public override void Deserialize(NetworkReader reader)
 		{
-			Kind = reader.ReadByte();
-			Hours = reader.ReadSingle();
+			RainWire.DecodeMessage(reader.ReadBytes(RainWire.MessageBytes), out Kind, out Hours);
 		}
 	}
 
@@ -124,11 +105,7 @@ internal sealed class Rain : MonoBehaviour
 	{
 		bool wasRaining = Current != WeatherKind.None;
 		_active = false;
-		Current = WeatherKind.None;
-		HoursLeft = 0f;
-		_lastClock = float.NaN;
-		_hourCarry = 0f;
-		_rest = RestHours;
+		State.Reset();
 		_sent = WeatherKind.None;
 		_fall = WeatherKind.Rain;
 		if (wasRaining)
@@ -186,12 +163,12 @@ internal sealed class Rain : MonoBehaviour
 		{
 			return WeatherKind.Rain;
 		}
-		System.Random pick = new System.Random(size.x * 31 + size.z);
+		System.Random pick = new System.Random(RainRules.SampleSeed(size.x, size.z));
 		int sand = 0;
 		int snow = 0;
 		int other = 0;
 		// On a sparse map (islands in the sky) most columns are empty: keep looking until enough have ground.
-		for (int i = 0; i < GroundSamples * 10 && sand + snow + other < GroundSamples; i++)
+		for (int i = 0; RainRules.KeepSampling(i, sand + snow + other); i++)
 		{
 			VoxelTerrainType type = VoxelEngine.GetColumnType(start.x + pick.Next(size.x), start.z + pick.Next(size.z));
 			if (type == VoxelTerrainType.Empty || type == VoxelTerrainType.Internal)
@@ -211,16 +188,7 @@ internal sealed class Rain : MonoBehaviour
 				other++;
 			}
 		}
-		int total = sand + snow + other;
-		if (total < 20)
-		{
-			return WeatherKind.Rain;
-		}
-		if (sand * 2 > total)
-		{
-			return WeatherKind.None;
-		}
-		return (snow * 2 > total) ? WeatherKind.Snow : WeatherKind.Rain;
+		return RainRules.DetectFall(sand, snow, other);
 	}
 
 	// Switched off while it rains: the weather ends (the host tells the others), so no boost is left behind.
@@ -231,7 +199,7 @@ internal sealed class Rain : MonoBehaviour
 			return;
 		}
 		Set(WeatherKind.None, 0f, announce: false);
-		_rest = RestHours;
+		State.Rest = RainRules.RestHours;
 		Send(true);
 	}
 
@@ -264,45 +232,16 @@ internal sealed class Rain : MonoBehaviour
 		{
 			return 0f;
 		}
-		float clock = Journee.instance.Heure;
-		float passed = float.IsNaN(_lastClock) ? 0f : Mathf.Repeat(clock - _lastClock, 24f);
-		_lastClock = clock;
-		return (passed > 12f) ? 0f : passed;
+		return State.Advance(Journee.instance.Heure);
 	}
 
 	private static void Roll(float hours)
 	{
-		if (Current != WeatherKind.None)
+		WeatherKind before = State.Current;
+		State.Roll(hours, _daysBetween.Value, _hours.Value, _fall, Random.NextDouble);
+		if (State.Current != before)
 		{
-			HoursLeft -= hours;
-			if (HoursLeft <= 0f)
-			{
-				Set(WeatherKind.None, 0f, announce: true);
-				_rest = RestHours;
-			}
-			return;
-		}
-		if (_rest > 0f)
-		{
-			_rest -= hours;
-			return;
-		}
-		if (_daysBetween.Value <= 0f || _fall == WeatherKind.None)
-		{
-			return;
-		}
-		// One roll for every game hour, with the chance that makes the wait (after the rest and the rain's own hours)
-		// average the days between.
-		_hourCarry += hours;
-		while (_hourCarry >= 1f)
-		{
-			_hourCarry -= 1f;
-			float wait = Mathf.Max(1f, _daysBetween.Value * 24f - RestHours - _hours.Value);
-			if (Random.NextDouble() < 1.0 / wait)
-			{
-				Begin(_fall, _hours.Value * (0.6f + 0.8f * (float)Random.NextDouble()));
-				return;
-			}
+			Changed?.Invoke(before, State.Current, true);
 		}
 	}
 
@@ -313,18 +252,16 @@ internal sealed class Rain : MonoBehaviour
 		{
 			return;
 		}
-		Set(kind, (kind == WeatherKind.None) ? 0f : Mathf.Max(0.05f, hours), announce: true);
-		if (kind == WeatherKind.None)
+		WeatherKind from = State.Begin(kind, hours);
+		if (from != kind)
 		{
-			_rest = RestHours;
+			Changed?.Invoke(from, kind, true);
 		}
 	}
 
 	private static void Set(WeatherKind kind, float hours, bool announce)
 	{
-		WeatherKind from = Current;
-		Current = kind;
-		HoursLeft = hours;
+		WeatherKind from = State.Set(kind, hours);
 		if (from != kind)
 		{
 			Changed?.Invoke(from, kind, announce);
@@ -351,20 +288,18 @@ internal sealed class Rain : MonoBehaviour
 	private static void Received(NetworkMessage netMsg)
 	{
 		WeatherNetMessage message = netMsg.ReadMessage<WeatherNetMessage>();
-		if (NetworkServer.active || !_active || !Enum.IsDefined(typeof(WeatherKind), (int)message.Kind))
+		if (NetworkServer.active || !_active || !RainWire.TryValidate(message.Kind, message.Hours, out WeatherKind kind, out float hours))
 		{
 			return;
 		}
-		Set((WeatherKind)message.Kind, message.Hours, announce: true);
+		Set(kind, hours, announce: true);
 	}
 
 	private static void Load(string file)
 	{
-		JObject data = JObject.Parse(File.ReadAllText(file));
-		_rest = (float?)data["rest"] ?? RestHours;
-		WeatherKind kind = (WeatherKind)((int?)data["kind"] ?? 0);
-		float hours = (float?)data["hoursLeft"] ?? 0f;
-		if (kind != WeatherKind.None && hours > 0f)
+		RainWire.ReadSave(File.ReadAllText(file), out WeatherKind kind, out float hours, out float rest);
+		State.Rest = rest;
+		if (kind != WeatherKind.None)
 		{
 			Set(kind, hours, announce: false);
 		}
@@ -394,7 +329,7 @@ internal sealed class Rain : MonoBehaviour
 		}
 		try
 		{
-			File.WriteAllText(file, new JObject { ["kind"] = (int)Current, ["hoursLeft"] = Math.Round(HoursLeft, 3), ["rest"] = Math.Round(_rest, 3) }.ToString(Newtonsoft.Json.Formatting.None));
+			File.WriteAllText(file, RainWire.SaveText(Current, HoursLeft, State.Rest));
 		}
 		catch (Exception ex)
 		{
