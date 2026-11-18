@@ -73,17 +73,6 @@ and biftron units with their own models and animations, guarding chests.
   - what happens to the bricktrons that travel there (taken out of this save and added to the other one);
   - whether it works in multiplayer.
 
-## Roads
-
-- Stone roads that bricktrons walk faster on.
-- Built like a floor of flat stone pieces on the ground, from stone blocks, in the build menu or as a task dragged along
-  a line.
-- Walking on a road is faster, for example 30-50% (a config setting). The route search counts road nodes as cheaper,
-  so workers and armies choose roads when they are quicker overall.
-- A road keeps its tiles from wearing into worn paths (WornPaths), and grass does not grow over it.
-- To decide: what a road costs per tile, whether enemies get the bonus too, whether roads can be damaged, and whether
-  wooden walkways and bridges count as roads.
-
 ## Building progress
 
 - A building grows a little every time a worker delivers resources to its blueprint, as a slow building animation,
