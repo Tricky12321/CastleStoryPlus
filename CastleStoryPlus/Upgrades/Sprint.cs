@@ -40,7 +40,7 @@ internal sealed class Sprint : MonoBehaviour
 		public Vector3 Last;
 	}
 
-	// The game's own messages end at 63; Castle Story Plus uses 200-212.
+	// The game's own messages end at 63; Castle Story Plus uses 200-213 (ModMessages).
 	private const short CommandMessage = 212;
 
 	private const short StartedMessage = 213;
@@ -129,7 +129,7 @@ internal sealed class Sprint : MonoBehaviour
 		SpeedBonus = Plugin.Cfg.Bind("Sprint", "SpeedBonus", 50, new ConfigDescription("How much faster (percent) a sprinting bricktron walks and runs; it multiplies with Light Boots and roads. In multiplayer the host's value counts.", new AcceptableValueRange<int>(0, 300)));
 		DurationSeconds = Plugin.Cfg.Bind("Sprint", "DurationSeconds", 5f, new ConfigDescription("How many seconds a sprint lasts at the first tier (the next tiers last 30% and 60% longer).", new AcceptableValueRange<float>(1f, 30f)));
 		CooldownSeconds = Plugin.Cfg.Bind("Sprint", "CooldownSeconds", 60f, new ConfigDescription("How many seconds a bricktron has to wait after a sprint at the first tier (the next tiers wait 25% and 50% less).", new AcceptableValueRange<float>(5f, 300f)));
-		Key = Plugin.Cfg.Bind("Sprint", "Key", KeyCode.G, "Key that makes the selected bricktrons sprint (None: no key). Not while typing or in a menu.");
+		Key = Plugin.Cfg.Bind("Sprint", "Key", KeyCode.Alpha7, "Key that makes the selected bricktrons sprint (None: no key). 7 is not bound in the game or by the mod (G and the other letters are the game's). Not while typing or in a menu.");
 		Auto = Plugin.Cfg.Bind("Sprint", "Auto", true, "Soldiers sprint by themselves when sent at an enemy from some way off, and fighters sprint when they run to safety (Retreat).");
 		MinChargeDistance = Plugin.Cfg.Bind("Sprint", "MinChargeDistance", 10f, new ConfigDescription("A melee fighter sprints on its own at an enemy or an attack order only when it is at least this many blocks away.", new AcceptableValueRange<float>(2f, 60f)));
 		SpeedBonus.SettingChanged += (object sender, System.EventArgs args) => RefreshText();
@@ -146,6 +146,9 @@ internal sealed class Sprint : MonoBehaviour
 		Sprinting.Clear();
 		ReadyAt.Clear();
 	}
+
+	// Whether the Sprint feature is on (the line stays registered either way, for the ids and the byte count).
+	internal static bool Active => Plugin.LoadedFeatures.TryGetValue(Features.Sprint, out bool on) && on;
 
 	private static float Bonus => (SpeedBonus != null) ? SpeedBonus.Value : 50;
 
@@ -384,9 +387,26 @@ internal sealed class Sprint : MonoBehaviour
 
 	// ---- dust and upkeep ----
 
+	private static bool _dustFailed;
+
 	private static ParticleSystem MakeDust(Transform parent)
 	{
 		GameObject go = new GameObject("SprintDust");
+		try
+		{
+			return BuildDust(go, parent);
+		}
+		catch (System.Exception ex)
+		{
+			Object.Destroy(go);
+			_dustFailed = true;
+			Plugin.Log.LogWarning("Sprint: no dust trail: " + ex.Message);
+			return null;
+		}
+	}
+
+	private static ParticleSystem BuildDust(GameObject go, Transform parent)
+	{
 		go.transform.SetParent(parent, false);
 		ParticleSystem system = go.AddComponent<ParticleSystem>();
 		system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -421,6 +441,24 @@ internal sealed class Sprint : MonoBehaviour
 
 	private void Update()
 	{
+		try
+		{
+			Step();
+		}
+		catch (System.Exception ex)
+		{
+			if (Time.unscaledTime >= _nextWarn)
+			{
+				_nextWarn = Time.unscaledTime + 30f;
+				Plugin.Log.LogWarning("Sprint: " + ex);
+			}
+		}
+	}
+
+	private float _nextWarn;
+
+	private void Step()
+	{
 		if (Key != null && KeyPressed())
 		{
 			KeyDown();
@@ -429,7 +467,7 @@ internal sealed class Sprint : MonoBehaviour
 		{
 			return;
 		}
-		if (_dust == null)
+		if (_dust == null && !_dustFailed)
 		{
 			_dust = MakeDust(transform);
 		}
@@ -442,7 +480,7 @@ internal sealed class Sprint : MonoBehaviour
 				Ended.Add(entry.Key);
 				continue;
 			}
-			if (now < run.NextPuff)
+			if (_dust == null || now < run.NextPuff)
 			{
 				continue;
 			}
@@ -515,12 +553,13 @@ internal static class SprintChargeTargetPatch
 	{
 		yield return AccessTools.Method(typeof(Labor), nameof(Labor.GoAttack));
 		yield return AccessTools.Method(typeof(Labor), nameof(Labor.GoAttackWithPriority));
-		yield return AccessTools.Method(typeof(Labor), nameof(Labor.GoAttackDirectly));
 	}
 
 	private static void Prefix(Labor __instance, GameObject target)
 	{
-		if (target != null && NetworkServer.active)
+		// Only at an enemy unit: GoAttackDirectly (path blockers, structures) is left out, and so is any target that is
+		// not a hostile bricktron or corruptron.
+		if (target != null && NetworkServer.active && target.GetComponent<Labor>() != null && Affiliation.IsEnemy(__instance.gameObject, target))
 		{
 			Sprint.TryStart(__instance, SprintTrigger.Charge, Vector3.Distance(__instance.transform.position, target.transform.position));
 		}

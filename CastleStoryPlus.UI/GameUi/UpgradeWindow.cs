@@ -197,7 +197,8 @@ internal class CsUpgradeWindow : CsStationWindow
 				break;
 			default:
 				AddGroup("Colony", UpgradeLines.Housing, UpgradeLines.Stacking, UpgradeLines.Scouting);
-				AddGroup("Workers", UpgradeLines.WorkMethods, UpgradeLines.LightBoots, UpgradeLines.Sprint, UpgradeLines.EfficientMining);
+				AddGroup("Workers", UpgradeLines.WorkMethods, UpgradeLines.EfficientMining);
+				AddGroup("Speed", UpgradeLines.LightBoots, UpgradeLines.Sprint);
 				AddGroup("Crystal", UpgradeLines.CrystalAttunement, UpgradeLines.FireflyLore, UpgradeLines.Giants);
 				break;
 		}
@@ -474,7 +475,7 @@ internal class CsUpgradeWindow : CsStationWindow
 		Sprite icon = UpgradeOrders.IconFor(line, Mathf.Clamp(Mathf.Max(tier + 1, queued), 1, line.Tiers));
 		card.Icon.sprite = icon;
 		card.Icon.enabled = icon != null;
-		CsRowParts.SetText(card.Name, line.Name);
+		CsRowParts.SetText(card.Name, UpgradeLines.IsEnabled(line) ? line.Name : (line.Name + " (off)"));
 		bool selected = line == _line;
 		card.Background.color = selected ? UiTheme.BgSelectedRow : UiTheme.BgBlock;
 		card.Name.color = selected ? LuiStyle.CastleYellow : LuiStyle.White;
@@ -500,6 +501,7 @@ internal class CsUpgradeWindow : CsStationWindow
 		}
 		bool full = queue != null && queue.Count >= UpgradeOrders.MaxQueue;
 		bool current = queue != null && queue.Count > 0 && line != null && UpgradeLines.TryGetResearch(queue[0], out UpgradeLine first, out int _) && first == line;
+		bool off = line != null && !UpgradeLines.IsEnabled(line);
 		for (int i = 0; i < _tiers.Length; i++)
 		{
 			Tier view = _tiers[i];
@@ -526,7 +528,12 @@ internal class CsUpgradeWindow : CsStationWindow
 			}
 			else if (number == tier + 1 && queued == 0)
 			{
-				if (lockedElsewhere)
+				if (off)
+				{
+					SetTier(view, UiTheme.BgBlock, UiTheme.BgSlot, "Off", UiTheme.TextDim, null);
+					view.Tooltip += "\nSwitched off: the Sprint feature is off in the settings.";
+				}
+				else if (lockedElsewhere)
 				{
 					SetTier(view, UiTheme.BgSelectedRow, UiTheme.BgSlot, "Busy", UiTheme.TextMuted, null);
 					view.Tooltip += "\nTier " + busy.Tier + " is " + (busy.Current ? "under way" : "queued") + " at " + ResearchReservations.Describe(busy.Station, station) + ".";

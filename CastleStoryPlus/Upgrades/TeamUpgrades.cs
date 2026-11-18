@@ -84,6 +84,18 @@ internal static class TeamUpgrades
 		Changed?.Invoke(faction);
 	}
 
+	// Server, for tests: sets a faction's tier of a line to any value (Unlock never lowers one).
+	internal static void SetTier(Faction faction, int line, int tier)
+	{
+		if (faction == null || !NetworkServer.active)
+		{
+			return;
+		}
+		TiersOf(faction)[line] = Mathf.Clamp(tier, 0, UpgradeLines.MaxTier);
+		faction.SetDirtyBit(TeamUpgradesNetwork.DirtyBit);
+		Changed?.Invoke(faction);
+	}
+
 	// Max health comes from the tool statistics (Profession.SetHpBonus); recompile them for the faction's units.
 	private static void RefreshHealth(Faction faction)
 	{

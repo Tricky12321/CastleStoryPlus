@@ -40,25 +40,6 @@ public class SprintRulesTests
 	}
 
 	[Test]
-	public void BonusesMultiplyInAnyOrder()
-	{
-		float boots = 0.1f;
-		float road = 1.4f;
-		float sprint = 1.5f;
-		float composed = SprintRules.Compose(3f, boots, road, sprint);
-		Assert.That(composed, Is.EqualTo(3f * 1.1f * 1.4f * 1.5f).Within(0.0001f));
-		// What the game's getter gives when the three postfixes run in another order.
-		float other = 3f * sprint * road * (1f + boots);
-		Assert.That(composed, Is.EqualTo(other).Within(0.0001f));
-	}
-
-	[Test]
-	public void NoBonusesLeavesTheSpeed()
-	{
-		Assert.That(SprintRules.Compose(6f, 0f, 1f, 1f), Is.EqualTo(6f));
-	}
-
-	[Test]
 	public void CannotStartWithoutTheResearch()
 	{
 		Assert.That(SprintRules.CanStart(0, false, false, 100f, 0f), Is.False);
@@ -110,10 +91,9 @@ public class SprintRulesTests
 
 	[TestCase(true, 1, true)]
 	[TestCase(true, 500, true)]
-	[TestCase(true, 501, false)]
 	[TestCase(true, 0, false)]
 	[TestCase(false, 3, false)]
-	public void CommandNeedsAKnownPlayerAndAReasonableCount(bool known, int units, bool expected)
+	public void CommandNeedsAKnownPlayerAndAUnit(bool known, int units, bool expected)
 	{
 		Assert.That(SprintRules.AcceptCommand(known, units), Is.EqualTo(expected));
 	}

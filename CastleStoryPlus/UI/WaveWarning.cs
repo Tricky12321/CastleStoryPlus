@@ -99,6 +99,7 @@ end)
 		{
 			return;
 		}
+		Achievements.AchievementTracker.LocalMax(Achievements.AchievementCounter.Wave, count);
 		if (_survived >= 0 && count > _survived)
 		{
 			_instance.Show("WAVE " + count + " CLEARED!", ClearedColor, ClearedSeconds);

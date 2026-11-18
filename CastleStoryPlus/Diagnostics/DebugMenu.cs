@@ -368,6 +368,10 @@ end)
 			// workers or materials, and what is removed goes at once. This machine only; off again when the game is left.
 			Brix.Engine.Architecte.editorMode = !Brix.Engine.Architecte.editorMode;
 			Brix.Engine.GameSignals.Invoke(Brix.Engine.GameSignals.OnEditorModeChanged, Brix.Engine.Architecte.editorMode);
+			if (Brix.Engine.Architecte.editorMode)
+			{
+				Achievements.AchievementTracker.Cheated("instant build");
+			}
 			SetStatus(Brix.Engine.Architecte.editorMode ? "Instant build on: what you place is built at once, what you remove goes at once." : "Instant build off.");
 			Refresh();
 		});
@@ -451,6 +455,10 @@ end)
 				return;
 			}
 			SpawnView.Toggle();
+			if (SpawnView.Enabled)
+			{
+				Achievements.AchievementTracker.Cheated("the spawn points");
+			}
 			SetStatus(SpawnView.Enabled ? "Spawn points shown: click a pillar, then the ground, to move it." : "Spawn points hidden.");
 			Refresh();
 		});
@@ -472,6 +480,10 @@ end)
 			// The game's own switch (as its Lua SetFogOfWar): everything visible, the fog drawn no more.
 			LocalFactionVision.ToggleFogSystem(!LocalFactionVision.IsEnabled());
 			_fogOffByMenu = !LocalFactionVision.IsEnabled();
+			if (_fogOffByMenu)
+			{
+				Achievements.AchievementTracker.Cheated("the fog of war switched off");
+			}
 			SetStatus(LocalFactionVision.IsEnabled() ? "Fog of war on." : "Fog of war off: everything is visible.");
 			Refresh();
 		});
@@ -527,6 +539,10 @@ end)
 				return;
 			}
 			CastleStoryPlus.Combat.CriticalHits.Forced = !CastleStoryPlus.Combat.CriticalHits.Forced;
+			if (CastleStoryPlus.Combat.CriticalHits.Forced)
+			{
+				Achievements.AchievementTracker.Cheated("100% critrate");
+			}
 			SetStatus(CastleStoryPlus.Combat.CriticalHits.Forced ? "Every hit and shot of your bricktrons is a critical hit." : "Critical hits by level again.");
 			Refresh();
 		});
@@ -578,6 +594,10 @@ end)
 			return;
 		}
 		XRayView.Set(mode);
+		if (mode != XRayView.Mode.Off)
+		{
+			Achievements.AchievementTracker.Cheated("the x-ray");
+		}
 		SetStatus(mode == XRayView.Mode.Off ? "X-ray off." : (mode == XRayView.Mode.Semi ? "X-ray: the walls of mines, tunnels and caves" : "X-ray: only the ore") + " within " + XRayView.Radius + " blocks of where the camera looks.");
 		Refresh();
 	}
@@ -652,6 +672,7 @@ end)
 			SetStatus("Host only: these commands run on the host.");
 			return;
 		}
+		Achievements.AchievementTracker.Cheated("the debug menu");
 		string result;
 		try
 		{
@@ -682,6 +703,7 @@ end)
 			SetStatus("No invasion wave timer in this game.");
 			return;
 		}
+		Achievements.AchievementTracker.Cheated("the debug menu's waves");
 		_waveCommand = command;
 		string message;
 		if (command == WaveNext)

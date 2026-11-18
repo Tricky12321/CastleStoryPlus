@@ -18,16 +18,6 @@ Features planned for Castle Story Plus over time. Nothing here is built yet. Whe
 - To decide: whether placing a blueprint over an existing workshop changes its recipes, and how blueprints saved before
   this (without recipes) behave.
 
-## Resource priorities
-
-- A priority per resource (for example stone, iron, orange crystal, coal, wood) from 1 to 5, set by the player: wood at
-  5 and coal at 1 means workers fetch, gather and carry wood before coal.
-- Used where workers choose between resources: quarries and mining (which ore to dig first), clean-up and hauling to
-  the stockpiles, gathering (trees, rocks), and workshops waiting for ingredients.
-- Set in a small table in the in-game menu (next to the resource list), saved with the world, per team in multiplayer.
-- To decide: whether priority 0 means "never", how it mixes with the task priorities and the distance to the resource,
-  and whether QuarryLimit's per-resource limits move into the same table.
-
 ## Animals
 
 The treasure beasts (Spirestalker, Cindermane, Boulderback, Ironhorn) are the starting point. Today they are corruptron
@@ -100,14 +90,3 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: from which wave and how often, whether it can be stunned or slowed, and whether it has its own attack
   (for example a ground slam that hits all round it).
 
-## Achievements
-
-- More achievements beside the game's own: the mod's features get their own (for example trade 100 times at the
-  market, research every colony upgrade, survive wave 20, kill a guardian or a mega corruptron, tame an animal, build
-  a road between two bases, flatten a large area).
-- Shown in a list in the menu with name, text, icon and progress (for example 37/100 trades), locked ones greyed out,
-  and a short message with a sound when one is unlocked.
-- Kept per player in the mod's own file, not in the save and not on Steam, so saves stay loadable without the mod.
-- To decide: whether they also show on Steam (the game's Steam app cannot take new ones), whether sandbox and cheats
-  count, whether they count in multiplayer for every player or only the host, and whether some unlock a reward (a
-  banner colour, a bricktron hat).

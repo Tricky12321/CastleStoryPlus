@@ -58,6 +58,10 @@ internal sealed class UpgradeLine
 	// A line added after the market's coal and steel trades existed: its recipes are made after those trades, so
 	// their recipe ids (kept in saved queues) stay as they were.
 	public bool Late;
+
+	// A line whose recipes come after every other recipe, the kit bundles' included (Sprint), so the ids the saved
+	// queues hold for those stay as they were.
+	public bool VeryLate;
 }
 
 // The upgrade lines, their tier effects and costs, and the crafting recipes that research them.
@@ -184,7 +188,7 @@ internal static class UpgradeLines
 			new[] { 0f, 1f, 2f, 3f }, "sprint tier {2}",
 			Cost(Crystal, 30), Cost(Crystal, 60), Cost(Crystal, 120));
 		All[EfficientMining].Late = true;
-		All[Sprint].Late = true;
+		All[Sprint].VeryLate = true;
 		CastleStoryPlus.Upgrades.Sprint.RefreshText();
 		RegisterRecipes(UpgradeHall.Smithy, UpgradeHall.Armoury);
 	}
@@ -264,6 +268,33 @@ internal static class UpgradeLines
 		return line >= All.Count || TeamUpgrades.Tier(faction, line) > 0;
 	}
 
+	// Every tier of every line (what researching all of the colony's upgrades comes to), and how many a faction has.
+	public static int TotalTiers()
+	{
+		int total = 0;
+		foreach (UpgradeLine line in All)
+		{
+			if (IsEnabled(line))
+			{
+				total += line.Tiers;
+			}
+		}
+		return total;
+	}
+
+	public static int ResearchedTiers(Faction faction)
+	{
+		int done = 0;
+		foreach (UpgradeLine line in All)
+		{
+			if (IsEnabled(line))
+			{
+				done += System.Math.Min(TeamUpgrades.Tier(faction, line.Index), line.Tiers);
+			}
+		}
+		return done;
+	}
+
 	public static bool IsResearch(RecipeInfo recipe)
 	{
 		return TryGetResearch(recipe, out UpgradeLine line, out int _) && line.Hall == UpgradeHall.Research;
@@ -277,16 +308,30 @@ internal static class UpgradeLines
 	// and dropping on completion skips the check for room to store it.
 	internal static void RegisterRecipes(params UpgradeHall[] halls)
 	{
-		RegisterRecipes(false, halls);
+		RegisterRecipes(false, false, halls);
 	}
 
 	// The late lines' recipes (see UpgradeLine.Late), after every other recipe.
 	internal static void RegisterLateRecipes()
 	{
-		RegisterRecipes(true, UpgradeHall.Smithy, UpgradeHall.Armoury, UpgradeHall.Research);
+		RegisterRecipes(true, false, UpgradeHall.Smithy, UpgradeHall.Armoury, UpgradeHall.Research);
 	}
 
-	private static void RegisterRecipes(bool late, params UpgradeHall[] halls)
+	// The very late lines' recipes (see UpgradeLine.VeryLate): after the kit bundles' recipes, or after the late ones
+	// when the kit bundles are off.
+	internal static void RegisterVeryLateRecipes()
+	{
+		RegisterRecipes(true, true, UpgradeHall.Smithy, UpgradeHall.Armoury, UpgradeHall.Research);
+	}
+
+	// Whether the line does anything: Sprint follows its feature switch (the line stays registered so the recipe ids
+	// and the saved and synced tiers keep their places).
+	public static bool IsEnabled(UpgradeLine line)
+	{
+		return line == null || line.Index != Sprint || CastleStoryPlus.Upgrades.Sprint.Active;
+	}
+
+	private static void RegisterRecipes(bool late, bool veryLate, params UpgradeHall[] halls)
 	{
 		if (CookBook.Sword == null)
 		{
@@ -295,7 +340,7 @@ internal static class UpgradeLines
 		int before = ByRecipe.Count;
 		foreach (UpgradeLine line in All)
 		{
-			if (System.Array.IndexOf(halls, line.Hall) < 0 || line.Recipe[1] != null || line.Late != late)
+			if (System.Array.IndexOf(halls, line.Hall) < 0 || line.Recipe[1] != null || line.Late != late || line.VeryLate != veryLate)
 			{
 				continue;
 			}

@@ -12,10 +12,14 @@ game. The checks compare what the client has with what the host has, through the
     Weather               the host's rain reaches the client (state, boost and what it shows), and its end too
     TaskCrew              the host's max of 12 bricktrons per task, chosen in the lobby, reach the client, and twelve of the
                           client's bricktrons put on its own task all join its crew there and on the host (issue #88)
+    SavedTeams            three players (host, client and a third player) in a Conquest Versus lobby, two of
+                          them in one team, are allied in the game; the game saved and loaded again in a new lobby puts both
+                          back in the same team, and they are allied again
+                          (issue #39). Runs last, in lobbies of its own: the other checks' game is left first
 
     tools/run-multiplayer-tests.py [--filter Cap] [--port 27890] [--player DIR] [--root-src DIR] [--keep] [--hold N]
 
---port is the host's API port, the client's is the next one (never 27860, the player's own game). The players share
+--port is the host's API port, the client's is the next one, SavedTeams' third player the one after (never 27860, the player's own game). The players share
 the player folder (default: the Unity 6 port's CastleStoryPlus.Player/Build/Linux) and start one after the other.
 The results are printed and written to multiplayer-tests-<yyyy-MM-dd-HHmmss>.json in --work, next to the players'
 logs. The exit code is 0 when every check passed.
@@ -279,6 +283,135 @@ def check_task_crew(host, client):
     return True, "the client's task holds %d on both players" % TASK_CREW
 
 
+VERSUS = "conquest_versus_f283061f-051c-4e70-8dd7-0edcf13bd3be"
+
+EXTRA = []
+
+MAPS = ["Apex", "Arecibo", "BigIsland", "Colibri", "Exile", "Helix", "Invictus", "Kairos", "Komorebi", "Nova", "Pineburg", "PlateauMont-Royal", "Quasar", "Riverains", "SteppingStones", "Tortuga", "TroubledHeaps", "ViperPass", "Zuma"]
+
+
+def lobby_players(player):
+    return player.call("GET", "/api/net").get("players", [])
+
+
+def leave_to_menu(players):
+    # The clients first, so the host's game is not what they see ending.
+    for player in reversed(players):
+        try:
+            player.call("POST", "/api/net/leave")
+        except Exception as e:
+            log("[%s]" % player.name, "leave", repr(e))
+    for player in reversed(players):
+        player.wait_for("the title screen", lambda p=player: p.call("GET", "/api/status").get("scene") == "SceneMenu", 120)
+    time.sleep(8)
+
+
+def open_lobby(players, setup):
+    host, clients = players[0], players[1:]
+    host.call("POST", "/api/net/host", port=GAME_PORT, name="Host")
+    host.wait_for("the lobby", lambda: any(p.get("local") for p in lobby_players(host)), 120)
+    setup(host)
+    for index, client in enumerate(clients):
+        client.call("POST", "/api/net/join", address="127.0.0.1", port=GAME_PORT, name=["Client", "Client2"][index])
+        want = index + 2
+        host.wait_for("%s in the lobby" % client.name, lambda: len(lobby_players(host)) >= want, 120)
+        time.sleep(3)
+
+
+def start_from_lobby(players):
+    host, clients = players[0], players[1:]
+    for client in clients:
+        client.call("POST", "/api/net/ready", value="true")
+    time.sleep(2)
+    log("lobby before the start:", lobby_players(host))
+    host.call("POST", "/api/net/start", button="true")
+    for player in players:
+        player.wait_for("the game's introduction", lambda p=player: p.call("GET", "/api/dialog").get("open"), 600, 2)
+    for player in players:
+        player.call("POST", "/api/dialog/press?index=0")
+    time.sleep(5)
+
+
+def alliance_groups(host):
+    # The players' factions as groups of allies: [["Host", "client"], ["client2"]] by owner name.
+    factions = host.call("GET", "/api/net/alliances")["factions"]
+    groups = []
+    for faction in factions:
+        mine = sorted(faction["owners"])
+        for group in groups:
+            if mine[0] in group:
+                break
+        else:
+            members = set(mine)
+            for relation in faction["relations"]:
+                if relation["allied"]:
+                    other = [f for f in factions if f["faction"] == relation["faction"]][0]
+                    members.update(other["owners"])
+            groups.append(sorted(members))
+    return sorted(groups)
+
+
+def teams(player):
+    return dict((p["name"], p["team"]) for p in lobby_players(player))
+
+
+def check_saved_teams(host, client, in_game):
+    players = [host, client]
+    # Versus needs two teams: with only two players they could not share one, so a third plays too.
+    third = Player(host.args, "Client2", host.port + 2, time.strftime("%Y-%m-%d-%H%M%S") + "-c2")
+    EXTRA.append(third)
+    third.start()
+    players.append(third)
+    if in_game:
+        leave_to_menu([host, client])
+    time.sleep(2)
+    # Host and Client in one team, Client2 in the other.
+    wanted = {"Host": 0, "Client": 0, "Client2": 1}
+
+    def setup(h):
+        # A map with a place for three players.
+        for map_name in MAPS:
+            try:
+                answer = h.call("POST", "/api/net/mode", gamemode="conquest", preset=VERSUS, map=map_name)
+            except RuntimeError:
+                continue
+            time.sleep(1)
+            if h.call("GET", "/api/net").get("maxFactions", 0) >= 3:
+                log("lobby:", answer)
+                return
+        raise RuntimeError("no Conquest map with a place for three players")
+
+    open_lobby(players, setup)
+    for name, team in wanted.items():
+        host.call("POST", "/api/net/team", value=team, name=name)
+    time.sleep(2)
+    before = teams(host)
+    if before != wanted:
+        return False, "the lobby would not take the teams %s: %s" % (wanted, before)
+    start_from_lobby(players)
+    groups = alliance_groups(host)
+    log("alliances:", host.call("GET", "/api/net/alliances"))
+    if groups != [["Client", "Host"], ["Client2"]]:
+        return False, "not as the lobby's teams before saving: allied groups %s" % groups
+    saved = host.call("POST", "/api/net/save")
+    log("saved as", saved["name"])
+    leave_to_menu(players)
+    open_lobby(players, lambda h: log("lobby:", h.call("POST", "/api/net/mode", save=saved["name"])))
+    time.sleep(3)
+    log("lobby of the loaded save:", lobby_players(host))
+    after = teams(host)
+    seen = teams(client)
+    if after["Host"] != after["Client"] or after["Host"] == after["Client2"]:
+        return False, "the loaded save's lobby changed the teams: %s (saved %s)" % (after, before)
+    if seen != after:
+        return False, "the client sees the teams %s, the host %s" % (seen, after)
+    start_from_lobby(players)
+    groups = alliance_groups(host)
+    if groups != [["Client", "Host"], ["Client2"]]:
+        return False, "teams %s in the lobby, but allied groups %s in the loaded game" % (after, groups)
+    return True, "teams %s before saving, %s after loading; allied groups %s" % (before, after, groups)
+
+
 CHECKS = [
     ("BricktronCap", check_bricktron_cap),
     ("ArmySelection", check_army_selection),
@@ -286,6 +419,7 @@ CHECKS = [
     ("WaveRows", check_wave_rows),
     ("Weather", check_weather),
     ("TaskCrew", check_task_crew),
+    ("SavedTeams", check_saved_teams),
 ]
 
 
@@ -301,7 +435,7 @@ def main():
     args = parser.parse_args()
     if not os.path.isfile(os.path.join(args.player, "run_bepinex.sh")):
         sys.exit("no run_bepinex.sh in " + args.player)
-    if args.port <= USER_PORT <= args.port + 1:
+    if args.port <= USER_PORT <= args.port + 2:
         sys.exit("port %d is the player's own game: choose another --port" % USER_PORT)
     checks = [(name, check) for name, check in CHECKS if args.filter.lower() in name.lower()]
     if not checks:
@@ -315,13 +449,20 @@ def main():
         # One after the other: they share the player folder's BepInEx config, which each writes while the mod loads.
         host.start()
         client.start()
-        join(host, client)
-        log("in the game")
-        time.sleep(5)
+        in_game = False
+        if any(name != "SavedTeams" for name, _ in checks):
+            join(host, client)
+            in_game = True
+            log("in the game")
+            time.sleep(5)
         for name, check in checks:
             begun = time.time()
             try:
-                passed, message = check(host, client)
+                if name == "SavedTeams":
+                    passed, message = check(host, client, in_game)
+                    in_game = True
+                else:
+                    passed, message = check(host, client)
             except Exception as e:
                 passed, message = False, "error: %s" % e
             results.append({"name": name, "outcome": "Passed" if passed else "Failed", "message": message, "seconds": round(time.time() - begun, 1)})
@@ -335,6 +476,8 @@ def main():
                 host.call("POST", "/api/net/taskcrew", value=TASK_CREW_BEFORE[0])
             except Exception as e:
                 log("[host]", "bricktrons per task not put back:", repr(e))
+        for extra in EXTRA:
+            extra.quit()
         client.quit()
         host.quit()
     path = os.path.join(args.work, "multiplayer-tests-%s.json" % stamp)

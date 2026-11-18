@@ -19,11 +19,21 @@ namespace CastleStoryPlus.Multiplayer;
 // only shows for allied or neutral units.
 // The host now writes the teams of the save's factions beside the save, and in the lobby of a loaded save each player
 // is put in the team his faction had, when he joins, when his faction changes and when the host picks another save.
-// The team can still be changed in the lobby afterwards.
+// While players join one by one the game's own lobby check (GameParam.FixTeams) may move players to make the teams
+// valid for the mode (Conquest Versus needs two teams): when someone joins, every player who has not picked a team
+// himself is put back, and after the check has moved players they are put back again, if the saved teams are valid.
+// A player who picks a team in the lobby keeps it (until the host picks another save).
+// A saved faction nobody takes over is given its saved relations too (SavedTeamsRelationsPatch).
 [Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
 internal static class SavedTeams
 {
 	private const string SaveFile = "castlestoryplus_teams.json";
+
+	// Teams are being put back (KeepSaved does not run again from the changes it makes).
+	internal static bool Applying { get; private set; }
+
+	// Players who picked their team in the lobby: they keep it.
+	internal static readonly HashSet<LobbyPlayer> Chosen = new HashSet<LobbyPlayer>();
 
 	// Host: called when the game has written a save into its folder.
 	internal static void Write(string folder)
@@ -97,19 +107,30 @@ internal static class SavedTeams
 		{
 			return;
 		}
+		bool outer = Applying;
+		Applying = true;
 		try
 		{
+			if (Chosen.Contains(player))
+			{
+				return;
+			}
 			int team = TeamOf(map, player.factionNumber);
 			if (team < 0 || team >= GameParam.MaxTeamCount || team == player.TeamNumber)
 			{
 				return;
 			}
+			int was = player.TeamNumber;
 			player.NetworkTeamNumber = team;
-			Plugin.Log.LogInfo("SavedTeams: " + player.playerName + " is in team " + (team + 1) + " as in the save");
+			Plugin.Log.LogInfo("SavedTeams: faction " + player.factionNumber + " is in team " + (team + 1) + " as in the save (was " + (was + 1) + ")");
 		}
 		catch (Exception ex)
 		{
 			Plugin.Log.LogWarning("SavedTeams: could not read the save's teams: " + ex.Message);
+		}
+		finally
+		{
+			Applying = outer;
 		}
 	}
 
@@ -119,9 +140,133 @@ internal static class SavedTeams
 		{
 			return;
 		}
-		foreach (LobbyPlayer player in UNetManager.instance.LobbyPlayerList)
+		bool outer = Applying;
+		Applying = true;
+		try
 		{
-			Apply(player);
+			foreach (LobbyPlayer player in new List<LobbyPlayer>(UNetManager.instance.LobbyPlayerList))
+			{
+				Apply(player);
+			}
+		}
+		finally
+		{
+			Applying = outer;
+		}
+	}
+
+	// After the game's own lobby check (GameParam.FixTeams) has moved players to make the teams valid: the saved teams
+	// are put back if they are valid too (all the players of the save are there), else the game's repair stays.
+	internal static void KeepSaved()
+	{
+		if (!NetworkServer.active || Applying || UNetManager.instance == null || UNetManager.instance.LobbyPlayerList == null)
+		{
+			return;
+		}
+		List<LobbyPlayer> players = new List<LobbyPlayer>(UNetManager.instance.LobbyPlayerList);
+		Chosen.RemoveWhere(p => p == null);
+		int[] repaired = new int[players.Count];
+		for (int i = 0; i < repaired.Length; i++)
+		{
+			repaired[i] = players[i].TeamNumber;
+		}
+		ApplyAll();
+		if (GameParam.AreTeamsValid())
+		{
+			return;
+		}
+		Applying = true;
+		try
+		{
+			for (int i = 0; i < repaired.Length; i++)
+			{
+				players[i].NetworkTeamNumber = repaired[i];
+			}
+		}
+		finally
+		{
+			Applying = false;
+		}
+	}
+
+	// The save's teams by faction name, or null (an older save, a new game).
+	internal static Dictionary<string, int> TeamsByName(Asset_Map map)
+	{
+		if (map == null || map.IsNewGame() || string.IsNullOrEmpty(map.path))
+		{
+			return null;
+		}
+		string file = Path.Combine(map.path, SaveFile);
+		if (!File.Exists(file))
+		{
+			return null;
+		}
+		JObject teams = JObject.Parse(File.ReadAllText(file))["teams"] as JObject;
+		if (teams == null)
+		{
+			return null;
+		}
+		Dictionary<string, int> result = new Dictionary<string, int>();
+		foreach (KeyValuePair<string, JToken> pair in teams)
+		{
+			if (pair.Value.Type == JTokenType.Integer)
+			{
+				result[pair.Key] = (int)pair.Value;
+			}
+		}
+		return result;
+	}
+
+	// Host, when the game starts: a saved faction no player took over has no relations from the game (it only sets
+	// them for factions with a player: enemies in Conquest), so its turrets and units would fight its former allies.
+	// It gets the saved ones: allied to the factions of its team, enemy to the others.
+	internal static void SetRelationsOfFreeFactions()
+	{
+		if (!NetworkServer.active)
+		{
+			return;
+		}
+		try
+		{
+			Dictionary<string, int> teams = TeamsByName(GameParam.Map);
+			if (teams == null)
+			{
+				return;
+			}
+			List<Faction> saved = new List<Faction>();
+			foreach (Faction faction in Faction.GetAllFactions())
+			{
+				if (faction != null && teams.ContainsKey(faction.name))
+				{
+					saved.Add(faction);
+				}
+			}
+			foreach (Faction free in saved)
+			{
+				if (free.AllOwners.Count > 0)
+				{
+					continue;
+				}
+				foreach (Faction other in saved)
+				{
+					if (other == free)
+					{
+						continue;
+					}
+					Affiliation.Relation relation = teams[free.name] == teams[other.name] ? Affiliation.Relation.Allied : Affiliation.Relation.Enemy;
+					free.SetFactionRelation(other, relation);
+					other.SetFactionRelation(free, relation);
+				}
+				free.SetFactionRelation(Faction.DefaultEnemy, Affiliation.Relation.Enemy);
+				free.SetFactionRelation(Faction.DefaultNeutral, Affiliation.Relation.Neutral);
+				Faction.DefaultEnemy.SetFactionRelation(free, Affiliation.Relation.Enemy);
+				Faction.DefaultNeutral.SetFactionRelation(free, Affiliation.Relation.Neutral);
+				Plugin.Log.LogInfo("SavedTeams: " + free.name + " has no player; its relations are as in the save");
+			}
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("SavedTeams: could not set the relations of free factions: " + ex.Message);
 		}
 	}
 
@@ -168,6 +313,17 @@ internal static class SavedTeams
 	}
 }
 
+// The game's lobby check has moved players: the saved teams come back if they are valid.
+[Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
+[HarmonyPatch(typeof(GameParam), "FixTeams")]
+internal static class SavedTeamsFixPatch
+{
+	private static void Postfix()
+	{
+		SavedTeams.KeepSaved();
+	}
+}
+
 // Saves the teams with the game.
 [Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
 [HarmonyPatch(typeof(Asset_Map), "Disk_Save")]
@@ -182,7 +338,10 @@ internal static class SavedTeamsSavePatch
 	}
 }
 
-// A player joining the lobby: the game has just put him in the first free team.
+// A player joining the lobby: the game has just put him in the first free team. Every player already there is put
+// back in his saved team too: while the first players join, the lobby is not valid for the mode yet (Conquest
+// Versus needs two teams, so two players who shared a team were split by the game's own lobby check, RefreshTeams),
+// and the team that check moved would otherwise stay where it was moved to when the last player of the save joins.
 [Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
 [HarmonyPatch(typeof(LobbyPlayer), nameof(LobbyPlayer.Start))]
 internal static class SavedTeamsJoinPatch
@@ -190,6 +349,7 @@ internal static class SavedTeamsJoinPatch
 	private static void Postfix(LobbyPlayer __instance)
 	{
 		SavedTeams.Apply(__instance);
+		SavedTeams.ApplyAll();
 	}
 }
 
@@ -219,6 +379,29 @@ internal static class SavedTeamsMapPatch
 {
 	private static void Postfix()
 	{
+		SavedTeams.Chosen.Clear();
 		SavedTeams.ApplyAll();
+	}
+}
+
+// A player picking his team in the lobby: it is his, the saved team no longer overrides it.
+[Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
+[HarmonyPatch(typeof(LobbyPlayer), nameof(LobbyPlayer.CmdSetTeam))]
+internal static class SavedTeamsChosenPatch
+{
+	private static void Prefix(LobbyPlayer __instance)
+	{
+		SavedTeams.Chosen.Add(__instance);
+	}
+}
+
+// The game has made its factions' relations from the lobby's teams.
+[Feature(Features.SavedTeams, Features.SavedTeamsInfo)]
+[HarmonyPatch(typeof(SimpleHostScript), nameof(SimpleHostScript.Run))]
+internal static class SavedTeamsRelationsPatch
+{
+	private static void Postfix()
+	{
+		SavedTeams.SetRelationsOfFreeFactions();
 	}
 }

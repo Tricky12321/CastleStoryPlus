@@ -155,6 +155,10 @@ internal static class ResearchReservations
 		{
 			return "No team.";
 		}
+		if (!UpgradeLines.IsEnabled(line))
+		{
+			return "Switched off (the Sprint feature).";
+		}
 		if (TeamUpgrades.Tier(faction, line.Index) >= tier)
 		{
 			return "Already researched.";

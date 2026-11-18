@@ -46,8 +46,14 @@ internal static class NetEndpoints
 		});
 		routes.Add(new Route("POST", "/api/net/mode", "Host: picks the lobby's game mode and preset (and a map that has the mode), as the lobby's map and mode lists do", Mode)
 		{
-			Parameters = "gamemode (codename, required, e.g. invasion), preset (codename or name; default the mode's default), map (codename or name; default the lobby's map if it has the mode, else the first official one that has it)"
+			Parameters = "gamemode (codename, required unless save is given, e.g. invasion), preset (codename or name; default the mode's default), map (codename or name; default the lobby's map if it has the mode, else the first official one that has it), save (instead of the others: a save's exact name or path, as POST /api/net/save answers it; the save is the lobby's map with the mode and preset it was last played in)"
 		});
+		routes.Add(new Route("POST", "/api/net/team", "Host, in the lobby: puts a player in a team, as the lobby's team choice does (GET /api/net shows each player's team)", Team)
+		{
+			Parameters = "value (the team, counting from 0; required), name (the player's lobby name; default the local player)"
+		});
+		routes.Add(new Route("POST", "/api/net/save", "Host, in a game: saves it as the pause menu's save does (a loaded manual save is overwritten, else a new save is made) and stays in the game; answers the save's name", SaveGame));
+		routes.Add(new Route("GET", "/api/net/alliances", "The game's factions that have a player: their owners and how each stands to the others (allied, enemy), to see what a loaded save made of the teams", Alliances));
 		routes.Add(new Route("GET", "/api/net/rules", "The game's rules as this player has them: the bricktron limit (with the research's Housing; baseCap without it)", Rules));
 		routes.Add(new Route("POST", "/api/net/rules", "Sets the game's bricktron limit as a game mode's settings do when the map loads (the host: for every player; a client: as its own game mode script does, which the host's limit overrides)", SetRules)
 		{
@@ -233,6 +239,7 @@ internal static class NetEndpoints
 			"client", NetworkClient.active,
 			"clientConnected", client != null && client.isConnected,
 			"serverConnections", connections,
+			"maxFactions", GameParam.MaxFactionCount,
 			"multiplayer", Neo.multiplayer,
 			"hostingPort", UNetManager.HostingPort,
 			"map", (GameParam.Map != null) ? GameParam.Map.displayName : null,
@@ -311,6 +318,11 @@ internal static class NetEndpoints
 		{
 			throw new ApiException(409, "Only the host picks the mode");
 		}
+		string saveName = request.String("save", null);
+		if (saveName != null)
+		{
+			return PickSave(saveName);
+		}
 		string modeName = request.Required("gamemode");
 		string mapName = request.String("map", null);
 		Asset_Map map = null;
@@ -364,6 +376,102 @@ internal static class NetEndpoints
 		GameParam.Gamemode = mode;
 		GameParam.Preset = preset;
 		return Obj("map", map.displayName, "mapCodename", map.codename, "gamemode", mode.codename, "preset", preset.codename);
+	}
+
+	// The lobby's map list showing a save: the save as the map, with the mode and preset it was last played in.
+	private static object PickSave(string saveName)
+	{
+		Asset_Map save = null;
+		foreach (Asset_Map candidate in AssetDispensary.saves.SendQuery(AssetQueryParameters.AllSources | AssetQueryParameters.RefreshCache, AssetPlayableContext.Multiplayer))
+		{
+			if (candidate != null && (string.Equals(candidate.customName, saveName, System.StringComparison.OrdinalIgnoreCase) || string.Equals(candidate.path, saveName, System.StringComparison.Ordinal)))
+			{
+				save = candidate;
+				break;
+			}
+		}
+		if (save == null)
+		{
+			throw new ApiException(404, "No multiplayer save '" + saveName + "'");
+		}
+		Asset_Gamemode mode = save.GetLastPlayedGamemode();
+		Asset_GamemodePreset preset = save.GetLastPlayedGamemodePreset();
+		if (mode == null || preset == null)
+		{
+			throw new ApiException(409, "The save " + save.customName + " has no last played mode and preset");
+		}
+		GameParam.Map = save;
+		GameParam.Gamemode = mode;
+		GameParam.Preset = preset;
+		return Obj("save", save.customName, "gamemode", mode.codename, "preset", preset.codename, "path", save.path);
+	}
+
+	private static object Team(ApiRequest request)
+	{
+		RequireLobby();
+		if (!NetworkServer.active)
+		{
+			throw new ApiException(409, "Only the host puts players in teams");
+		}
+		int team = request.Int("value", -1);
+		if (team < 0)
+		{
+			throw new ApiException(400, "Give the team: value=0 is the first");
+		}
+		string name = request.String("name", null);
+		foreach (LobbyPlayer player in UNetManager.instance.LobbyPlayerList)
+		{
+			if (player != null && (name == null ? player.isLocalPlayer : player.NetworkplayerName == name))
+			{
+				player.NetworkTeamNumber = team;
+				return Obj("name", player.NetworkplayerName, "team", player.NetworkTeamNumber);
+			}
+		}
+		throw new ApiException(404, "No such player in the lobby");
+	}
+
+	private static object SaveGame(ApiRequest request)
+	{
+		if (!NetworkServer.active || Architecte.instance == null || GameParam.Map == null)
+		{
+			throw new ApiException(409, "Only the host saves, in a game");
+		}
+		if (!CastleStoryPlus.Menus.QuitDialogPatch.SaveBeforeLeaving(out Asset_Map written) || written == null)
+		{
+			throw new ApiException(500, "The game could not be saved (see /api/log?problems=true)");
+		}
+		return Obj("saved", true, "name", written.customName, "path", written.path);
+	}
+
+	private static object Alliances(ApiRequest request)
+	{
+		List<Faction> played = new List<Faction>();
+		foreach (Faction faction in Faction.GetAllFactions())
+		{
+			if (faction != null && !faction.isAI && !faction.IsSpectator && faction != Faction.DefaultNeutral && faction.AllOwners.Count > 0)
+			{
+				played.Add(faction);
+			}
+		}
+		List<object> factions = new List<object>();
+		foreach (Faction faction in played)
+		{
+			List<string> owners = new List<string>();
+			foreach (User owner in faction.AllOwners)
+			{
+				owners.Add(owner.ScreenName);
+			}
+			List<object> relations = new List<object>();
+			foreach (Faction other in played)
+			{
+				if (other != faction)
+				{
+					relations.Add(Obj("faction", other.name, "allied", Affiliation.IsAllied(faction, other), "enemy", Affiliation.IsEnemy(faction, other)));
+				}
+			}
+			factions.Add(Obj("faction", faction.name, "owners", owners, "relations", relations));
+		}
+		return Obj("factions", factions);
 	}
 
 	private static Asset_Gamemode ModeOf(Asset_Map map, string modeName)

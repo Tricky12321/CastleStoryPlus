@@ -49,13 +49,6 @@ internal static class SprintRules
 		return 1f + ((bonusPercent < 0f) ? 0f : bonusPercent) / 100f;
 	}
 
-	// The speed with every bonus on it. Each bonus is a plain factor and the result is their product, so the order
-	// the game's getter patches run in does not matter: light boots (a share, 0.1 is +10%), road and sprint (factors).
-	public static float Compose(float speed, float lightBoots, float roadFactor, float sprintFactor)
-	{
-		return speed * (1f + lightBoots) * roadFactor * sprintFactor;
-	}
-
 	// Whether a unit may start a sprint now. Enemies never sprint; a sprint cannot start inside a sprint or before its
 	// cooldown is over (readyAt is when the unit may sprint again).
 	public static bool CanStart(int tier, bool enemy, bool sprinting, float now, float readyAt)
@@ -86,10 +79,10 @@ internal static class SprintRules
 	}
 
 	// Whether the host carries out a sprint command that a client sent: it must come from a known player and name at
-	// least one and at most MaxCommandUnits units.
+	// least one unit (the message reader keeps at most MaxCommandUnits).
 	public static bool AcceptCommand(bool playerKnown, int units)
 	{
-		return playerKnown && units > 0 && units <= MaxCommandUnits;
+		return playerKnown && units > 0;
 	}
 
 	// Each unit of a command must be a bricktron of the sending player's team.
