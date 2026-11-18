@@ -337,7 +337,7 @@ internal static class Features
 
 	public const string Roads = "Roads";
 
-	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus), and route searches count road steps as cheaper so roads are taken when they are quicker overall. Grass does not grow over a road and steps do not wear it.";
+	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
 
 	public const string GlobalBuildJob = "GlobalBuildJob";
 

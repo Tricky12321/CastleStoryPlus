@@ -70,6 +70,13 @@ internal static class NavMeshRoutes
 	// Steep steps of a route traded for a cheaper way round them over the graph.
 	internal static int Eased;
 
+// Routes that went through Ease, the time it took in all (ms), and the looks it made for a road.
+internal static int EaseRoutes;
+
+internal static double EaseMilliseconds;
+
+internal static int RoadEases;
+
 	// Routes that went back to a voxel they had already passed, cut short there.
 	internal static int Loops;
 
@@ -132,6 +139,9 @@ internal static class NavMeshRoutes
 		RouteVoxels = 0;
 		Mended = 0;
 		Eased = 0;
+		EaseRoutes = 0;
+		EaseMilliseconds = 0;
+		RoadEases = 0;
 		Loops = 0;
 		Climbs = 0;
 		StepDowns = 0;
@@ -293,7 +303,10 @@ internal static class NavMeshRoutes
 				why = _why ?? "route not walkable";
 				continue;
 			}
+			long easeStart = Stopwatch.GetTimestamp();
 			Ease(request.Evaluator);
+			EaseMilliseconds += (Stopwatch.GetTimestamp() - easeStart) * 1000.0 / Stopwatch.Frequency;
+			EaseRoutes++;
 			CutLoops();
 			// Up to the first voxel that reaches the target, as the game's search stops there.
 			int end = -1;
@@ -759,7 +772,65 @@ internal static class NavMeshRoutes
 
 	private static readonly HashSet<TerrainPathNode> EaseDone = new HashSet<TerrainPathNode>();
 
-	private static readonly List<TerrainPathNode> EaseOpen = new List<TerrainPathNode>();
+	// The places still to look at, a binary heap by cost (a place may be in it more than once; the dearer entry is
+	// skipped when it comes up).
+	private struct EaseEntry
+	{
+		public int Cost;
+
+		public TerrainPathNode Node;
+	}
+
+	private static readonly List<EaseEntry> EaseOpen = new List<EaseEntry>();
+
+	private static void EasePush(int cost, TerrainPathNode node)
+	{
+		int i = EaseOpen.Count;
+		EaseOpen.Add(new EaseEntry { Cost = cost, Node = node });
+		while (i > 0)
+		{
+			int parent = (i - 1) / 2;
+			if (EaseOpen[parent].Cost <= EaseOpen[i].Cost)
+			{
+				break;
+			}
+			EaseEntry swap = EaseOpen[parent];
+			EaseOpen[parent] = EaseOpen[i];
+			EaseOpen[i] = swap;
+			i = parent;
+		}
+	}
+
+	private static EaseEntry EasePop()
+	{
+		EaseEntry top = EaseOpen[0];
+		int last = EaseOpen.Count - 1;
+		EaseOpen[0] = EaseOpen[last];
+		EaseOpen.RemoveAt(last);
+		int i = 0;
+		while (true)
+		{
+			int left = 2 * i + 1;
+			int smallest = i;
+			if (left < last && EaseOpen[left].Cost < EaseOpen[smallest].Cost)
+			{
+				smallest = left;
+			}
+			if (left + 1 < last && EaseOpen[left + 1].Cost < EaseOpen[smallest].Cost)
+			{
+				smallest = left + 1;
+			}
+			if (smallest == i)
+			{
+				break;
+			}
+			EaseEntry swap = EaseOpen[smallest];
+			EaseOpen[smallest] = EaseOpen[i];
+			EaseOpen[i] = swap;
+			i = smallest;
+		}
+		return top;
+	}
 
 	// Route voxels a way round may end at: their index and the route's cost to them from where the way round starts.
 	private static readonly Dictionary<TerrainPathNode, KeyValuePair<int, int>> EaseTargets = new Dictionary<TerrainPathNode, KeyValuePair<int, int>>();
@@ -770,11 +841,11 @@ internal static class NavMeshRoutes
 	// less than the ground), so its voxels are mostly the ground's. A route voxel on plain ground beside a road gets the
 	// graph's cheapest way (its weights count the road) to one of the next route voxels, over the road when that is
 	// quicker. At most RoadLooks of these a route.
-	private const int RoadAhead = 14;
+	private const int RoadAhead = 12;
 
-	private const int RoadReach = 16;
+	private const int RoadReach = 12;
 
-	private const int RoadPlaces = 700;
+	private const int RoadPlaces = 300;
 
 	private const int RoadLooks = 12;
 
@@ -793,7 +864,8 @@ internal static class NavMeshRoutes
 				continue;
 			}
 			bool steep = Route[i].Weight >= SteepWeight;
-			if (!steep && (roadLooks >= RoadLooks || !Roads.Any || !BesideRoad(start.position)))
+			// Not a route that only crosses a road: two route voxels in a row lie beside it.
+			if (!steep && (roadLooks >= RoadLooks || !Roads.Any || !BesideRoad(start.position) || !(Route[i].Node is TerrainPathNode along) || !BesideRoad(along.position)))
 			{
 				continue;
 			}
@@ -803,6 +875,7 @@ internal static class NavMeshRoutes
 			if (!steep)
 			{
 				roadLooks++;
+				RoadEases++;
 			}
 			EaseTargets.Clear();
 			int routeCost = 0;
@@ -822,25 +895,17 @@ internal static class NavMeshRoutes
 			EaseDone.Clear();
 			EaseOpen.Clear();
 			EaseCost[start] = 0;
-			EaseOpen.Add(start);
+			EasePush(0, start);
 			while (EaseOpen.Count > 0 && EaseDone.Count < places)
 			{
-				int pick = 0;
-				for (int o = 1; o < EaseOpen.Count; o++)
-				{
-					if (EaseCost[EaseOpen[o]] < EaseCost[EaseOpen[pick]])
-					{
-						pick = o;
-					}
-				}
-				TerrainPathNode here = EaseOpen[pick];
-				EaseOpen[pick] = EaseOpen[EaseOpen.Count - 1];
-				EaseOpen.RemoveAt(EaseOpen.Count - 1);
-				if (!EaseDone.Add(here))
+				EaseEntry entry = EasePop();
+				TerrainPathNode here = entry.Node;
+				if (EaseDone.Contains(here) || entry.Cost > EaseCost[here])
 				{
 					continue;
 				}
-				int cost = EaseCost[here];
+				EaseDone.Add(here);
+				int cost = entry.Cost;
 				if (EaseTargets.TryGetValue(here, out KeyValuePair<int, int> target) && target.Value - cost > bestSaving)
 				{
 					best = here;
@@ -862,7 +927,7 @@ internal static class NavMeshRoutes
 					{
 						EaseCost[next] = nextCost;
 						EaseCame[next] = new KeyValuePair<TerrainPathNode, PathBranch>(here, branch);
-						EaseOpen.Add(next);
+						EasePush(nextCost, next);
 					}
 				}
 			}

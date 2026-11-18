@@ -20,9 +20,10 @@ namespace CastleStoryPlus.Pathfinding;
 //   Block: a road does not fill its block (its floor is the block's bottom, level with the ground), so a unit stands
 //   in the road's voxel as on plain ground, with no step up onto it and no step off it, and a road is not a wall.
 //   Speed: a unit standing on a road walks and runs [Roads] SpeedBonus percent faster.
-//   Routes: a step between two road voxels costs 1 / speed factor of a plain step, one between a road and plain
-//   ground the mean of both. The game's graph has it in the weight of the branch (Unity 6); the navigation mesh has the
-//   road tiles as an area of their own with that cost, so both searches take a road when it is quicker overall.
+//   Routes (Unity 6 only): a step between two road voxels costs 1 / speed factor of a plain step, one between a road
+//   and plain ground the mean of both. The game's graph has it in the weight of the branch (set so that the A*'s rank,
+//   length * 10 + weight * 2, drops by the same share); the navigation mesh has the road tiles as an area that costs
+//   1 where the other walking areas cost the speed factor, so both searches favour a road.
 //   Nature: nobody's steps wear a road (WornPaths) and grass and plants cannot grow in its voxel (a block is in the
 //   way, as for any building), so nothing more is needed there.
 [Feature(Features.Roads, Features.RoadsInfo)]
@@ -40,13 +41,14 @@ internal static class Roads
 
 	private static void Enable()
 	{
-		SpeedBonus = Plugin.Cfg.Bind("Roads", "SpeedBonus", 40, new ConfigDescription("How much faster (percent) every unit walks and runs on a stone road; routes take a road when it is quicker overall. 0: roads are no faster than the ground.", new AcceptableValueRange<int>(0, 200)));
+		SpeedBonus = Plugin.Cfg.Bind("Roads", "SpeedBonus", 40, new ConfigDescription("How much faster (percent) every unit walks and runs on a stone road; in the Unity 6 port route searches favour roads by the same share. 0: roads are no faster than the ground. In multiplayer the host's value counts.", new AcceptableValueRange<int>(0, 200)));
 		GameSession.OnLeave(Positions.Clear);
 		CustomBlocks.EnableRoadMenu();
 	}
 
-	// How many times faster a road is than the ground.
-	internal static float Factor => 1f + ((SpeedBonus != null) ? SpeedBonus.Value : 40) / 100f;
+	// How many times faster a road is than the ground (a client uses the host's setting, RoadsSync). Weights the graph
+	// made are kept until its places are made again.
+	internal static float Factor => 1f + (RoadsSync.HostBonus ?? ((SpeedBonus != null) ? SpeedBonus.Value : 40)) / 100f;
 
 	internal static void Added(XYZ position)
 	{
@@ -85,7 +87,10 @@ internal static class Roads
 		return Positions.Count > 0 && unit != null && IsRoad(VoxelAt(unit.position));
 	}
 
-	// The weight of a plain step between two voxels, scaled by the road under them.
+	// The weight of a plain step between two voxels, scaled by the road under them. A flat step has weight 10 and each
+	// third of a block of slope adds to it. The A* ranks a step by length * 10 + weight * 2 (PathAStarQueue.Evaluate), so
+	// a flat step ranks 30; the road's share of that (30 / speed factor) is reached by a weight of 15 * share - 5. Only
+	// the flat step's part is discounted, not the slope.
 	internal static int Scale(int weight, XYZ from, XYZ to)
 	{
 		bool a = IsRoad(from);
@@ -96,7 +101,7 @@ internal static class Roads
 		}
 		float cost = 1f / Factor;
 		float share = ((a ? cost : 1f) + (b ? cost : 1f)) / 2f;
-		return Mathf.Max(1, Mathf.RoundToInt(weight * share));
+		return Mathf.Max(1, weight - 10 + Mathf.RoundToInt(15f * share - 5f));
 	}
 }
 

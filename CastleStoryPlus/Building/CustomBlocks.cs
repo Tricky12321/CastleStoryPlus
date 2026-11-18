@@ -92,7 +92,7 @@ internal static class CustomBlocks
 		new Shape { Name = "Wood_Slab1x5", IconFile = "wood_slab_1x5", Id = 9012, Wood = true, Width = 1, Depth = 5, Cost = 3, Hp = 600f, Label = "Wood slab 1x5", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab2x3", IconFile = "wood_slab_2x3", Id = 9013, Wood = true, Width = 2, Depth = 3, Cost = 3, Hp = 720f, Label = "Wood slab 2x3", Icon = "_Plank" },
 		new Shape { Name = Ladders.Name, IconFile = "wood_ladder", Id = Ladders.Id, Wood = true, Ladder = true, Width = 1, Depth = 1, Cost = 1, Hp = 120f, Label = "Wood ladder", Icon = "_Plank" },
-		new Shape { Name = Roads.Name, IconFile = "stone_road", Id = Roads.Id, Road = true, Width = 1, Depth = 1, Cost = 1, Hp = 240f, Label = "Stone road", Icon = "_Block" }
+		new Shape { Name = Roads.Name, IconFile = "stone_road", Id = Roads.Id, Road = true, Width = 1, Depth = 1, Cost = 1, Hp = 480f, Label = "Stone road", Icon = "_Block" }
 	};
 
 	private const string StoneBlockSource = "Stone_DoubleBrick";
@@ -170,11 +170,6 @@ internal static class CustomBlocks
 	{
 		foreach (Shape shape in Shapes)
 		{
-			// The road only exists while its feature is on.
-			if (shape.Road && !Plugin.IsEnabled(Features.Roads))
-			{
-				continue;
-			}
 			TryCreate("Blocks", shape, blueprint: false);
 			TryCreate("Blueprints", shape, blueprint: true);
 			TryCreateDescriptor(shape);

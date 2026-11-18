@@ -49,8 +49,9 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	internal const int AreaObstacle = 7;
 
-	// A stone road's tiles (Roads): ground at a lower cost, 1 / the road's speed factor, so routes keep to a road where
-	// that is quicker. Unity's built-in "Jump" area, which nothing else here uses.
+	// A stone road's tiles (Roads): ground that costs 1 where every other walking area costs the road's speed factor
+	// (an area cost under 1 would break Detour's heuristic), so routes keep to a road where that is quicker. Unity's
+	// built-in "Jump" area, which nothing else here uses.
 	internal const int AreaRoad = 2;
 
 	// A stockpile's pallets: walkable while empty (PassThroughStockpile), which nothing signals, so they are ground at
@@ -1194,8 +1195,19 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 			mask |= AllDoorsMask();
 		}
 		filter.areaMask = mask;
-		filter.SetAreaCost(AreaStockpile, StockpileCost);
-		filter.SetAreaCost(AreaRoad, 1f / Roads.Factor);
+		// Every area but the road costs the speed factor (the pallets' extra on top), the road costs 1.
+		float factor = Roads.Factor;
+		if (factor > 1.001f)
+		{
+			for (int area = 0; area < 32; area++)
+			{
+				if (area != AreaRoad && area != 1)
+				{
+					filter.SetAreaCost(area, factor);
+				}
+			}
+		}
+		filter.SetAreaCost(AreaStockpile, StockpileCost * factor);
 		return filter;
 	}
 

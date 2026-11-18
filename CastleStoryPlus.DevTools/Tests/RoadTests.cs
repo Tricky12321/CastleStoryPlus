@@ -36,17 +36,39 @@ internal static class RoadTests
 			Engine.CreateBlock(voxel, Quaternion.identity, road);
 		}
 		List<XYZ> placed = new List<XYZ>(voxels);
-		t.Cleanup(() =>
+		t.Cleanup(() => Remove(placed));
+		Placed[t] = placed;
+	}
+
+	private static readonly Dictionary<TestContext, List<XYZ>> Placed = new Dictionary<TestContext, List<XYZ>>();
+
+	private static void Remove(List<XYZ> voxels)
+	{
+		foreach (XYZ voxel in voxels)
 		{
-			foreach (XYZ voxel in placed)
+			IBlockData block = Engine.GetBlockData(voxel);
+			if (block != null && Engine.IsBlock(voxel))
 			{
-				IBlockData block = Engine.GetBlockData(voxel);
-				if (block != null && Engine.IsBlock(voxel))
-				{
-					block.RootOrSelf.DeBlock();
-				}
+				block.RootOrSelf.DeBlock();
 			}
-		});
+		}
+		voxels.Clear();
+	}
+
+	// Takes the test's roads away and waits until the route graph (and the navigation mesh) has taken that in, so the
+	// next test on the same ground starts from plain ground. The clean-up does the same, but cannot wait.
+	private static IEnumerator RemoveRoads(TestContext t)
+	{
+		if (Placed.TryGetValue(t, out List<XYZ> voxels))
+		{
+			Remove(voxels);
+			Placed.Remove(t);
+		}
+		yield return TestWorld.WaitForGraph(t);
+#if UNITY6_PLAYER
+		yield return t.Until(() => !NavMeshExperiment.Busy, 10f, "the navigation mesh to take in the removed roads");
+#endif
+		yield return t.Frames(2);
 	}
 
 	private static List<XYZ> Row(XYZ from, int length)
@@ -165,6 +187,8 @@ internal static class RoadTests
 		t.False(Voxel.IsFull(site), "The road fills its voxel");
 		t.True(Voxel.IsOpenAndWalkable(site), "A unit cannot stand in the road's voxel");
 		t.Equal(0, Voxel.GetNiveaux(site), "The road's floor (niveaux)");
+		Placed[t] = new List<XYZ> { site };
+		yield return RemoveRoads(t);
 	}
 
 	[GameTest("Roads", "A unit's walking and running speed is raised by the road bonus on a road and normal beside it")]
@@ -194,6 +218,7 @@ internal static class RoadTests
 		t.AtLeast(Roads.Factor - 0.001f, roadRun / plainRun, "Running speed on the road over plain");
 		t.AtLeast(Roads.Factor - 0.001f, roadWalk / plainWalk, "Walking speed on the road over plain");
 		t.AtMost(Roads.Factor + 0.001f, roadWalk / plainWalk, "Walking speed on the road over plain");
+		yield return RemoveRoads(t);
 	}
 
 	[GameTest("Roads", "A bricktron walks a road faster than plain ground over the same distance", TimeoutSeconds = 150f)]
@@ -241,7 +266,7 @@ internal static class RoadTests
 		// A frame moves the game by at most 0.25 s, which at 10x caps how far a unit gets towards its next point in a
 		// frame: the full bonus shows in RoadSpeedIsRaised, here only that the road is clearly quicker.
 		t.AtLeast(1f + (Roads.Factor - 1f) * 0.4f, ratio, "Speed on the road over the speed on plain ground");
-		t.True(road[0] < plain[0], "The walk along the road took " + road[0] + " s, the one on plain ground " + plain[0] + " s");
+		yield return RemoveRoads(t);
 	}
 
 #if UNITY6_PLAYER
@@ -270,6 +295,45 @@ internal static class RoadTests
 			}
 		}
 		t.Record("meshRoute", found ? (length.ToString("0.0") + " long, corners " + corners) : "none");
+	}
+#endif
+
+#if UNITY6_PLAYER
+	[GameTest("Roads", "Routes beside and across roads stay cheap to make (time in the route mender)", TimeoutSeconds = 200f, Exclusive = true)]
+	private static IEnumerator RoadRoutesStayCheap(TestContext t)
+	{
+		XYZ center = Scenario.Site(t, 31, 15, 3);
+		XYZ a = new XYZ(center.x - 12, center.y, center.z);
+		XYZ b = new XYZ(center.x + 12, center.y, center.z);
+		// A road beside the line, as long as it, and one across it.
+		List<XYZ> road = Row(new XYZ(a.x, a.y, a.z + 1), 25);
+		for (int z = -5; z <= 5; z++)
+		{
+			XYZ cross = new XYZ(center.x, center.y, center.z + z);
+			if (!road.Contains(cross))
+			{
+				road.Add(cross);
+			}
+		}
+		PlaceRoad(t, road);
+		Labor labor = Scenario.Bricktron(t, Occupation.Type.Builder, a);
+		yield return t.Frames(5);
+		yield return TestWorld.WaitForGraph(t);
+		yield return t.Until(() => !NavMeshExperiment.Busy, 10f, "the navigation mesh to take in the roads");
+		yield return Walk(t, labor, a, null, null);
+		NavMeshRoutes.ResetStats();
+		for (int i = 0; i < 6; i++)
+		{
+			yield return Walk(t, labor, b, null, null);
+			yield return Walk(t, labor, a, null, null);
+		}
+		double mean = NavMeshRoutes.EaseMilliseconds / System.Math.Max(1, NavMeshRoutes.EaseRoutes);
+		t.Record("routes", NavMeshRoutes.EaseRoutes);
+		t.Record("easeMsTotal", System.Math.Round(NavMeshRoutes.EaseMilliseconds, 2));
+		t.Record("easeMsPerRoute", System.Math.Round(mean, 3));
+		t.Record("roadLooks", NavMeshRoutes.RoadEases);
+		t.AtMost(3f, (float)mean, "Milliseconds the route mender takes per route");
+		yield return RemoveRoads(t);
 	}
 #endif
 
@@ -309,5 +373,6 @@ internal static class RoadTests
 		t.Record("samples", track.Count);
 		t.Record("onRoad", System.Math.Round(share, 2));
 		t.AtLeast(0.4f, share, "Share of the walk spent on the road");
+		yield return RemoveRoads(t);
 	}
 }
