@@ -51,6 +51,7 @@ internal static class Routes
 		RandomWorldEndpoints.Add(routes);
 		TreasureEndpoints.Add(routes);
 		WeatherEndpoints.Add(routes);
+		AchievementEndpoints.Add(routes);
 		SpawnEndpoints.Add(routes);
 		VolumeDumpEndpoints.Add(routes);
 		TemplateEndpoints.Add(routes);

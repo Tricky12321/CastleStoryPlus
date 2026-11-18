@@ -257,6 +257,27 @@ internal static class UpgradeLines
 		return line >= All.Count || TeamUpgrades.Tier(faction, line) > 0;
 	}
 
+	// Every tier of every line (what researching all of the colony's upgrades comes to), and how many a faction has.
+	public static int TotalTiers()
+	{
+		int total = 0;
+		foreach (UpgradeLine line in All)
+		{
+			total += line.Tiers;
+		}
+		return total;
+	}
+
+	public static int ResearchedTiers(Faction faction)
+	{
+		int done = 0;
+		foreach (UpgradeLine line in All)
+		{
+			done += System.Math.Min(TeamUpgrades.Tier(faction, line.Index), line.Tiers);
+		}
+		return done;
+	}
+
 	public static bool IsResearch(RecipeInfo recipe)
 	{
 		return TryGetResearch(recipe, out UpgradeLine line, out int _) && line.Hall == UpgradeHall.Research;

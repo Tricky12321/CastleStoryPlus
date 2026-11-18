@@ -143,6 +143,10 @@ internal static class Features
 
 	public const string RainInfo = "Weather: now and then (about every 3 game days, for a few game hours: [Rain] DaysBetween, Hours) it rains, decided by the host and told to the other players, saved with the world: drops fall round the camera, the light and sky darken, a rain noise plays and a message shows when it starts and stops. While it rains grass spreads and worn paths grow over faster ([Rain] GrassBoost) and plants seed and grow faster ([Rain] PlantBoost). No rain in a desert world (mostly sand); in a snow world it snows (only shown).";
 
+	public const string Achievements = "Achievements";
+
+	public const string AchievementsInfo = "The mod's own achievements (trading, research, waves survived, guardians and chests, kills, crafting, building, digging...), kept per player in BepInEx/config/castlestoryplus_achievements.json (not in the save, not on Steam, no rewards). A list with progress is opened from the crown button in the in-game menu's right bar, and a short message with a chime shows when one is unlocked. Nothing counts in a sandbox game or in a game where cheats were used (the debug menu's energy, units, resources, enemies, waves, time, fog of war, x-ray, critical hits and spawn points, the game's debug sidebar, instant build, the developer API's cheats); in multiplayer every player counts his own team's deeds.";
+
 	public const string WiderVision = "WiderVision";
 
 	public const string WiderVisionInfo = "Units see 10% further through the fog of war ([FogOfWar] VisionMultiplier).";
