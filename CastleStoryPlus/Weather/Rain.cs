@@ -39,7 +39,7 @@ internal sealed class Rain : MonoBehaviour
 	// Game hours of rest after a rain before the next may start.
 	private const float RestHours = 6f;
 
-	private const float ResendSeconds = 5f;
+	private const float ResendSeconds = 30f;
 
 	// Columns looked at to see what the ground of the world is.
 	private const int GroundSamples = 600;
@@ -108,16 +108,19 @@ internal sealed class Rain : MonoBehaviour
 
 	private static void Enable()
 	{
+		Plugin.Root.AddComponent<Rain>();
+	}
+
+	// The settings, bound whether the feature is on or not (the boosts are read by WornPaths and WildPlants either way).
+	internal static void BindConfig()
+	{
 		_daysBetween = Plugin.Cfg.Bind("Rain", "DaysBetween", 3f, new ConfigDescription("Game days between rains on average (the host rolls it; 0: no rain by itself).", new AcceptableValueRange<float>(0f, 30f)));
 		_hours = Plugin.Cfg.Bind("Rain", "Hours", 3f, new ConfigDescription("Game hours a rain lasts on average (each lasts 60% to 140% of this).", new AcceptableValueRange<float>(0.5f, 24f)));
 		_grassBoost = Plugin.Cfg.Bind("Rain", "GrassBoost", 3f, new ConfigDescription("While it rains, grass spreads onto bare earth and worn paths grow over this many times faster (WornPaths).", new AcceptableValueRange<float>(1f, 20f)));
 		_plantBoost = Plugin.Cfg.Bind("Rain", "PlantBoost", 2f, new ConfigDescription("While it rains, plants seed and grow this many times faster (WildPlants).", new AcceptableValueRange<float>(1f, 20f)));
-		GameSession.OnLevelReady(LevelReady);
-		GameSession.OnLeave(Clear);
-		Plugin.Root.AddComponent<Rain>();
 	}
 
-	private static void Clear()
+	internal static void Clear()
 	{
 		bool wasRaining = Current != WeatherKind.None;
 		_active = false;
@@ -134,7 +137,7 @@ internal sealed class Rain : MonoBehaviour
 		}
 	}
 
-	private static void LevelReady()
+	internal static void LevelReady()
 	{
 		Clear();
 		Asset_Map map = GameParam.Map;
@@ -152,7 +155,7 @@ internal sealed class Rain : MonoBehaviour
 			}
 			client.RegisterHandler(WeatherMessage, Received);
 		}
-		if (NetworkServer.active && !map.IsNewGame() && !string.IsNullOrEmpty(map.path))
+		if (NetworkServer.active && Plugin.IsEnabled(Features.Rain) && !map.IsNewGame() && !string.IsNullOrEmpty(map.path))
 		{
 			string file = System.IO.Path.Combine(map.path, SaveFile);
 			if (File.Exists(file))
@@ -187,7 +190,8 @@ internal sealed class Rain : MonoBehaviour
 		int sand = 0;
 		int snow = 0;
 		int other = 0;
-		for (int i = 0; i < GroundSamples; i++)
+		// On a sparse map (islands in the sky) most columns are empty: keep looking until enough have ground.
+		for (int i = 0; i < GroundSamples * 10 && sand + snow + other < GroundSamples; i++)
 		{
 			VoxelTerrainType type = VoxelEngine.GetColumnType(start.x + pick.Next(size.x), start.z + pick.Next(size.z));
 			if (type == VoxelTerrainType.Empty || type == VoxelTerrainType.Internal)
@@ -217,6 +221,18 @@ internal sealed class Rain : MonoBehaviour
 			return WeatherKind.None;
 		}
 		return (snow * 2 > total) ? WeatherKind.Snow : WeatherKind.Rain;
+	}
+
+	// Switched off while it rains: the weather ends (the host tells the others), so no boost is left behind.
+	private void OnDisable()
+	{
+		if (!_active || !NetworkServer.active || Current == WeatherKind.None)
+		{
+			return;
+		}
+		Set(WeatherKind.None, 0f, announce: false);
+		_rest = RestHours;
+		Send(true);
 	}
 
 	private void Update()
@@ -316,13 +332,13 @@ internal sealed class Rain : MonoBehaviour
 	}
 
 	// Host: the weather to the other players when it changed, and once in a while for a player who joined.
-	private static void Send()
+	private static void Send(bool force = false)
 	{
 		if (!Neo.multiplayer)
 		{
 			return;
 		}
-		if (_sent == Current && Time.unscaledTime < _nextSend)
+		if (!force && _sent == Current && Time.unscaledTime < _nextSend)
 		{
 			return;
 		}
@@ -335,7 +351,7 @@ internal sealed class Rain : MonoBehaviour
 	private static void Received(NetworkMessage netMsg)
 	{
 		WeatherNetMessage message = netMsg.ReadMessage<WeatherNetMessage>();
-		if (NetworkServer.active || !_active)
+		if (NetworkServer.active || !_active || !Enum.IsDefined(typeof(WeatherKind), (int)message.Kind))
 		{
 			return;
 		}
@@ -362,9 +378,23 @@ internal sealed class Rain : MonoBehaviour
 		{
 			return;
 		}
+		string file = System.IO.Path.Combine(folder, SaveFile);
+		if (!Plugin.IsEnabled(Features.Rain))
+		{
+			// Off: no old rain left in the save to come back when it is switched on.
+			try
+			{
+				File.Delete(file);
+			}
+			catch (Exception ex)
+			{
+				Plugin.Log.LogWarning("Rain: could not remove the old weather: " + ex.Message);
+			}
+			return;
+		}
 		try
 		{
-			File.WriteAllText(System.IO.Path.Combine(folder, SaveFile), new JObject { ["kind"] = (int)Current, ["hoursLeft"] = Math.Round(HoursLeft, 3), ["rest"] = Math.Round(_rest, 3) }.ToString(Newtonsoft.Json.Formatting.None));
+			File.WriteAllText(file, new JObject { ["kind"] = (int)Current, ["hoursLeft"] = Math.Round(HoursLeft, 3), ["rest"] = Math.Round(_rest, 3) }.ToString(Newtonsoft.Json.Formatting.None));
 		}
 		catch (Exception ex)
 		{
@@ -379,8 +409,21 @@ internal sealed class Rain : MonoBehaviour
 	}
 }
 
-// Saves the weather with the game.
-[Feature(Features.Rain, Features.RainInfo)]
+// What always runs, also with the feature off: the settings (the boosts are read by WornPaths and WildPlants), the
+// weather's start and end with a game, and the host's weather, which every player takes (message and save).
+[Feature]
+internal static class RainSetup
+{
+	private static void Enable()
+	{
+		Rain.BindConfig();
+		GameSession.OnLevelReady(Rain.LevelReady);
+		GameSession.OnLeave(Rain.Clear);
+	}
+}
+
+// Saves the weather with the game (with the feature off the old weather file is removed).
+[Feature]
 [HarmonyPatch(typeof(Asset_Map), "Disk_Save")]
 internal static class RainSavePatch
 {

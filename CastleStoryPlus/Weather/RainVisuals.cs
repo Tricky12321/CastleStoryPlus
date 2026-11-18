@@ -7,10 +7,11 @@ namespace CastleStoryPlus.Weather;
 
 // What the weather (Rain) looks and sounds like, on every peer: rain (thin streaks) or snow (slow flakes) falling in
 // a box that follows the camera's view, a dark blue-grey veil over the picture under the game's own windows, the
-// sun's light, the ambient light and the fog turned down, a rain noise made in code (filtered noise with some
+// sun's colour, the ambient light and the fog turned down, a rain noise made in code (filtered noise with some
 // drops, looped without a seam) and a short message when it starts and stops. All of it fades in and out over
 // FadeSeconds (real time) with the weather's strength. The game sets its light every frame, so the turned down
-// values are put on top each frame from the value the game set (never on top of an earlier one).
+// values are put on top each frame from the value the game set (never on top of an earlier one). The sun's intensity
+// is left alone: the moon's light fades by it (MoonLightIntensity), so dimming it would bring the moon in early.
 [Feature(Features.Rain, Features.RainInfo)]
 internal sealed class RainVisuals : MonoBehaviour
 {
@@ -19,17 +20,17 @@ internal sealed class RainVisuals : MonoBehaviour
 	private const float BannerSeconds = 3.5f;
 
 	// How dark the sun, the ambient light and the fog get at full strength (1: not at all), and the veil's opacity.
-	private const float SunLevel = 0.45f;
+	private const float SunLevel = 0.55f;
 
 	private const float AmbientLevel = 0.7f;
 
-	private const float VeilAlpha = 0.22f;
+	private const float VeilAlpha = 0.26f;
 
 	private const float RainVolume = 0.35f;
 
 	private const int SampleRate = 44100;
 
-	private static readonly Color RainColor = new Color(0.7f, 0.82f, 1f, 0.5f);
+	private static readonly Color RainColor = new Color(0.7f, 0.82f, 1f, 0.4f);
 
 	private static readonly Color SnowColor = new Color(1f, 1f, 1f, 0.9f);
 
@@ -65,9 +66,15 @@ internal sealed class RainVisuals : MonoBehaviour
 
 	private bool _hasSun;
 
-	private float _sunBase;
+	private Color _sunBase;
 
-	private float _sunWritten;
+	private Color _sunWritten;
+
+	private bool _live;
+
+	private AudioListener _listener;
+
+	private float _nextListenerLook;
 
 	private bool _hasAmbient;
 
@@ -90,6 +97,15 @@ internal sealed class RainVisuals : MonoBehaviour
 	private static void Enable()
 	{
 		_instance = Plugin.Root.AddComponent<RainVisuals>();
+		GameSession.OnLevelReady(() =>
+		{
+			if (_instance != null)
+			{
+				_instance._sun = null;
+				_instance._hasSun = false;
+				_instance._nextSunLook = 0f;
+			}
+		});
 		Rain.Changed += (WeatherKind from, WeatherKind to, bool announce) =>
 		{
 			if (_instance == null || !announce || !Rain.Active)
@@ -137,13 +153,16 @@ internal sealed class RainVisuals : MonoBehaviour
 			_strength = Mathf.MoveTowards(_strength, target, Time.unscaledDeltaTime / FadeSeconds);
 		}
 		UpdateBanner();
-		if (_strength <= 0f && _rain == null && _snow == null && _veil == null && _sound == null)
+		bool idle = kind == WeatherKind.None && _strength <= 0f;
+		if (idle && !_live)
 		{
 			return;
 		}
 		UpdateParticles();
 		UpdateVeil();
 		UpdateSound();
+		// One last pass with nothing showing has cleared it all; then nothing is done until the next weather.
+		_live = !idle;
 	}
 
 	// The light is turned down after the game's own scripts set it this frame.
@@ -172,6 +191,8 @@ internal sealed class RainVisuals : MonoBehaviour
 		{
 			_sound.Stop();
 		}
+		UpdateListener(false);
+		_live = false;
 		if (_veil != null)
 		{
 			_veil.gameObject.SetActive(false);
@@ -187,30 +208,27 @@ internal sealed class RainVisuals : MonoBehaviour
 	private void Dim()
 	{
 		float k = _strength;
-		// The sun: the directional light with the most light.
+		// The sun: the game's own, or the one the moon's light follows. Only its colour is turned down.
 		if (_sun == null && Time.unscaledTime >= _nextSunLook)
 		{
 			_nextSunLook = Time.unscaledTime + 5f;
 			_hasSun = false;
-			float best = 0f;
-			foreach (Light light in FindObjectsOfType<Light>())
+			_sun = RenderSettings.sun;
+			if (_sun == null)
 			{
-				if (light.type == LightType.Directional && light.enabled && light.intensity > best)
-				{
-					best = light.intensity;
-					_sun = light;
-				}
+				Brix.Skybox.MoonLightIntensity moon = FindObjectOfType<Brix.Skybox.MoonLightIntensity>();
+				_sun = (moon != null) ? moon.SunLight : null;
 			}
 		}
 		if (_sun != null)
 		{
-			if (!_hasSun || !Mathf.Approximately(_sun.intensity, _sunWritten))
+			if (!_hasSun || _sun.color != _sunWritten)
 			{
-				_sunBase = _sun.intensity;
+				_sunBase = _sun.color;
 				_hasSun = true;
 			}
-			_sunWritten = _sunBase * Mathf.Lerp(1f, SunLevel, k);
-			_sun.intensity = _sunWritten;
+			_sunWritten = Color.Lerp(_sunBase, Dimmed(Color.Lerp(_sunBase, new Color(0.5f, 0.55f, 0.65f, _sunBase.a), 0.5f), SunLevel), k);
+			_sun.color = _sunWritten;
 		}
 		else
 		{
@@ -271,9 +289,10 @@ internal sealed class RainVisuals : MonoBehaviour
 		}
 		if (!on || camera == null)
 		{
-			if (system.isPlaying)
+			// Out of the game (a menu) or faded out: nothing is left hanging in the air.
+			if (system.isPlaying || system.particleCount > 0)
 			{
-				system.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+				system.Stop(true, (!Rain.Active || _strength <= 0f) ? ParticleSystemStopBehavior.StopEmittingAndClear : ParticleSystemStopBehavior.StopEmitting);
 			}
 			return;
 		}
@@ -282,7 +301,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		Vector3 centre = camera.transform.position + forward * 25f;
 		system.transform.position = new Vector3(centre.x, Mathf.Max(centre.y, camera.transform.position.y - 20f) + above, centre.z);
 		ParticleSystem.EmissionModule emission = system.emission;
-		emission.rateOverTime = ((system == _rain) ? 4000f : 1500f) * _strength;
+		emission.rateOverTime = ((system == _rain) ? 5000f : 1500f) * _strength;
 		if (!system.isPlaying)
 		{
 			system.Play();
@@ -304,7 +323,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		main.simulationSpace = ParticleSystemSimulationSpace.World;
 		main.startSpeed = rain ? 34f : 3.5f;
 		main.startLifetime = rain ? 1.3f : 8f;
-		main.startSize = rain ? 0.035f : 0.14f;
+		main.startSize = rain ? 0.02f : 0.14f;
 		main.startColor = rain ? RainColor : SnowColor;
 		main.maxParticles = rain ? 9000 : 6000;
 		ParticleSystem.ShapeModule shape = system.shape;
@@ -322,7 +341,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
 		renderer.renderMode = rain ? ParticleSystemRenderMode.Stretch : ParticleSystemRenderMode.Billboard;
 		renderer.lengthScale = 1f;
-		renderer.velocityScale = 0.03f;
+		renderer.velocityScale = 0.02f;
 		renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 		renderer.receiveShadows = false;
 		Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
@@ -374,14 +393,8 @@ internal sealed class RainVisuals : MonoBehaviour
 			_sound.loop = true;
 			_sound.spatialBlend = 0f;
 			_sound.playOnAwake = false;
-			_sound.ignoreListenerPause = false;
-			if (FindObjectOfType<AudioListener>() == null)
-			{
-				// The game's sounds go through Wwise, which has its own listener: Unity's audio needs one to be heard.
-				gameObject.AddComponent<AudioListener>();
-			}
 		}
-		_sound.volume = wantRain ? RainVolume * _strength : 0f;
+		_sound.volume = wantRain ? RainVolume * _strength * GameVolume() : 0f;
 		if (wantRain && !_sound.isPlaying)
 		{
 			_sound.Play();
@@ -389,6 +402,47 @@ internal sealed class RainVisuals : MonoBehaviour
 		else if (!wantRain && _sound.isPlaying)
 		{
 			_sound.Stop();
+		}
+		UpdateListener(_sound.isPlaying);
+	}
+
+	// The game's own sound settings (Wwise): muted, or the master and ambience volumes (0-100).
+	private static float GameVolume()
+	{
+		if (Brix.Audio.SoundEngine.mute)
+		{
+			return 0f;
+		}
+		return Mathf.Clamp01(Brix.Audio.SoundEngine.volumeMaster / 100f) * Mathf.Clamp01(Brix.Audio.SoundEngine.volumeAmbience / 100f);
+	}
+
+	// The game's sounds go through Wwise, which has its own listener: Unity's audio needs one to be heard. Ours is
+	// there only while the rain plays and only when there is no other (looked at every 2 seconds, also after a new scene).
+	private void UpdateListener(bool playing)
+	{
+		if (!playing)
+		{
+			if (_listener != null)
+			{
+				Destroy(_listener);
+				_listener = null;
+			}
+			return;
+		}
+		if (Time.unscaledTime < _nextListenerLook)
+		{
+			return;
+		}
+		_nextListenerLook = Time.unscaledTime + 2f;
+		int count = FindObjectsOfType<AudioListener>().Length;
+		if (_listener == null && count == 0)
+		{
+			_listener = gameObject.AddComponent<AudioListener>();
+		}
+		else if (_listener != null && count > 1)
+		{
+			Destroy(_listener);
+			_listener = null;
 		}
 	}
 

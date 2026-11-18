@@ -35,7 +35,11 @@ internal static class WeatherEndpoints
 		{
 			throw new ApiException(409, "No game is running (or the Rain feature is off)");
 		}
-		WeatherKind kind = (WeatherKind)Enum.Parse(typeof(WeatherKind), request.Required("state"), true);
+		string state = request.Required("state");
+		if (!Enum.TryParse(state, true, out WeatherKind kind) || !Enum.IsDefined(typeof(WeatherKind), kind))
+		{
+			throw new ApiException(400, "state must be rain, snow or none");
+		}
 		Rain.Begin(kind, request.Float("hours", 3f));
 		return Get(request);
 	}

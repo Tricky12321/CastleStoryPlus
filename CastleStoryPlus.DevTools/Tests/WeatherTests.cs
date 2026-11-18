@@ -103,4 +103,20 @@ internal static class WeatherTests
 		yield return new WaitForEndOfFrame();
 		t.True(Mathf.Abs(RenderSettings.ambientLight.grayscale - ambient.grayscale) < 0.02f, "The ambient light is not back: " + ambient + " -> " + RenderSettings.ambientLight);
 	}
+
+	[GameTest("Weather", "Switching the Rain feature off in the rain ends it, so no boost is left", TimeoutSeconds = 60f)]
+	private static IEnumerator SwitchingOffEndsTheRain(TestContext t)
+	{
+		t.Cleanup(() =>
+		{
+			Core.FeatureToggle.Set(Core.Features.Rain, true);
+			Rain.Begin(WeatherKind.None, 0f);
+		});
+		Rain.Begin(WeatherKind.Rain, 2f);
+		t.True(Rain.GrassBoost > 1f, "No boost in the rain");
+		Core.FeatureToggle.Set(Core.Features.Rain, false);
+		yield return t.Frames(3);
+		t.Equal(WeatherKind.None, Rain.Current, "The weather after the feature was switched off");
+		t.Equal(1f, Rain.GrassBoost, "The grass boost after the feature was switched off");
+	}
 }
