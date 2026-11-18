@@ -134,6 +134,12 @@ internal static class AutoCleanup
 		{
 			SortByWalk(labor, items);
 		}
+		// Resource priorities: what is at 0 is left alone, the rest by distance / weight (stable, so equals keep the walk order).
+		bool priorities = Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.Customised(labor.faction);
+		if (priorities)
+		{
+			items = ResourcePriority.ByCost(labor.faction, items, SortFrom);
+		}
 		foreach (GameObject item in items)
 		{
 			if (!IsLoose(item) || Claims.ContainsKey(item) || Knowledge.Instance.IsReserved(item) || ResourceReservation.IsReservedByOther(item, labor))
