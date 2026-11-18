@@ -293,20 +293,26 @@ internal static class ResourcePriorityTests
 	{
 		XYZ site = Scenario.Site(t, 12, 6);
 		Recepteur stockpile = null;
+		Recepteur ropes = null;
 		CraftingStation station = null;
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 4, site.y, site.z), build, go => stockpile = go.GetComponent<Recepteur>());
+		// A pallet holds one kind of resource: the rope has a pallet of its own, as near the worker as the planks'.
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 4, site.y, site.z + 3), build, go => ropes = go.GetComponent<Recepteur>());
 		yield return Scenario.Building(t, Blueprints.Workbench, new XYZ(site.x + 2, site.y, site.z), build, go => station = go.GetComponent<CraftingStation>());
-		t.NotNull(stockpile, "The stockpile's storage");
+		t.NotNull(stockpile, "The plank stockpile's storage");
+		t.NotNull(ropes, "The rope stockpile's storage");
 		t.NotNull(station, "The workbench's crafting station");
 		foreach (GameObject item in Scenario.Items(t, FactoryBlocks.Wood_DoublePlank_AA, 1, stockpile.transform.position + Vector3.up))
 		{
 			stockpile.AddObject(item);
 		}
-		foreach (GameObject item in Scenario.Items(t, BuildResources.Rope, 1, stockpile.transform.position + Vector3.up))
+		foreach (GameObject item in Scenario.Items(t, BuildResources.Rope, 1, ropes.transform.position + Vector3.up))
 		{
-			stockpile.AddObject(item);
+			ropes.AddObject(item);
 		}
+		t.Equal(1, stockpile.ContentDescription.Value(Adjectif.plankBlock), "Planks in their stockpile");
+		t.Equal(1, ropes.ContentDescription.Value(Adjectif.rope), "Rope in its stockpile");
 		Priority(t, "planks", planks);
 		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 2));
 		yield return t.Frames(5);
@@ -320,7 +326,7 @@ internal static class ResourcePriorityTests
 			// The rope is fetched; the plank at 0 never is.
 			yield return t.Seconds(40f);
 			t.Equal(1, stockpile.ContentDescription.Value(Adjectif.plankBlock), "Planks left in the stockpile with planks at 0");
-			t.Equal(0, stockpile.ContentDescription.Value(Adjectif.rope), "Rope left in the stockpile (it must have been fetched)");
+			t.Equal(0, ropes.ContentDescription.Value(Adjectif.rope), "Rope left in the stockpile (it must have been fetched)");
 			yield break;
 		}
 		yield return t.UntilGame(() =>

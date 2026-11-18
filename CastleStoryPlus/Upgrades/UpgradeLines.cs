@@ -321,7 +321,7 @@ internal static class UpgradeLines
 	// when the kit bundles are off.
 	internal static void RegisterVeryLateRecipes()
 	{
-		RegisterRecipes(true, true, UpgradeHall.Smithy, UpgradeHall.Armoury, UpgradeHall.Research);
+		RegisterRecipes(false, true, UpgradeHall.Smithy, UpgradeHall.Armoury, UpgradeHall.Research);
 	}
 
 	// Whether the line does anything: Sprint follows its feature switch (the line stays registered so the recipe ids

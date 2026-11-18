@@ -125,7 +125,8 @@ internal static class AchievementGatherPatch
 		{
 			Labor labor = work.Worker as Labor;
 			// Several workers (or goals) can end work on the same tree or plant: each one counts once.
-			int id = __instance.gameObject.InstanceId();
+			// The goal itself, not its game object: the felled tree's goal is already destroyed here, and its game object throws.
+			int id = __instance.InstanceId();
 			if (labor != null && (!Counted.TryGetValue(id, out float last) || Time.time - last > 10f))
 			{
 				if (Counted.Count > 2000)

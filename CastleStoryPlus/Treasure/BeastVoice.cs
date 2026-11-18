@@ -70,6 +70,9 @@ internal sealed class BeastVoice
 		_roarAt = Time.unscaledTime + Random.Range(0.15f, 1.1f);
 	}
 
+	// For the tests: the game runs at a high speed in a test run, and the voice would stay quiet.
+	internal bool IgnoreGameSpeed;
+
 	// For the tests: the next idle call is due now.
 	internal void IdleDue()
 	{
@@ -92,7 +95,7 @@ internal sealed class BeastVoice
 		}
 		_state = state;
 		// Limits are in real time; at a high game speed footsteps and calls would only be a flood.
-		bool fast = Time.timeScale > 3f;
+		bool fast = !IgnoreGameSpeed && Time.timeScale > 3f;
 		Steps(at, phase, fast ? 0f : speed, now);
 		Hurt(at, now);
 		if (_roarAt >= 0f && now >= _roarAt)

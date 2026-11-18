@@ -120,7 +120,7 @@ internal static class GuardianSoundTests
 			GameObject unit = beast.gameObject;
 			yield return t.Until(() => unit != null && !unit.IsNullOrReleased() && unit.GetComponent<BeastBody>() != null, 10f, info.Name + " to get its model");
 			// A voice of our own, so the test decides what the guardian does (the body's own is driven by the camera).
-			BeastVoice voice = new BeastVoice(info, beast);
+			BeastVoice voice = new BeastVoice(info, beast) { IgnoreGameSpeed = true };
 			Vector3 pos = beast.transform.position;
 			t.Record(info.Name + " at", pos.ToString());
 			// A player's unit 4 blocks away: the guardian spots it at its first look and roars.
