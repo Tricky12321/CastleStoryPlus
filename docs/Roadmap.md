@@ -97,19 +97,6 @@ and biftron units with their own models and animations, guarding chests.
   the hammering time (not only the delivery) also moves it on, whether a half built building can be used or attacked,
   and what happens to the shown progress when resources are taken back (demolish, cancel).
 
-## Weather
-
-### Rain
-
-- Rain is a natural event: it starts at random, lasts a while (for example a few game hours), and comes about every
-  3 in-game days on average.
-- While it rains, grass spreads faster onto bare earth (WornPaths), worn paths grow back faster, and plants seed and
-  grow faster (WildPlants).
-- Shown with rain falling, a darker sky and a rain sound; a short message when it starts and stops.
-- The host decides when it rains and tells the other players; the weather is saved with the world.
-- To decide: whether rain slows bricktrons or puts out fires, and whether it also comes in winter and desert biomes
-  (snow, or no rain).
-
 ## Enemies
 
 ### Mega corruptron

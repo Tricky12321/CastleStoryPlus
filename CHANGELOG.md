@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [ADD] **Rain:** now and then (about every 3 game days, for a few game hours: `[Rain] DaysBetween`, `Hours`) it rains. The host decides and tells the other players, and the weather is saved with the world. Drops fall round the camera, the sky and light darken, a rain noise plays (made in code, no game files) and a message shows when it starts and stops. While it rains grass spreads onto bare earth and worn paths grow over faster (`[Rain] GrassBoost`, 3x) and plants seed and grow faster (`PlantBoost`, 2x). No rain in a desert world; in a snow world it snows (shown only). The game has no fire system, so there is nothing for the rain to put out, and it does not slow bricktrons. Switch: `Rain`. DevTools: `GET/POST /api/weather`.
+
 ## 0.8.13 — 2026-11-18
 
 - [FIX] **Enemies stuck behind a biftron (#102):** with `PassThroughAllies` the route search ignores allies, but the walk itself lets only a working builder into a voxel where an ally stands: soldiers, corruptrons and biftrons halt before climbing up or stepping down into it. Corruptrons below a ledge with a biftron standing on its edge therefore got the route that climbs into the biftron again and again, halted below it and gave their order up, instead of climbing the free ledge beside it. A unit that cannot pass allies and finds its walk blocked by one now has that ally's voxel closed to its own route searches for 5 seconds (up to 4 such voxels at a time), so it walks round it; with no other way it fails as before. Unity 6 port, feature switch `CrowdPathing`.

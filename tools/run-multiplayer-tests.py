@@ -9,6 +9,7 @@ game. The checks compare what the client has with what the host has, through the
                           copies of their weapons say otherwise (issue #84)
     BlueprintDeliveries   material delivered to a blueprint reaches the client's blueprint (issue #83)
     WaveRows              the scoreboard's waves (enemies left of each wave) reach the client (issue #85)
+    Weather               the host's rain reaches the client (state, boost and what it shows), and its end too
     TaskCrew              the host's max of 12 bricktrons per task, chosen in the lobby, reach the client, and twelve of the
                           client's bricktrons put on its own task all join its crew there and on the host (issue #88)
 
@@ -214,6 +215,23 @@ def check_wave_rows(host, client):
     return True, "client shows %s" % rows()
 
 
+def check_weather(host, client):
+    host.call("POST", "/api/weather", state="rain", hours=5)
+    try:
+        client.wait_for("the host's rain", lambda: client.call("GET", "/api/weather").get("state") == "Rain", 15)
+    except RuntimeError:
+        return False, "the client's weather: %s" % client.call("GET", "/api/weather")
+    answer = client.call("GET", "/api/weather")
+    if not answer.get("grassBoost", 1) > 1:
+        return False, "no grass boost on the client: %s" % answer
+    host.call("POST", "/api/weather", state="none")
+    try:
+        client.wait_for("the rain to end", lambda: client.call("GET", "/api/weather").get("state") == "None", 15)
+    except RuntimeError:
+        return False, "the client still has: %s" % client.call("GET", "/api/weather")
+    return True, "client had the host's rain (boost %s) and its end" % answer["grassBoost"]
+
+
 TASK_CREW = 12
 
 TASK_CREW_BEFORE = []
@@ -266,6 +284,7 @@ CHECKS = [
     ("ArmySelection", check_army_selection),
     ("BlueprintDeliveries", check_blueprint_deliveries),
     ("WaveRows", check_wave_rows),
+    ("Weather", check_weather),
     ("TaskCrew", check_task_crew),
 ]
 
