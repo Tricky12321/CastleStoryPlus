@@ -156,7 +156,7 @@ internal static class SavedTeams
 	}
 
 	// After the game's own lobby check (GameParam.FixTeams) has moved players to make the teams valid: the saved teams
-	// are put back if they are valid too (all the players of the save are there), else the game's repair stays.
+	// are put back if they are valid for the mode too (enough of the save's players are there), else the game's repair stays.
 	internal static void KeepSaved()
 	{
 		if (!NetworkServer.active || Applying || UNetManager.instance == null || UNetManager.instance.LobbyPlayerList == null)
@@ -171,7 +171,7 @@ internal static class SavedTeams
 			repaired[i] = players[i].TeamNumber;
 		}
 		ApplyAll();
-		if (GameParam.AreTeamsValid())
+		if (SavedAreValid(players))
 		{
 			return;
 		}
@@ -187,6 +187,19 @@ internal static class SavedTeams
 		{
 			Applying = false;
 		}
+	}
+
+	// The game's own check (GameParam.AreTeamsValid) wants every team slot to have a player, so it never accepts a lobby with
+	// fewer players than slots; the mode's limits are checked here instead (TeamRules).
+	private static bool SavedAreValid(List<LobbyPlayer> players)
+	{
+		int[] teams = new int[players.Count];
+		for (int i = 0; i < teams.Length; i++)
+		{
+			teams[i] = players[i].TeamNumber;
+		}
+		var limits = GameParam.instance.Parameters;
+		return TeamRules.IsValid(teams, GameParam.CurrentTeamInfos.Length, GameParam.MinTeamCount, GameParam.MaxTeamCount, limits.MinPlayersPerTeam, limits.MaxPlayersPerTeam);
 	}
 
 	// The save's teams by faction name, or null (an older save, a new game).
