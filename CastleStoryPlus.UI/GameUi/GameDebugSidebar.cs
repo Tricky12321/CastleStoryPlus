@@ -41,6 +41,7 @@ internal static class GameDebugSidebar
 			Highlight = () => Architecte.editorMode,
 			OnClick = (bool shift, bool ctrl) =>
 			{
+				Achievements.AchievementTracker.Cheated("instant build");
 				Architecte.editorMode = !Architecte.editorMode;
 				GameSignals.Invoke(GameSignals.OnEditorModeChanged, Architecte.editorMode);
 			}
@@ -77,6 +78,7 @@ internal static class GameDebugSidebar
 			{
 				if (Journee.instance != null)
 				{
+					Achievements.AchievementTracker.Cheated("the debug sidebar's time of day");
 					float time = Mathf.Repeat(Mathf.Round(Journee.instance.Heure) + delta, 24f);
 					Journee.instance.SetTime(time);
 				}
@@ -136,6 +138,7 @@ internal static class GameDebugSidebar
 				Faction faction = (User.LocalUser != null) ? User.LocalUser.faction : null;
 				if (cmd != null && faction != null)
 				{
+					Achievements.AchievementTracker.Cheated("the debug sidebar's spawning");
 					spawn(cmd, CameraScript.Target, faction.gameObject);
 				}
 			}

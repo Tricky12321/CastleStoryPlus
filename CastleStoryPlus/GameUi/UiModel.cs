@@ -133,6 +133,12 @@ internal sealed class UiStatus : UiItem
 	public Func<string> Tooltip;
 
 	public Action OnClick;
+
+	// Greyed out while true (an achievement not unlocked yet).
+	public Func<bool> Dimmed;
+
+	// The block's width where it must not grow with its texts (a sidebar's list); 0: as wide as its texts.
+	public float Width;
 }
 
 // One of a few named choices side by side, the chosen one lit (a workshop's priority).

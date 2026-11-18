@@ -137,15 +137,3 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: whether the player triggers it (a key or a button for the selected bricktrons, for example to flee or
   reach a breach) or it starts by itself (soldiers charging, workers fleeing enemies), whether it costs stamina or only
   has a cooldown, whether it shows on the bricktron (dust trail, a small bar), and whether enemies can sprint too.
-
-## Achievements
-
-- More achievements beside the game's own: the mod's features get their own (for example trade 100 times at the
-  market, research every colony upgrade, survive wave 20, kill a guardian or a mega corruptron, tame an animal, build
-  a road between two bases, flatten a large area).
-- Shown in a list in the menu with name, text, icon and progress (for example 37/100 trades), locked ones greyed out,
-  and a short message with a sound when one is unlocked.
-- Kept per player in the mod's own file, not in the save and not on Steam, so saves stay loadable without the mod.
-- To decide: whether they also show on Steam (the game's Steam app cannot take new ones), whether sandbox and cheats
-  count, whether they count in multiplayer for every player or only the host, and whether some unlock a reward (a
-  banner colour, a bricktron hat).

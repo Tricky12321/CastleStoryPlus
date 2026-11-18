@@ -72,10 +72,6 @@ internal sealed class RainVisuals : MonoBehaviour
 
 	private bool _live;
 
-	private AudioListener _listener;
-
-	private float _nextListenerLook;
-
 	private bool _hasAmbient;
 
 	private Color _ambientBase;
@@ -191,7 +187,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		{
 			_sound.Stop();
 		}
-		UpdateListener(false);
+		ModSound.Listening(this, false);
 		_live = false;
 		if (_veil != null)
 		{
@@ -394,7 +390,7 @@ internal sealed class RainVisuals : MonoBehaviour
 			_sound.spatialBlend = 0f;
 			_sound.playOnAwake = false;
 		}
-		_sound.volume = wantRain ? RainVolume * _strength * GameVolume() : 0f;
+		_sound.volume = wantRain ? RainVolume * _strength * ModSound.AmbienceVolume : 0f;
 		if (wantRain && !_sound.isPlaying)
 		{
 			_sound.Play();
@@ -403,47 +399,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		{
 			_sound.Stop();
 		}
-		UpdateListener(_sound.isPlaying);
-	}
-
-	// The game's own sound settings (Wwise): muted, or the master and ambience volumes (0-100).
-	private static float GameVolume()
-	{
-		if (Brix.Audio.SoundEngine.mute)
-		{
-			return 0f;
-		}
-		return Mathf.Clamp01(Brix.Audio.SoundEngine.volumeMaster / 100f) * Mathf.Clamp01(Brix.Audio.SoundEngine.volumeAmbience / 100f);
-	}
-
-	// The game's sounds go through Wwise, which has its own listener: Unity's audio needs one to be heard. Ours is
-	// there only while the rain plays and only when there is no other (looked at every 2 seconds, also after a new scene).
-	private void UpdateListener(bool playing)
-	{
-		if (!playing)
-		{
-			if (_listener != null)
-			{
-				Destroy(_listener);
-				_listener = null;
-			}
-			return;
-		}
-		if (Time.unscaledTime < _nextListenerLook)
-		{
-			return;
-		}
-		_nextListenerLook = Time.unscaledTime + 2f;
-		int count = FindObjectsOfType<AudioListener>().Length;
-		if (_listener == null && count == 0)
-		{
-			_listener = gameObject.AddComponent<AudioListener>();
-		}
-		else if (_listener != null && count > 1)
-		{
-			Destroy(_listener);
-			_listener = null;
-		}
+		ModSound.Listening(this, _sound.isPlaying);
 	}
 
 	// Three seconds of rain: noise, low-passed to a hiss with the lowest rumble taken off, and now and then a drop;

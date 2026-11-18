@@ -214,6 +214,8 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 
 	private RectTransform _fill;
 
+	private CanvasGroup _group;
+
 	protected override UiItem Item
 	{
 		get { return _status; }
@@ -235,6 +237,7 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 		UiTheme.Round(background, UiTheme.BgBlock, UiTheme.ButtonRadius);
 		CsStatusView view = rect.gameObject.AddComponent<CsStatusView>();
 		view._status = status;
+		view._group = rect.gameObject.AddComponent<CanvasGroup>();
 
 		RectTransform slot = CsRowParts.Slot(rect, 48f);
 		view._icon = CsRowParts.Picture(slot, 40f);
@@ -244,6 +247,12 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 		Object.DestroyImmediate(texts.GetComponent<ContentSizeFitter>());
 		texts.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
 		UiKit.Flexible(texts.gameObject);
+		if (status.Width > 0f)
+		{
+			// A set width (a sidebar's list): long texts wrap inside the room the slot leaves instead of pushing the block wider.
+			rect.GetComponent<LayoutElement>().preferredWidth = status.Width;
+			texts.GetComponent<LayoutElement>().preferredWidth = 0f;
+		}
 		view._caption = LuiWidgets.Label(texts, string.Empty, 10, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Bold);
 		view._title = LuiWidgets.Label(texts, string.Empty, 16, LuiStyle.White, TextAnchor.MiddleLeft, LuiStyle.Title);
 		view._detail = LuiWidgets.Label(texts, string.Empty, LuiStyle.SmallFontSize, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Regular);
@@ -282,6 +291,11 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 		string detail = (s.Detail != null) ? s.Detail() : string.Empty;
 		CsRowParts.SetText(_detail, detail);
 		_detail.gameObject.SetActive(!string.IsNullOrEmpty(detail));
+		float opacity = (s.Dimmed != null && s.Dimmed()) ? 0.45f : 1f;
+		if (_group.alpha != opacity)
+		{
+			_group.alpha = opacity;
+		}
 		float progress = (s.Progress != null) ? s.Progress() : -1f;
 		bool bar = progress >= 0f;
 		if (_bar.activeSelf != bar)

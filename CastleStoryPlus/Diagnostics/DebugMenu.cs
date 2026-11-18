@@ -298,6 +298,8 @@ end)
 	{
 		if (!CheatGuard.Restricted)
 		{
+			// A cheat is about to be used: nothing counts for the achievements in this game from now on.
+			Achievements.AchievementTracker.Cheated("the debug menu");
 			return false;
 		}
 		if (_status != null)
