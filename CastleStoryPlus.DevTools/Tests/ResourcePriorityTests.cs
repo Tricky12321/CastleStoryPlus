@@ -4,10 +4,12 @@ using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.Beacons;
 using Brix.Game.AI.KnowledgeSpace;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
 using Brix.Input;
+using CastleStoryPlus.DevTools.Building;
 using CastleStoryPlus.DevTools.Endpoints;
 using CastleStoryPlus.DevTools.Testing;
 using CastleStoryPlus.WorkerAI;
@@ -42,6 +44,27 @@ internal static class ResourcePriorityTests
 		t.True(kind >= 0, "No resource kind '" + id + "' in the priority table");
 		ResourcePriority.Set(Scenario.Player, kind, priority);
 		t.Cleanup(() => ResourcePriority.Set(Scenario.Player, kind, ResourcePriority.Neutral));
+	}
+
+	// The goals as a clean-up or harvest area orders them for the worker (a copy).
+	private static List<Goal> Ordered(Labor labor, List<Goal> goals)
+	{
+		List<Goal> copy = new List<Goal>(goals);
+		ResourcePrioritySelect.Order(labor, copy);
+		return copy;
+	}
+
+	// The first thing in the worker's hands, by its kind in the priority table (null: nothing yet).
+	private static GameObject FirstCarried(Labor labor)
+	{
+		foreach (IDescriptor item in labor.recepteur.StoredItems)
+		{
+			if (item != null && item.GameObject != null)
+			{
+				return item.GameObject;
+			}
+		}
+		return null;
 	}
 
 	private static bool IsKind(GameObject go, string id)
@@ -81,7 +104,7 @@ internal static class ResourcePriorityTests
 
 		Priority(t, "wood", 5);
 		Priority(t, "stone", 1);
-		List<Goal> ordered = ResourcePrioritySelect.Order(builder, goals);
+		List<Goal> ordered = Ordered(builder, goals);
 		t.Equal(2, ordered.Count, "Goals ordered");
 		t.True(ordered[0] == logGoal, "Wood at 5 and stone at 1: the stone came first");
 		float time = 0f;
@@ -89,12 +112,12 @@ internal static class ResourcePriorityTests
 
 		Priority(t, "wood", 1);
 		Priority(t, "stone", 5);
-		ordered = ResourcePrioritySelect.Order(builder, goals);
+		ordered = Ordered(builder, goals);
 		t.True(ordered[0] == stoneGoal, "Stone at 5 and wood at 1: the log came first");
 		t.True(stoneGoal.PriorityFor(builder, ref time) > logGoal.PriorityFor(builder, ref time), "The game's priority number of the stone (5) is not above the log's (1)");
 
 		Priority(t, "stone", 0);
-		ordered = ResourcePrioritySelect.Order(builder, goals);
+		ordered = Ordered(builder, goals);
 		t.Equal(1, ordered.Count, "Goals with the stone at 0");
 		t.True(ordered[0] == logGoal, "The stone at 0 was not left out");
 		t.Equal(int.MinValue, stoneGoal.PriorityFor(builder, ref time), "The game's priority number of a stone at 0");
@@ -153,52 +176,6 @@ internal static class ResourcePriorityTests
 		t.True(planned != bricks, "The idle cleanup chose the bricks at 0");
 	}
 
-	[GameTest("ResourcePriority", "A workshop's worker with a stone and a log both in a stockpile fetches the higher priority first when the recipe wants both, and never the one at 0", TimeoutSeconds = 120f)]
-	private static IEnumerator IngredientsFollowPriority(TestContext t)
-	{
-		XYZ site = Scenario.Site(t, 10, 6);
-		Recepteur stockpile = null;
-		BuildProject build = Scenario.BuildProject(t, site);
-		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 3, site.y, site.z), build, made => stockpile = made.GetComponent<Recepteur>());
-		t.NotNull(stockpile, "The stockpile's storage");
-		foreach (GameObject item in Scenario.Items(t, FactoryBlocks.Wood_DoubleLog_AA, 1, stockpile.transform.position + Vector3.up))
-		{
-			stockpile.AddObject(item);
-		}
-		foreach (GameObject item in Scenario.Items(t, RawResources.RawStone, 1, stockpile.transform.position + Vector3.up))
-		{
-			stockpile.AddObject(item);
-		}
-		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 2));
-		builder.Autonomy = AutonomyStatus.WaitForOrders;
-		// Both are known to the worker (one at a time, the game's own search) before the choice is tested.
-		Description onlyStone = new Description();
-		onlyStone.Add(Adjectif.New(Adjectif.stones.GetType(), 1));
-		Description onlyWood = new Description();
-		onlyWood.Add(Adjectif.New(Adjectif.woodBlock.GetType(), 1));
-		yield return t.UntilGame(() => Find(builder, onlyStone) != null && Find(builder, onlyWood) != null, 30f, "the stone and the log in the stockpile to be known to the worker");
-		// A recipe's ingredients: the stone listed first, as the game's first match.
-		Description wanted = new Description();
-		wanted.Add(Adjectif.New(Adjectif.stones.GetType(), 1));
-		wanted.Add(Adjectif.New(Adjectif.woodBlock.GetType(), 1));
-
-		Priority(t, "wood", 5);
-		Priority(t, "stone", 1);
-		GameObject found = Find(builder, wanted);
-		t.Log("Builder at " + builder.transform.position + ", stockpile at " + stockpile.transform.position + ", found " + ((found != null) ? found.name + " at " + found.transform.position : "nothing"));
-		t.NotNull(found, "Nothing found for a stone and a log in the stockpile");
-		t.True(IsKind(found, "wood"), "Wood at 5 and stone at 1: the worker went for " + found.name);
-
-		Priority(t, "wood", 1);
-		Priority(t, "stone", 5);
-		found = Find(builder, wanted);
-		t.True(IsKind(found, "stone"), "Stone at 5 and wood at 1: the worker went for " + ((found != null) ? found.name : "nothing"));
-
-		Priority(t, "stone", 0);
-		found = Find(builder, wanted);
-		t.True(IsKind(found, "wood"), "Stone at 0: the worker went for " + ((found != null) ? found.name : "nothing"));
-	}
-
 	[GameTest("ResourcePriority", "A quarry's workers leave the ground alone while stone is at 0, and dig it when it is back at 3", TimeoutSeconds = 420f)]
 	private static IEnumerator QuarryLeavesStoneAtZero(TestContext t)
 	{
@@ -233,15 +210,174 @@ internal static class ResourcePriorityTests
 		yield return t.Seconds(40f);
 		t.Equal(0, Dug(ground), "Voxels of the quarry dug in 40 game seconds with stone at 0");
 		Priority(t, "stone", 3);
-		yield return t.UntilGame(() => Dug(ground) >= 1, 240f, "a voxel of the quarry to be dug once stone is back at 3");
+		yield return t.UntilGame(() => Dug(ground) >= 1, 240f, "a voxel of the quarry to be dug once stone is back at 3", 30f, () =>
+		{
+			t.Record("quarry", ProjectEndpoints.Describe(quarry));
+			t.Record("digGoals", TaskTests.WhyNotDug(a, quarry));
+			t.Log(a.name + " " + a.Activity + " autonomy " + a.Autonomy + " on " + ((a.Project != null) ? a.Project.GetType().Name + (a.Project == quarry ? " (the quarry)" : string.Empty) : "nothing") + " task " + ((a.CurrentTask != null) ? a.CurrentTask.ToString() : "none") + " at " + CastleStoryPlus.DevTools.Pathing.Units.VoxelOf(a) + ", " + b.name + " " + b.Activity + ", customised " + ResourcePriority.Customised(a.faction) + ", stone " + ResourcePriority.Get(a.faction, KindIndex("stone")));
+		});
 		t.Record("dug", Dug(ground));
 	}
 
-	// The game's search, as a new decision of the worker makes it: its resource cache lives for one decision (frame).
-	private static GameObject Find(Labor labor, Description wanted)
+	// The real decision path: a worker hired on a clean-up task chooses between a log and a stone brick lying at the
+	// same distance, through the game's own goal selection.
+	private static IEnumerator CleanupTask(TestContext t, string higher, bool zeroTheOther)
 	{
-		labor.decisionFrame++;
-		return labor.Find(wanted);
+		XYZ site = Scenario.Site(t, 12, 8, 4, away: 30);
+		Recepteur stockpile = null;
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x, site.y, site.z + 3), build, made => stockpile = made.GetComponent<Recepteur>());
+		t.NotNull(stockpile, "The stockpile's storage");
+		GameObject log = Scenario.Items(t, FactoryBlocks.Wood_DoubleLog_AA, 1, new XYZ(site.x + 3, site.y, site.z - 1).ToVector3())[0];
+		GameObject bricks = Scenario.Items(t, FactoryBlocks.Stone_DoubleBrick, 1, new XYZ(site.x - 3, site.y, site.z - 1).ToVector3())[0];
+		if (BaseJobs.CoversCleanup(Scenario.Player, log.transform.position))
+		{
+			t.Skip("The base's cleanup task covers the site");
+			yield break;
+		}
+		string other = (higher == "wood") ? "bricks" : "wood";
+		Priority(t, higher, 5);
+		Priority(t, other, zeroTheOther ? 0 : 1);
+		CleanupProject project = Scenario.NewProject<CleanupProject>(t, () => Scenario.Groupe.CmdSpawnGoupe("Groupes", "Cleanup", new XYZ(site.x, site.y, site.z - 1).ToVector3(), Quaternion.identity, false));
+		BeaconDriver driver = project.GetComponent<BeaconDriver>();
+		driver.Beacon.radius = 8;
+		driver.NetworkNetworkRadius = 8;
+		ProjectEndpoints.Commit(project);
+		// Both items are goals of the area before the worker chooses (the area finds them one after the other).
+		yield return t.UntilGame(() => project.GoalCounts() >= 2, 30f, "both items to be goals of the clean-up area");
+		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 3));
+		yield return t.Frames(5);
+		Scenario.Hire(project, builder);
+		GameObject wanted = (higher == "wood") ? log : bricks;
+		GameObject left = (higher == "wood") ? bricks : log;
+		GameObject first = null;
+		yield return t.UntilGame(() =>
+		{
+			first = FirstCarried(builder);
+			return first != null;
+		}, 120f, "the clean-up worker to pick something up");
+		t.True(first == wanted, higher + " at 5 and " + other + " at " + (zeroTheOther ? 0 : 1) + ": the clean-up worker took " + first.name + " first");
+		if (zeroTheOther)
+		{
+			// Everything the worker will take is in the stockpile; the one at 0 is left where it lies.
+			yield return t.UntilGame(() => FirstCarried(builder) == null && Scenario.Stored(Is(wanted)) >= 1, 120f, "the item at 5 to be stored");
+			yield return t.Seconds(30f);
+			t.True(left.activeInHierarchy && (left.transform.parent == null || left.transform.parent.GetComponentInParent<Recepteur>() == null), "The item at 0 was picked up and stored");
+		}
+	}
+
+	private static Factory.AssetKey Is(GameObject go)
+	{
+		return go.GetComponent<FactoryImprint>().AssetKey;
+	}
+
+	[GameTest("ResourcePriority", "A worker on a clean-up task takes a log before a stone brick at the same distance when wood is at 5 and bricks at 1", TimeoutSeconds = 240f)]
+	private static IEnumerator CleanupTaskTakesWoodFirst(TestContext t)
+	{
+		return CleanupTask(t, "wood", false);
+	}
+
+	[GameTest("ResourcePriority", "A worker on a clean-up task takes the stone brick first when bricks are at 5 and wood at 1", TimeoutSeconds = 240f)]
+	private static IEnumerator CleanupTaskTakesBricksFirst(TestContext t)
+	{
+		return CleanupTask(t, "bricks", false);
+	}
+
+	[GameTest("ResourcePriority", "A worker on a clean-up task never takes the stone brick while bricks are at 0, and still takes the log", TimeoutSeconds = 300f)]
+	private static IEnumerator CleanupTaskLeavesZero(TestContext t)
+	{
+		return CleanupTask(t, "wood", true);
+	}
+
+	// The real fetch of a workshop: a workbench with a Bow ordered (a plank and a rope) fetches from the stockpile.
+	private static IEnumerator BowFetch(TestContext t, int planks, bool expectPlanksFirst, bool expectNoPlanks)
+	{
+		XYZ site = Scenario.Site(t, 12, 6);
+		Recepteur stockpile = null;
+		CraftingStation station = null;
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 4, site.y, site.z), build, go => stockpile = go.GetComponent<Recepteur>());
+		yield return Scenario.Building(t, Blueprints.Workbench, new XYZ(site.x + 2, site.y, site.z), build, go => station = go.GetComponent<CraftingStation>());
+		t.NotNull(stockpile, "The stockpile's storage");
+		t.NotNull(station, "The workbench's crafting station");
+		foreach (GameObject item in Scenario.Items(t, FactoryBlocks.Wood_DoublePlank_AA, 1, stockpile.transform.position + Vector3.up))
+		{
+			stockpile.AddObject(item);
+		}
+		foreach (GameObject item in Scenario.Items(t, BuildResources.Rope, 1, stockpile.transform.position + Vector3.up))
+		{
+			stockpile.AddObject(item);
+		}
+		Priority(t, "planks", planks);
+		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 2));
+		yield return t.Frames(5);
+		Scenario.ProjectCommands.CmdCraftingAssignWorker(station.gameObject, worker.gameObject);
+		yield return t.Frames(2);
+		t.True(station.Operator == worker, "The worker is not the workbench's operator");
+		Scenario.ProjectCommands.CmdcraftingQueueRecipe(station.gameObject, CookBook.Bow.id, 1);
+		GameObject first = null;
+		if (expectNoPlanks)
+		{
+			// The rope is fetched; the plank at 0 never is.
+			yield return t.Seconds(40f);
+			t.Equal(1, stockpile.ContentDescription.Value(Adjectif.plankBlock), "Planks left in the stockpile with planks at 0");
+			yield break;
+		}
+		yield return t.UntilGame(() =>
+		{
+			first = FirstCarried(worker);
+			return first != null;
+		}, 120f, "the workbench's worker to fetch something");
+		bool planksFirst = IsKind(first, "planks");
+		t.True(planksFirst == expectPlanksFirst, "Planks at " + planks + ": the worker fetched " + first.name + " first");
+	}
+
+	[GameTest("ResourcePriority", "A workbench's worker fetches the plank before the rope for a bow when planks are at 5 (rope neutral)", TimeoutSeconds = 240f)]
+	private static IEnumerator WorkbenchFetchesPlankFirst(TestContext t)
+	{
+		return BowFetch(t, 5, true, false);
+	}
+
+	[GameTest("ResourcePriority", "A workbench's worker fetches the rope before the plank for a bow when planks are at 1 (rope neutral)", TimeoutSeconds = 240f)]
+	private static IEnumerator WorkbenchFetchesRopeFirst(TestContext t)
+	{
+		return BowFetch(t, 1, false, false);
+	}
+
+	[GameTest("ResourcePriority", "A workbench's worker never fetches the plank for a bow while planks are at 0", TimeoutSeconds = 240f)]
+	private static IEnumerator WorkbenchLeavesPlanksAtZero(TestContext t)
+	{
+		return BowFetch(t, 0, false, true);
+	}
+
+	[GameTest("ResourcePriority", "Blueprint materials keep the game's choice: bricks at 0 still build a stone brick blueprint", TimeoutSeconds = 300f)]
+	private static IEnumerator BuildingIgnoresPriorities(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 10, 6);
+		BuildProject build = Scenario.BuildProject(t, site);
+		Recepteur stockpile = null;
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 3, site.y, site.z), build, made => stockpile = made.GetComponent<Recepteur>());
+		foreach (GameObject block in Scenario.Items(t, FactoryBlocks.Stone_DoubleBrick, 2, stockpile.transform.position + Vector3.up))
+		{
+			stockpile.AddObject(block);
+		}
+		Priority(t, "bricks", 0);
+		Labor a = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 2));
+		yield return t.Frames(5);
+		XYZ voxel = new XYZ(site.x + 2, site.y, site.z);
+		BlueprintPlacer.Result placed = BlueprintPlacer.Place(new Factory.AssetKey("Blueprints", FactoryBlocks.Stone_Brick.Name), voxel, 0, build, force: false);
+		t.True(placed.Placed, "Stone brick blueprint: " + placed.Outcome + " " + placed.Detail);
+		t.Cleanup(() =>
+		{
+			IBlockData block = Voxel.GetBlockData(voxel);
+			if (block != null && !block.IsNull && Voxel.IsBlock(voxel))
+			{
+				block.RootOrSelf.DeBlock();
+			}
+		});
+		ProjectEndpoints.Commit(build);
+		Scenario.Hire(build, a);
+		yield return t.UntilGame(() => Voxel.IsBlock(voxel), 200f, "the stone brick to be built with bricks at 0");
 	}
 
 	private static int Dug(List<XYZ> voxels)

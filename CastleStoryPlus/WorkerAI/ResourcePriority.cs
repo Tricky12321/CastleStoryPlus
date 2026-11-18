@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using BepInEx.Configuration;
+using Brix.Common.Collections;
 using Brix.Engine;
+using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.AI.KnowledgeSpace;
@@ -63,6 +65,8 @@ internal static class ResourcePriority
 
 		public Type[] Types;
 	}
+
+	private static HashSet<Factory.AssetKey> LitterKeys = new HashSet<Factory.AssetKey>();
 
 	private static Kind[] _kinds;
 
@@ -130,7 +134,7 @@ internal static class ResourcePriority
 	private static void Enable()
 	{
 		_enabled = true;
-		_shown = Plugin.Cfg.Bind("ResourcePriority", "Shown", true, "Whether the resource priority table beside the resource list is shown (the \"Priorities\" button on the right-hand bar toggles it).");
+		_shown = Plugin.Cfg.Bind("ResourcePriority", "Shown", false, "Whether the resource priority table beside the resource list is shown (the \"Priorities\" button on the right-hand bar toggles it).");
 		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), SetHash, InvokeSet);
 		GameSession.OnLeave(Teams.Clear);
 		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) =>
@@ -223,6 +227,8 @@ internal static class ResourcePriority
 			Teams[faction] = values;
 		}
 		values[kind] = priority;
+		// The job board's memos of asks that came to nothing (a resource raised from 0 applies at once).
+		JobBoard.RoutesChanged();
 		if (NetworkServer.active)
 		{
 			faction.SetDirtyBit(ResourcePriorityNetwork.DirtyBit);
@@ -285,6 +291,97 @@ internal static class ResourcePriority
 		}
 	}
 
+	// The ingredient lists a workshop asked its worker to fetch (CraftingStation.StuffToFetch): a search for one of
+	// those is a workshop's, by the list itself, as the fetch is an order of its own that no task (giver) shows.
+	private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Description, object> WorkshopLists = new System.Runtime.CompilerServices.ConditionalWeakTable<Description, object>();
+
+	internal static void MarkWorkshopList(Description list)
+	{
+		if (list != null && !ReferenceEquals(list, Adjectif.orangeCrystal.Profile.description))
+		{
+			WorkshopLists.GetValue(list, (Description unused) => new object());
+		}
+	}
+
+	private static readonly List<Ressource> Wanted = new List<Ressource>();
+
+	// Whether this search for ingredients is a workshop's: blueprints, landscape tasks, catapults and the like keep the
+	// game's choice, and are never turned down.
+	internal static bool WorkshopFetch(Labor labor, Description ingredients)
+	{
+		if (ingredients != null && WorkshopLists.TryGetValue(ingredients, out _))
+		{
+			return true;
+		}
+		GameObject giver = labor.CurrentTask?.Giver;
+		return giver != null && giver.GetComponent<CraftingStation>() != null;
+	}
+
+	// A workshop worker's choice among several wanted ingredients: the one of the lowest cost (distance / weight),
+	// one at 0 never. False when it is not the case for a choice (not a workshop's search, no priority set, or the
+	// ingredients all at the same priority): the game's own search then runs. The source is the worker's
+	// per-decision cache, or a search of its own when cached is false (a destination or a research, which the
+	// cache does not know).
+	internal static bool TryChoose(Labor labor, Description ingredients, bool cached, out GameObject closest, out int qty)
+	{
+		closest = null;
+		qty = 0;
+		if (ingredients == null || !Customised(labor.faction) || !WorkshopFetch(labor, ingredients))
+		{
+			return false;
+		}
+		Wanted.Clear();
+		bool differ = false;
+		int first = -1;
+		foreach (Ressource resource in ingredients.GetRessources().NoLeak())
+		{
+			if (resource.quantifiable.valeur == 0)
+			{
+				continue;
+			}
+			int priority = Get(labor.faction, resource);
+			if (first < 0)
+			{
+				first = priority;
+			}
+			differ |= priority != first || priority == Never;
+			Wanted.Add(resource);
+		}
+		if (!differ)
+		{
+			Wanted.Clear();
+			return false;
+		}
+		if (cached)
+		{
+			labor.resourceCache = labor.resourceCache.Bind(labor);
+			labor.resourceCache.RefreshIfNeeded();
+		}
+		float best = float.MaxValue;
+		foreach (Ressource resource in Wanted)
+		{
+			int priority = Get(labor.faction, resource);
+			if (priority == Never)
+			{
+				continue;
+			}
+			GameObject item = cached ? labor.resourceCache.GetUnsafe(resource) : labor.FindOneResource(resource);
+			if (item.IsNullOrReleased() || !labor.recepteur.HasRoomFor(item))
+			{
+				continue;
+			}
+			float cost = Cost(Vector3.Distance(labor.transform.position, Where(item)), priority);
+			if (cost < best)
+			{
+				best = cost;
+				closest = item;
+				qty = cached ? resource.quantifiable.valeur : 0;
+			}
+		}
+		Wanted.Clear();
+		return true;
+	}
+
 	// The kind of resource a worker gets from a goal, or -1 (loose items by what they are, trees as wood, a quarry's
 	// block by what it gives, plants and rocks by what they give).
 	internal static int KindOf(Goal goal)
@@ -292,6 +389,25 @@ internal static class ResourcePriority
 		if (goal is DigGoal dig)
 		{
 			return KindOfFlag(QuarryLimit.FlagOf(Voxel.GetBlockInfo(dig.voxel.position).ResourceKey));
+		}
+		if (goal is LitterGoal litter)
+		{
+			int eaten = KindOf(litter.EatThis as Ressource);
+			if (eaten >= 0)
+			{
+				return eaten;
+			}
+			LitterKeys.Clear();
+			litter.UniqueItems(ref LitterKeys);
+			foreach (Factory.AssetKey key in LitterKeys)
+			{
+				int kind = KindOfFlag(QuarryLimit.FlagOf(key));
+				if (kind >= 0)
+				{
+					return kind;
+				}
+			}
+			return -1;
 		}
 		if (goal is TreeGoal)
 		{
@@ -338,27 +454,6 @@ internal static class ResourcePriority
 		Transform parent = item.transform.parent;
 		Recepteur holder = (parent != null) ? parent.GetComponentInParent<Recepteur>() : null;
 		return ((holder != null) ? holder.transform : item.transform).position;
-	}
-
-	// The loose items without those at 0, lowest cost first (distance from a point / weight); stable.
-	internal static List<GameObject> ByCost(Faction faction, List<GameObject> items, Vector3 from)
-	{
-		List<KeyValuePair<float, GameObject>> ranked = new List<KeyValuePair<float, GameObject>>(items.Count);
-		for (int i = 0; i < items.Count; i++)
-		{
-			int priority = Get(faction, Apparence.PrincipaleOf(items[i]));
-			if (priority != Never)
-			{
-				ranked.Add(new KeyValuePair<float, GameObject>(Cost(Vector3.Distance(from, items[i].transform.position), priority) + i * 0.0001f, items[i]));
-			}
-		}
-		ranked.Sort((KeyValuePair<float, GameObject> a, KeyValuePair<float, GameObject> b) => a.Key.CompareTo(b.Key));
-		List<GameObject> result = new List<GameObject>(ranked.Count);
-		foreach (KeyValuePair<float, GameObject> entry in ranked)
-		{
-			result.Add(entry.Value);
-		}
-		return result;
 	}
 
 	// "stone:5,wood:1" for saves: only what is off neutral.
@@ -486,7 +581,8 @@ internal static class ResourcePriorityGoal
 			__result = int.MinValue;
 			return;
 		}
-		float distance = RouteOrder.Distance(labor, __instance);
+		// A quarry's block is compared by the straight line (the game's), the others by the walk when there is one.
+		float distance = (__instance is DigGoal) ? Vector3.Distance(labor.transform.position, __instance.transform.position) : RouteOrder.Distance(labor, __instance);
 		__result += Mathf.RoundToInt(distance - distance / ResourcePriority.Weight(priority));
 	}
 }
@@ -519,8 +615,8 @@ internal static class ResourcePrioritySelect
 		return Select(__instance, labor, result, ref __result);
 	}
 
-	// The valid goals without those at 0, lowest cost first (stable).
-	internal static List<Goal> Order(Labor labor, List<Goal> goals)
+	// The valid goals without those at 0, lowest cost first (stable), in the list.
+	internal static void Order(Labor labor, List<Goal> goals)
 	{
 		Ranked.Clear();
 		RouteDistance.Field field = Plugin.IsEnabled(Features.WorkerAI) ? RouteDistance.For(labor) : null;
@@ -542,13 +638,12 @@ internal static class ResourcePrioritySelect
 			Ranked.Add(new KeyValuePair<float, Goal>(ResourcePriority.Cost(distance, priority) + i * 0.0001f, goal));
 		}
 		Ranked.Sort(LowestFirst);
-		List<Goal> ordered = new List<Goal>(Ranked.Count);
+		goals.Clear();
 		foreach (KeyValuePair<float, Goal> entry in Ranked)
 		{
-			ordered.Add(entry.Value);
+			goals.Add(entry.Value);
 		}
 		Ranked.Clear();
-		return ordered;
 	}
 
 	private static bool Select(Project project, Labor labor, Var<Goal> result, ref Node __result)
@@ -562,7 +657,7 @@ internal static class ResourcePrioritySelect
 		{
 			provider?.GetAll(goals);
 		}
-		goals = Order(labor, goals);
+		Order(labor, goals);
 		__result = project.SelectBestGoalPooledList(goals.GetEnumerator(), labor, result);
 		return false;
 	}
@@ -570,78 +665,49 @@ internal static class ResourcePrioritySelect
 
 // A workshop's worker fetches the ingredients one at a time: the game takes the first ingredient of the recipe that
 // it finds anywhere (Labor.ClosestResource). With several ingredients wanted at different priorities, the one of the
-// lowest cost (distance / weight) is fetched first, and one at 0 is not fetched at all. With the same priority on
-// all of them, or only one wanted, the game's search runs as it was.
+// lowest cost (distance / weight) is fetched first, and one at 0 is not fetched at all (ResourcePriority.TryChoose).
+// Only a workshop's search: blueprints, landscape tasks and catapults go through the same method and keep the game's
+// choice. With a destination (TaskFlow) or a research asking, their patches make the search and ask TryChoose
+// themselves, so this one leaves those alone.
 [Feature(Features.ResourcePriority, Features.ResourcePriorityInfo)]
 [HarmonyPatch(typeof(Labor), "ClosestResource", new Type[] { typeof(GameObject), typeof(int), typeof(Description) }, new ArgumentType[] { ArgumentType.Out, ArgumentType.Out, ArgumentType.Normal })]
 internal static class ResourcePriorityIngredients
 {
-	private static readonly List<Ressource> Wanted = new List<Ressource>();
-
-	// After the workshop range's prefix (first), which this must run inside, before TaskFlow's and the research's.
 	[HarmonyPriority(Priority.High)]
 	private static bool Prefix(Labor __instance, ref GameObject closest, ref int qty, Description ingredients, ref bool __result)
 	{
-		if (ingredients == null || !ResourcePriority.Customised(__instance.faction))
+		if (TaskFlow.TryGetDestination(out _) || ResearchReservations.ForResearch)
 		{
 			return true;
 		}
-		Wanted.Clear();
-		bool differ = false;
-		int first = -1;
-		foreach (Ressource resource in ingredients.GetRessources().ToList())
+		if (!ResourcePriority.TryChoose(__instance, ingredients, cached: true, out closest, out qty))
 		{
-			if (resource.quantifiable.valeur == 0)
-			{
-				continue;
-			}
-			int priority = ResourcePriority.Get(__instance.faction, resource);
-			if (first < 0)
-			{
-				first = priority;
-			}
-			differ |= priority != first || priority == ResourcePriority.Never;
-			Wanted.Add(resource);
-		}
-		if (!differ)
-		{
-			Wanted.Clear();
 			return true;
 		}
-		// The per-decision cache holds the nearest source of each resource, but not while a destination or a research
-		// has the search made without it (see their patches).
-		bool uncached = TaskFlow.TryGetDestination(out _) || ResearchReservations.ForResearch;
-		closest = null;
-		qty = 0;
-		float best = float.MaxValue;
-		if (!uncached)
-		{
-			__instance.resourceCache = __instance.resourceCache.Bind(__instance);
-			__instance.resourceCache.RefreshIfNeeded();
-		}
-		foreach (Ressource resource in Wanted)
-		{
-			int priority = ResourcePriority.Get(__instance.faction, resource);
-			if (priority == ResourcePriority.Never)
-			{
-				continue;
-			}
-			GameObject item = uncached ? __instance.FindOneResource(resource) : __instance.resourceCache.GetUnsafe(resource);
-			if (item.IsNullOrReleased() || !__instance.recepteur.HasRoomFor(item))
-			{
-				continue;
-			}
-			float cost = ResourcePriority.Cost(Vector3.Distance(__instance.transform.position, ResourcePriority.Where(item)), priority);
-			if (cost < best)
-			{
-				best = cost;
-				closest = item;
-				qty = uncached ? 0 : resource.quantifiable.valeur;
-			}
-		}
-		Wanted.Clear();
 		__result = closest != null;
 		return false;
+	}
+}
+
+// ... and so is the list a worker is sent with (the order carries its own copy of it).
+[Feature(Features.ResourcePriority, Features.ResourcePriorityInfo)]
+[HarmonyPatch(typeof(CraftingInstructions), "FindResource")]
+internal static class ResourcePriorityFetchOrder
+{
+	private static void Prefix(Description ingredients)
+	{
+		ResourcePriority.MarkWorkshopList(ingredients);
+	}
+}
+
+// What a workshop asks its worker to fetch is marked, so the search for it is known as a workshop's.
+[Feature(Features.ResourcePriority, Features.ResourcePriorityInfo)]
+[HarmonyPatch(typeof(CraftingStation), nameof(CraftingStation.StuffToFetch))]
+internal static class ResourcePriorityWorkshopList
+{
+	private static void Postfix(Description __result)
+	{
+		ResourcePriority.MarkWorkshopList(__result);
 	}
 }
 

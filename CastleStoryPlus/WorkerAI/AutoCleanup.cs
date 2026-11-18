@@ -135,10 +135,9 @@ internal static class AutoCleanup
 			SortByWalk(labor, items);
 		}
 		// Resource priorities: what is at 0 is left alone, the rest by distance / weight (stable, so equals keep the walk order).
-		bool priorities = Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.Customised(labor.faction);
-		if (priorities)
+		if (Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.Customised(labor.faction))
 		{
-			items = ResourcePriority.ByCost(labor.faction, items, SortFrom);
+			WeighPriorities(labor, items);
 		}
 		foreach (GameObject item in items)
 		{
@@ -188,6 +187,36 @@ internal static class AutoCleanup
 	private static readonly List<KeyValuePair<long, GameObject>> Walks = new List<KeyValuePair<long, GameObject>>();
 
 	private static readonly System.Comparison<KeyValuePair<long, GameObject>> LowestFirst = (KeyValuePair<long, GameObject> a, KeyValuePair<long, GameObject> b) => a.Key.CompareTo(b.Key);
+
+	private static readonly List<KeyValuePair<float, GameObject>> Costs = new List<KeyValuePair<float, GameObject>>();
+
+	private static readonly System.Comparison<KeyValuePair<float, GameObject>> CheapestFirst = (KeyValuePair<float, GameObject> a, KeyValuePair<float, GameObject> b) => a.Key.CompareTo(b.Key);
+
+	// The items by resource priority: those at 0 out, the rest by cost (the worker's walk to them, as SortByWalk, or the
+	// straight line, over the weight of the item's priority); the order they have breaks ties. In place.
+	private static void WeighPriorities(Labor labor, List<GameObject> items)
+	{
+		RouteDistance.Field field = (items.Count > 1 && Plugin.IsEnabled(Features.WorkerAI)) ? RouteDistance.For(labor) : null;
+		Vector3 from = labor.transform.position;
+		Costs.Clear();
+		for (int i = 0; i < items.Count; i++)
+		{
+			int priority = ResourcePriority.Get(labor.faction, Apparence.PrincipaleOf(items[i]));
+			if (priority == ResourcePriority.Never)
+			{
+				continue;
+			}
+			float distance = (field != null) ? RouteDistance.Rank(field, from, items[i].transform.position) : Vector3.Distance(from, items[i].transform.position);
+			Costs.Add(new KeyValuePair<float, GameObject>(ResourcePriority.Cost(distance, priority) + i * 0.0001f, items[i]));
+		}
+		Costs.Sort(CheapestFirst);
+		items.Clear();
+		foreach (KeyValuePair<float, GameObject> cost in Costs)
+		{
+			items.Add(cost.Value);
+		}
+		Costs.Clear();
+	}
 
 	// The items (already nearest first in a straight line) nearest first by the worker's walk to them; equal walks keep
 	// the straight line's order.

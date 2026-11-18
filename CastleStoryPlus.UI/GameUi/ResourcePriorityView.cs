@@ -19,8 +19,6 @@ internal class ResourcePriorityView : MonoBehaviour
 
 	private const float RowHeight = 24f;
 
-	private const float ListWidth = 220f;
-
 	private const float Gap = 8f;
 
 	private const float ReadSeconds = 0.25f;
@@ -30,6 +28,8 @@ internal class ResourcePriorityView : MonoBehaviour
 	private GameMenuModel _menu;
 
 	private RectTransform _rect;
+
+	private Image _background;
 
 	private readonly List<Text> _values = new List<Text>();
 
@@ -56,6 +56,7 @@ internal class ResourcePriorityView : MonoBehaviour
 		ResourcePriorityView view = rect.gameObject.AddComponent<ResourcePriorityView>();
 		view._menu = menu;
 		view._rect = rect;
+		view._background = background;
 		view.Build();
 	}
 
@@ -94,10 +95,9 @@ internal class ResourcePriorityView : MonoBehaviour
 	private void Update()
 	{
 		bool shown = ResourcePriority.Shown;
-		Image background = GetComponent<Image>();
-		if (background.enabled != shown)
+		if (_background.enabled != shown)
 		{
-			background.enabled = shown;
+			_background.enabled = shown;
 			for (int i = 0; i < transform.childCount; i++)
 			{
 				transform.GetChild(i).gameObject.SetActive(shown);
@@ -112,7 +112,7 @@ internal class ResourcePriorityView : MonoBehaviour
 		float x = (_menu.Right.Open != null) ? -328f : -56f;
 		if (ResourceList.Enabled && ResourceList.Shown)
 		{
-			x -= ListWidth + Gap;
+			x -= ResourceListView.Width + Gap;
 		}
 		_rect.anchoredPosition = new Vector2(x, -64f);
 		if (_readAt >= 0f && Time.unscaledTime - _readAt < ReadSeconds)

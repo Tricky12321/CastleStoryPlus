@@ -35,15 +35,24 @@ internal static class RouteOrder
 
 	[HarmonyPatch(typeof(HarvestProject), "SelectBestGoal")]
 	[HarmonyPrefix]
-	private static bool HarvestSelect(HarvestProject __instance, Labor labor, Var<Goal> result, ref Node __result)
+	private static bool HarvestSelect(HarvestProject __instance, Labor labor, Var<Goal> result, ref Node __result, bool __runOriginal)
 	{
+		if (!__runOriginal)
+		{
+			return true;
+		}
 		return Select(__instance, labor, result, ref __result);
 	}
 
 	[HarmonyPatch(typeof(CleanupProject), "SelectBestGoal")]
 	[HarmonyPrefix]
-	private static bool CleanupSelect(CleanupProject __instance, Labor labor, Var<Goal> result, ref Node __result)
+	private static bool CleanupSelect(CleanupProject __instance, Labor labor, Var<Goal> result, ref Node __result, bool __runOriginal)
 	{
+		if (!__runOriginal)
+		{
+			// Another patch (resource priorities) chose the goal already.
+			return true;
+		}
 		return Select(__instance, labor, result, ref __result);
 	}
 
