@@ -111,18 +111,6 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: from which wave and how often, whether it can be stunned or slowed, and whether it has its own attack
   (for example a ground slam that hits all round it).
 
-### Guardian sounds
-
-- The treasure guardians (Spirestalker, Cindermane, Boulderback, Ironhorn) make no sounds of their own today. Give each
-  one its own sounds: an idle call now and then, a roar when it spots bricktrons, footsteps that fit its size and gait,
-  attack and hit sounds, and a death sound.
-- The material should be heard too: crystal chimes for the Spirestalker, crackling embers for the Cindermane, grinding
-  stone for the Boulderback, clanking iron for the Ironhorn.
-- Played in the world like the game's other unit sounds (positioned, quieter with distance), and part of the guardian
-  rules in `docs/Guardians.md` so every new guardian gets them.
-- To decide: where the sounds come from (made for the mod or from a free library with a licence that allows it; never
-  the game's own files shipped), and how they are played next to the game's Wwise sound banks.
-
 ## Research
 
 ### Sprint

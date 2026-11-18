@@ -52,6 +52,10 @@ internal static class BeastTemper
 			if (labor != null && Beasts.KindOf(labor) != null && (labor.transform.position - at).sqrMagnitude <= PackRadius * PackRadius)
 			{
 				ProvokedUntil[labor] = until;
+				if (wasCalm)
+				{
+					labor.GetComponent<BeastBody>()?.Voice?.Provoked();
+				}
 			}
 		}
 		ProvokedUntil[victim] = until;

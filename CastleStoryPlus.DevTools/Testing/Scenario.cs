@@ -423,6 +423,18 @@ internal static class Scenario
 		return labor;
 	}
 
+	// A unit the test made itself (not through Spawn, for example a guardian) is the test's own: it is not taken away as
+	// a stray, and the clean-up removes it.
+	internal static void Adopt(TestContext t, Labor labor)
+	{
+		Contexts[labor] = t;
+		t.Cleanup(() =>
+		{
+			Contexts.Remove(labor);
+			Remove(labor);
+		});
+	}
+
 	// The voxel of the route graph nearest the given one (a unit spawned off the graph cannot walk: PathInvalid),
 	// within 3 voxels; else the voxel itself.
 	// Walkable ground about distance from a place, the nearer the better (west of it first, as it used to be); the

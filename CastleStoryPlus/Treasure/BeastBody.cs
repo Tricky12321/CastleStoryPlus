@@ -63,6 +63,11 @@ internal sealed class BeastBody : MonoBehaviour
 
 	private BeastRagdoll _ragdoll;
 
+	private BeastVoice _voice;
+
+	// What it sounds like (GuardianSounds); null on a corpse.
+	internal BeastVoice Voice => _voice;
+
 	internal static BeastBody Attach(GameObject unit, BeastInfo info, bool dead)
 	{
 		BeastBody body = unit.GetComponent<BeastBody>();
@@ -121,6 +126,11 @@ internal sealed class BeastBody : MonoBehaviour
 		if (Dead)
 		{
 			_ragdoll = BeastRagdoll.Create(_root.transform, _parts, gameObject);
+			GuardianSounds.Play(Info, GuardianSound.Death, transform.position);
+		}
+		else
+		{
+			_voice = new BeastVoice(Info, _labor);
 		}
 	}
 
@@ -224,6 +234,7 @@ internal sealed class BeastBody : MonoBehaviour
 		_speed = Mathf.Lerp(_speed, distance / dt, Mathf.Min(1f, dt * 8f));
 		_phase += distance * Info.StepsPerBlock * Mathf.PI * 2f;
 		Combat(dt);
+		_voice?.Tick(transform.position, _phase, _speed, _lastState);
 		_swing.Clear();
 		_turn.Clear();
 		float walk = Mathf.Clamp01(_speed / 1.2f);
