@@ -137,8 +137,11 @@ internal sealed class UiStatus : UiItem
 	// Greyed out while true (an achievement not unlocked yet).
 	public Func<bool> Dimmed;
 
-	// The block's width where it must not grow with its texts (a sidebar's list); 0: as wide as its texts.
-	public float Width;
+	// The block is as wide as a sidebar's list (long texts wrap) instead of as wide as its texts.
+	public bool FillPanel;
+
+	// A short value right-aligned beside the bar (37/100).
+	public Func<string> Value;
 }
 
 // One of a few named choices side by side, the chosen one lit (a workshop's priority).

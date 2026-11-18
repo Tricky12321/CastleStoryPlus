@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace CastleStoryPlus.Achievements;
 
-// The list in the in-game menu: a sidebar opened from the right bar (a trophy button), one block for each achievement
+// The list in the in-game menu: a sidebar opened from the right bar (a crown button), one block for each achievement
 // with its picture, category, name, text and progress (37/100 and a bar; the date it was unlocked once it is);
 // locked ones are greyed out. A line at the top says when nothing counts in this game (sandbox, cheats).
 [Feature(Features.Achievements, Features.AchievementsInfo)]
@@ -63,7 +63,8 @@ internal static class AchievementPanel
 				Detail = () => DetailText(info),
 				Progress = () => Mathf.Clamp01(AchievementTracker.Progress(info) / (float)info.Goal),
 				Dimmed = () => !AchievementTracker.IsUnlocked(info),
-				Width = 244f,
+				FillPanel = true,
+				Value = () => AchievementTracker.Progress(info) + "/" + info.Goal,
 				Tooltip = () => info.Text
 			});
 		}
@@ -89,7 +90,7 @@ internal static class AchievementPanel
 		{
 			return info.Text + "\n<color=#FFCC40>Unlocked " + AchievementTracker.UnlockedAt(info) + "</color>";
 		}
-		return info.Text + "\n" + AchievementTracker.Progress(info) + "/" + info.Goal;
+		return info.Text;
 	}
 
 	private static string StateText()

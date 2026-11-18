@@ -102,6 +102,12 @@ internal static class AchievementList
 		return new AchievementInfo { Id = id, Name = name, Text = text, Category = category, Icon = icon, Counter = counter, Target = target };
 	}
 
+	// Whether the counter holds the best value reached (waves, research) rather than a running total.
+	public static bool IsBest(string counter)
+	{
+		return counter == AchievementCounter.Research || counter == AchievementCounter.Wave;
+	}
+
 	public static AchievementInfo Find(string id)
 	{
 		return All.Find((AchievementInfo a) => a.Id == id);

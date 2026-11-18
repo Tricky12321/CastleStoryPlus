@@ -77,17 +77,17 @@ internal static class AchievementCraftPatch
 	}
 }
 
-// A block of the player's team was built (the game's own count of objects built): only the placed blocks, not what
-// a loaded save sets up (nothing counts before the level is ready).
+// A block of the player's team was built: a blueprint of a placed block became the block (the end of the building
+// itself; the blocks a loaded save sets up, and instant builds, do not go through it as a worker's work).
 [Feature(Features.Achievements, Features.AchievementsInfo)]
-[HarmonyPatch(typeof(StatsTracker), nameof(StatsTracker.ObjectBuilt))]
+[HarmonyPatch(typeof(Blueprint), nameof(Blueprint.MorphToObject))]
 internal static class AchievementBuiltPatch
 {
-	private static void Prefix(Faction faction, Factory.AssetKey key)
+	private static void Postfix(Blueprint __instance, GameObject __result)
 	{
-		if (NetworkServer.active && faction != null && key != null && key.ToString().StartsWith("PlacedBlock."))
+		if (NetworkServer.active && __result != null && !__instance.IsAnti && __instance.BlueprintResult != null && __instance.BlueprintResult.ToString().StartsWith("PlacedBlock."))
 		{
-			AchievementTracker.Add(faction, AchievementCounter.Blocks);
+			AchievementTracker.Add(Faction.GetFaction(__instance.gameObject), AchievementCounter.Blocks);
 		}
 	}
 }
@@ -111,6 +111,10 @@ internal static class AchievementDugPatch
 [HarmonyPatch(typeof(Goal), nameof(Goal.EndWork))]
 internal static class AchievementGatherPatch
 {
+	// When each tree or plant last counted (game seconds): objects come from a pool, so only a repeat within a few
+	// seconds is the same one.
+	private static readonly System.Collections.Generic.Dictionary<int, float> Counted = new System.Collections.Generic.Dictionary<int, float>();
+
 	private static void Prefix(Goal __instance, Task work)
 	{
 		if (!NetworkServer.active || work == null || work.result != TaskResult.Succes || work.Status != TaskProgression.Finished)
@@ -120,8 +124,15 @@ internal static class AchievementGatherPatch
 		if (__instance is TreeGoal || __instance is NatureHarvestGoal)
 		{
 			Labor labor = work.Worker as Labor;
-			if (labor != null)
+			// Several workers (or goals) can end work on the same tree or plant: each one counts once.
+			int id = __instance.gameObject.InstanceId();
+			if (labor != null && (!Counted.TryGetValue(id, out float last) || Time.time - last > 10f))
 			{
+				if (Counted.Count > 2000)
+				{
+					Counted.Clear();
+				}
+				Counted[id] = Time.time;
 				AchievementTracker.Add(labor.faction, AchievementCounter.Gathered);
 			}
 		}

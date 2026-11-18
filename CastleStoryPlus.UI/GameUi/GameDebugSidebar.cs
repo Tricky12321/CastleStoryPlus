@@ -62,6 +62,7 @@ internal static class GameDebugSidebar
 			Highlight = () => Journee.instance != null && Journee.instance.IsPaused,
 			OnClick = (bool shift, bool ctrl) =>
 			{
+				Achievements.AchievementTracker.Cheated("the debug sidebar's pause of the day");
 				if (Journee.instance != null)
 				{
 					Journee.instance.IsPaused = !Journee.instance.IsPaused;

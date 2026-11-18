@@ -90,7 +90,7 @@ internal sealed class AchievementToast : MonoBehaviour
 		float alpha = Mathf.Clamp01(age / FadeIn) * Mathf.Clamp01((FadeIn + Hold + FadeOut - age) / FadeOut);
 		_group.alpha = alpha;
 		// Slides down into place while it fades in.
-		_rect.anchoredPosition = new Vector2(0f, TopOffset + 24f * (1f - Mathf.Clamp01(age / FadeIn)));
+		_rect.anchoredPosition = new Vector2(-230f, TopOffset + 24f * (1f - Mathf.Clamp01(age / FadeIn)));
 	}
 
 	// For the tests: no message on show or waiting.
@@ -144,7 +144,7 @@ internal sealed class AchievementToast : MonoBehaviour
 		GameObject canvas = UiKit.CreateCanvas("AchievementToastCanvas", transform, 945);
 		canvas.GetComponent<GraphicRaycaster>().enabled = false;
 		_rect = UiKit.CreateRect("Toast", canvas.transform);
-		UiKit.SetRect(_rect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, TopOffset), new Vector2(480f, 84f));
+		UiKit.SetRect(_rect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-230f, TopOffset), new Vector2(480f, 84f));
 		_rect.pivot = new Vector2(0.5f, 1f);
 		_plate = _rect.gameObject;
 		_group = _plate.AddComponent<CanvasGroup>();

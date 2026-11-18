@@ -216,6 +216,10 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 
 	private CanvasGroup _group;
 
+	private Text _value;
+
+	private GameObject _barRow;
+
 	protected override UiItem Item
 	{
 		get { return _status; }
@@ -247,10 +251,10 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 		Object.DestroyImmediate(texts.GetComponent<ContentSizeFitter>());
 		texts.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
 		UiKit.Flexible(texts.gameObject);
-		if (status.Width > 0f)
+		if (status.FillPanel)
 		{
-			// A set width (a sidebar's list): long texts wrap inside the room the slot leaves instead of pushing the block wider.
-			rect.GetComponent<LayoutElement>().preferredWidth = status.Width;
+			// As wide as a sidebar's list: long texts wrap inside the room the slot leaves instead of pushing the block wider.
+			rect.GetComponent<LayoutElement>().preferredWidth = CsPanelView.Width - 28f;
 			texts.GetComponent<LayoutElement>().preferredWidth = 0f;
 		}
 		view._caption = LuiWidgets.Label(texts, string.Empty, 10, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Bold);
@@ -259,11 +263,20 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 		view._detail.supportRichText = true;
 		view._detail.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-		RectTransform bar = UiKit.CreateRect("Bar", texts);
+		// The bar and, beside it, the value right-aligned.
+		RectTransform barRow = LuiWidgets.Horizontal(texts, 6f, 0);
+		Object.DestroyImmediate(barRow.GetComponent<ContentSizeFitter>());
+		barRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
+		barRow.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
+		UiKit.Flexible(barRow.gameObject);
+		RectTransform bar = UiKit.CreateRect("Bar", barRow);
 		LayoutElement barElement = bar.gameObject.AddComponent<LayoutElement>();
 		barElement.minHeight = 5f;
 		barElement.preferredHeight = 5f;
 		barElement.flexibleWidth = 1f;
+		view._value = LuiWidgets.Label(barRow, string.Empty, LuiStyle.SmallFontSize, UiTheme.TextMuted, TextAnchor.MiddleRight, LuiStyle.Bold);
+		view._value.gameObject.AddComponent<LayoutElement>().preferredWidth = 56f;
+		view._barRow = barRow.gameObject;
 		Image track = bar.gameObject.AddComponent<Image>();
 		UiTheme.Round(track, new Color(1f, 1f, 1f, 0.08f), UiTheme.BarRadius);
 		track.raycastTarget = false;
@@ -298,10 +311,11 @@ internal class CsStatusView : CsItemView, IPointerEnterHandler, IPointerExitHand
 		}
 		float progress = (s.Progress != null) ? s.Progress() : -1f;
 		bool bar = progress >= 0f;
-		if (_bar.activeSelf != bar)
+		if (_barRow.activeSelf != bar)
 		{
-			_bar.SetActive(bar);
+			_barRow.SetActive(bar);
 		}
+		CsRowParts.SetText(_value, (s.Value != null) ? s.Value() : string.Empty);
 		if (bar)
 		{
 			_fill.anchorMax = new Vector2(Mathf.Clamp01(progress), 1f);

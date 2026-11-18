@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using Brix.Engine;
 using Brix.Game;
@@ -23,6 +24,10 @@ internal static class AchievementTests
 		string folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "csp-achievements-" + System.Guid.NewGuid().ToString("N"));
 		Directory.CreateDirectory(folder);
 		string file = System.IO.Path.Combine(folder, "achievements.json");
+		// What the player's own achievements were: written out first, read back afterwards; and the game's cheated state.
+		AchievementTracker.Flush();
+		AchievementTracker.Save();
+		KeyValuePair<bool, string> cheatState = AchievementTracker.CheatState;
 		AchievementTracker.FilePathOverride = file;
 		AchievementTracker.IgnoreRules = ignoreRules;
 		AchievementTracker.ResetForTest();
@@ -32,8 +37,8 @@ internal static class AchievementTests
 			AchievementTracker.FilePathOverride = null;
 			AchievementTracker.IgnoreRules = false;
 			AchievementTracker.SandboxProbe = CastleStoryPlus.Upgrades.SandboxResearch.IsSandbox;
-			AchievementTracker.ClearCheatedForTest();
 			AchievementTracker.Load();
+			AchievementTracker.CheatState = cheatState;
 			AchievementToast.ResetForTest();
 			Directory.Delete(folder, true);
 		});
@@ -111,12 +116,8 @@ internal static class AchievementTests
 		t.True(AchievementTracker.IsUnlocked(AchievementList.Find("guardian1")), "Beast slayer");
 		// The game's own counts of ground dug and blocks built, as it reports them.
 		StatsTracker.DugVoxel(builder.gameObject);
-		StatsTracker.ObjectBuilt(mine, new Brix.External.Factories.Factory.AssetKey("PlacedBlock", "Stone_Brick"));
-		// What is not a placed block (a building, a unit) is not a block built.
-		StatsTracker.ObjectBuilt(mine, FactoryBlocks.Stone_Brick);
 		AchievementTracker.Flush();
 		t.Equal(1, AchievementTracker.Value(AchievementCounter.Dug), "Voxels dug");
-		t.Equal(1, AchievementTracker.Value(AchievementCounter.Blocks), "Blocks built");
 		yield return null;
 	}
 
@@ -201,11 +202,11 @@ internal static class AchievementTests
 		t.False(File.Exists(file + ".tmp"), "The temporary file is left behind after the second write");
 		AchievementTracker.Load();
 		t.Equal(13, AchievementTracker.Value(AchievementCounter.Trades), "Trades after the second write");
-		// A file that is not JSON: no crash, a copy beside it, empty counters.
+		// A file that is not JSON: no crash, a copy beside it, and what is in memory stays.
 		File.WriteAllText(file, "{ this is not json");
 		AchievementTracker.Load();
-		t.Equal(0, AchievementTracker.Value(AchievementCounter.Trades), "Trades from an unreadable file");
-		t.True(File.Exists(file + ".unreadable"), "No copy of the unreadable file");
+		t.Equal(13, AchievementTracker.Value(AchievementCounter.Trades), "Trades after reading an unreadable file");
+		t.True(Directory.GetFiles(System.IO.Path.GetDirectoryName(file), "achievements.json.unreadable-*").Length == 1, "No copy of the unreadable file");
 		yield return null;
 	}
 
@@ -277,5 +278,36 @@ internal static class AchievementTests
 		t.False(unlocked.Dimmed(), "An unlocked achievement is greyed out");
 		t.True(unlocked.Detail().Contains("Unlocked "), "Its detail: " + unlocked.Detail());
 		yield return null;
+	}
+
+	[GameTest("Achievements", "A best value a game starts with is its baseline: only what goes beyond it counts", TimeoutSeconds = 30f)]
+	private static IEnumerator BaselineOfALoadedGame(TestContext t)
+	{
+		Isolate(t, ignoreRules: false);
+		AchievementTracker.SandboxProbe = () => false;
+		AchievementTracker.ClearCheatedForTest();
+		// The first moments of a game: what it reports is where it stands (a loaded game at wave 12).
+		AchievementTracker.SetBaselineOverForTest(false);
+		AchievementTracker.LocalMax(AchievementCounter.Wave, 12);
+		t.Equal(0, AchievementTracker.Value(AchievementCounter.Wave), "Wave counted from the start of a game");
+		t.False(AchievementTracker.IsUnlocked(AchievementList.Find("wave10")), "Holding the line from a loaded game");
+		AchievementTracker.SetBaselineOverForTest(true);
+		AchievementTracker.LocalMax(AchievementCounter.Wave, 12);
+		t.Equal(0, AchievementTracker.Value(AchievementCounter.Wave), "The same wave again");
+		AchievementTracker.LocalMax(AchievementCounter.Wave, 13);
+		t.Equal(13, AchievementTracker.Value(AchievementCounter.Wave), "A wave survived after the start");
+		yield return null;
+	}
+
+	[GameTest("Achievements", "A block counts when its blueprint is built, once", TimeoutSeconds = 60f)]
+	private static IEnumerator BuiltBlockCounts(TestContext t)
+	{
+		Isolate(t);
+		XYZ site = Scenario.Site(t, 6, 6);
+		Brix.External.Factories.Factory.AssetKey blueprint = new Brix.External.Factories.Factory.AssetKey("Blueprints", FactoryBlocks.Stone_Brick.Name);
+		Brix.Game.AI.BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, blueprint, new XYZ(site.x + 2, site.y, site.z), build, (GameObject made) => { });
+		AchievementTracker.Flush();
+		t.Equal(1, AchievementTracker.Value(AchievementCounter.Blocks), "Blocks after one block was built");
 	}
 }

@@ -145,7 +145,7 @@ internal static class Features
 
 	public const string Achievements = "Achievements";
 
-	public const string AchievementsInfo = "The mod's own achievements (trading, research, waves survived, guardians and chests, kills, crafting, building, digging...), kept per player in BepInEx/config/castlestoryplus_achievements.json (not in the save, not on Steam, no rewards). A list with progress is in the in-game menu's right bar, and a short message with a chime shows when one is unlocked. Nothing counts in a sandbox game or in a game where cheats were used (the debug menu, the developer API, instant build); in multiplayer every player counts his own team's deeds.";
+	public const string AchievementsInfo = "The mod's own achievements (trading, research, waves survived, guardians and chests, kills, crafting, building, digging...), kept per player in BepInEx/config/castlestoryplus_achievements.json (not in the save, not on Steam, no rewards). A list with progress is opened from the crown button in the in-game menu's right bar, and a short message with a chime shows when one is unlocked. Nothing counts in a sandbox game or in a game where cheats were used (the debug menu's energy, units, resources, enemies, waves, time, fog of war, x-ray, critical hits and spawn points, the game's debug sidebar, instant build, the developer API's cheats); in multiplayer every player counts his own team's deeds.";
 
 	public const string WiderVision = "WiderVision";
 

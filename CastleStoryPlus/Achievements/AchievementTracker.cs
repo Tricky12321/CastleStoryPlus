@@ -15,17 +15,19 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Achievements;
 
-// The mod's own achievements (no Steam, no rewards). Hooks in the game's code report what a team did (Add, Max: on
-// the host, where the game's logic runs, with the team that did it; Local and LocalMax: on every peer, for the
-// player's own deeds). A report counts only for the local player's own team: the host tells the other players
-// the reports of every team (message AchievementMessage, batched once a second) and each player counts the ones of
+// The mod's own achievements (no Steam, no rewards). Hooks in the game's code report what a team did (Add: on the
+// host, where the game's logic runs, with the team that did it; Local and LocalMax: on every peer, for the player's own
+// deeds). A report counts only for the local player's own team: the host tells the other players the reports of every
+// team (message AchievementMessage, batched, only while the host's own game counts) and each player counts the ones of
 // his own team, so in multiplayer everyone has his own progress.
 //
 // Nothing counts (Why) while no game runs, in a sandbox game, in a world editor or debug map, or in a game where
 // cheats were used: the debug menu, the game's own debug sidebar (instant build, spawning), the developer API's
 // cheats (Cheated); nor in a multiplayer game where the host allows cheats (CheatGuard), as another player's cheats
-// cannot be seen from here. A cheated game stays cheated: the folder of its save is remembered (in the achievements file), so
-// loading it again does not count either; the save itself is not touched, so it loads without the mod.
+// cannot be seen from here. A game that was saved after a cheat stays cheated: the folder of the save is remembered
+// (in the achievements file), so loading it again does not count either; the save itself is not touched, so it loads
+// without the mod. Only what happens after a game is set up counts: a best value read from a loaded or joined game
+// (waves survived, research done) is the baseline, and only what goes beyond it counts.
 //
 // Kept in the mod's own file (BepInEx/config/castlestoryplus_achievements.json): the counters, when each achievement
 // was unlocked and the cheated saves. Written whole to a temporary file and moved over the old one, so a crash never
@@ -33,16 +35,23 @@ namespace CastleStoryPlus.Achievements;
 [Feature(Features.Achievements, Features.AchievementsInfo)]
 internal sealed class AchievementTracker : MonoBehaviour
 {
-	// The game's own messages end at 63; Castle Story Plus uses 200-209.
+	// The game's own messages end at 63; Castle Story Plus uses 200-211 (ModMessages).
 	private const short AchievementMessage = 210;
 
 	private const string FileName = "castlestoryplus_achievements.json";
 
-	private const float FlushSeconds = 1f;
+	private const float FlushSeconds = 0.5f;
 
 	private const float SaveSeconds = 15f;
 
 	private const int Limit = 1000000000;
+
+	// The most one message may add to a counter.
+	private const int MostPerMessage = 100000;
+
+	// A loaded or joined game sets itself up as the level becomes ready: for this long (real seconds) the best values it
+	// reports are its baseline, and what the host sees done is not counted.
+	private const float BaselineSeconds = 5f;
 
 	private static readonly Dictionary<string, int> Counters = new Dictionary<string, int>();
 
@@ -54,7 +63,8 @@ internal sealed class AchievementTracker : MonoBehaviour
 	// What the host has seen done and not yet counted or told: team id and counter.
 	private static readonly Dictionary<KeyValuePair<int, string>, int> Pending = new Dictionary<KeyValuePair<int, string>, int>();
 
-	private static AchievementTracker _instance;
+	// The best values this game started with (waves survived, research done).
+	private static readonly Dictionary<string, int> Baseline = new Dictionary<string, int>();
 
 	private static bool _loaded;
 
@@ -68,15 +78,18 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	private static string _saveFolder;
 
-	// A loaded game sets its objects up as the level becomes ready: what the host sees done in the first moments is
-	// not counted (real seconds).
-	private const float SettleSeconds = 3f;
-
-	private static float _settledAt;
+	private static float _baselineUntil;
 
 	private static float _nextFlush;
 
 	private static float _nextSave;
+
+	// While the game is being left: what the last look saw (the game's objects may be gone).
+	private static bool _leaving;
+
+	private static bool _lastCounting;
+
+	private static int _lastTeam = -1;
 
 	// Another file than the player's own (the tests).
 	internal static string FilePathOverride;
@@ -102,14 +115,11 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 		public int Value;
 
-		public bool Max;
-
 		public override void Serialize(NetworkWriter writer)
 		{
 			writer.Write(Team);
 			writer.Write(Counter);
 			writer.Write(Value);
-			writer.Write(Max);
 		}
 
 		public override void Deserialize(NetworkReader reader)
@@ -117,14 +127,13 @@ internal sealed class AchievementTracker : MonoBehaviour
 			Team = reader.ReadInt32();
 			Counter = reader.ReadString();
 			Value = reader.ReadInt32();
-			Max = reader.ReadBoolean();
 		}
 	}
 
 	private static void Enable()
 	{
 		Load();
-		_instance = Plugin.Root.AddComponent<AchievementTracker>();
+		Plugin.Root.AddComponent<AchievementTracker>();
 		GameSession.OnLevelReady(LevelReady);
 		GameSession.OnLeave(Leave);
 	}
@@ -178,34 +187,43 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	internal static bool IsCheated => _cheated;
 
-	// A cheat was used in this game: nothing counts in it from now on (nor when its save is loaded again).
+	// For the tests: the cheated state of the game running, to put back afterwards.
+	internal static KeyValuePair<bool, string> CheatState
+	{
+		get { return new KeyValuePair<bool, string>(_cheated, _cheatReason); }
+		set
+		{
+			_cheated = value.Key;
+			_cheatReason = value.Value;
+		}
+	}
+
+	// A cheat took effect in this game: nothing counts in it from now on, and the player is told once. A save made
+	// from now on is remembered as cheated (Saved), so it does not count when loaded again either.
 	internal static void Cheated(string reason)
 	{
-		if (!_levelActive || _cheated)
+		if (!_levelActive || _cheated || !Plugin.IsEnabled(Features.Achievements))
 		{
 			return;
 		}
 		_cheated = true;
 		_cheatReason = reason;
 		Plugin.Log.LogInfo("Achievements: nothing counts in this game from now on (" + reason + ")");
-		Remember(_saveFolder);
-	}
-
-	private static void Remember(string folder)
-	{
-		if (!string.IsNullOrEmpty(folder) && CheatedSaves.Add(folder))
+		if (!IgnoreRules)
 		{
-			_dirty = true;
+			GameSignals.Invoke(GameSignals.OnAutoFadeDialog, "Achievements no longer count in this game (" + reason + ")", 5f);
 		}
 	}
 
 	private static void LevelReady()
 	{
 		_levelActive = true;
-		_settledAt = Time.unscaledTime + SettleSeconds;
+		_leaving = false;
+		_baselineUntil = Time.unscaledTime + BaselineSeconds;
 		_cheated = false;
 		_cheatReason = null;
 		Pending.Clear();
+		Baseline.Clear();
 		Asset_Map map = GameParam.Map;
 		_saveFolder = (map != null && !map.IsNewGame()) ? map.path : null;
 		if (!string.IsNullOrEmpty(_saveFolder) && CheatedSaves.Contains(_saveFolder))
@@ -226,25 +244,34 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	private static void Leave()
 	{
+		// What the last look saw counts: the game's objects (the team, the map) may be gone by now.
+		_leaving = true;
 		Flush();
+		_leaving = false;
 		_levelActive = false;
 		_cheated = false;
 		_cheatReason = null;
 		_saveFolder = null;
+		Baseline.Clear();
 		Save();
 	}
 
-	// The game was saved into the folder: if cheats were used it is remembered as cheated.
+	// The game was saved into the folder (its final one): a game saved after a cheat is remembered as cheated.
 	internal static void Saved(string folder)
 	{
-		if (_levelActive && _cheated)
+		if (!_levelActive || string.IsNullOrEmpty(folder))
 		{
-			Remember(folder);
-			_saveFolder = folder;
+			return;
 		}
-		else if (_levelActive && !string.IsNullOrEmpty(folder))
+		_saveFolder = folder;
+		if (_cheated && CheatedSaves.Add(folder))
 		{
-			_saveFolder = folder;
+			_dirty = true;
+		}
+		else if (!_cheated && CheatedSaves.Remove(folder))
+		{
+			// Written over by a game that never was cheated.
+			_dirty = true;
 		}
 	}
 
@@ -257,7 +284,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 		{
 			return;
 		}
-		if (!IgnoreRules && Time.unscaledTime < _settledAt)
+		if (!IgnoreRules && Time.unscaledTime < _baselineUntil)
 		{
 			return;
 		}
@@ -266,28 +293,33 @@ internal sealed class AchievementTracker : MonoBehaviour
 		Pending[key] = Math.Min(Limit, sum + amount);
 	}
 
-	// Host: the team reached a value (kept when it is the best so far).
-	internal static void Max(Faction team, string counter, int value)
-	{
-		if (team == null || team.isAI || !NetworkServer.active || !Plugin.IsEnabled(Features.Achievements))
-		{
-			return;
-		}
-		Deliver(team.ID, counter, value, max: true);
-	}
-
 	// Every peer: the local player did something (a click, a message every peer gets).
 	internal static void Local(string counter, int amount = 1)
 	{
 		Apply(counter, amount, max: false);
 	}
 
+	// Every peer: the best value the game shows now (waves survived, research done). What the game started with (a
+	// loaded or joined game) is its baseline; only a value beyond it counts.
 	internal static void LocalMax(string counter, int value)
 	{
+		if (!IgnoreRules && _levelActive)
+		{
+			Baseline.TryGetValue(counter, out int baseline);
+			if (Time.unscaledTime < _baselineUntil)
+			{
+				Baseline[counter] = Math.Max(baseline, value);
+				return;
+			}
+			if (value <= baseline)
+			{
+				return;
+			}
+		}
 		Apply(counter, value, max: true);
 	}
 
-	// Counts what was reported on the host, and tells the other players.
+	// Counts what was reported on the host, and tells the other players (while the host's own game counts).
 	internal static void Flush()
 	{
 		if (Pending.Count == 0)
@@ -296,40 +328,53 @@ internal sealed class AchievementTracker : MonoBehaviour
 		}
 		List<KeyValuePair<KeyValuePair<int, string>, int>> batch = new List<KeyValuePair<KeyValuePair<int, string>, int>>(Pending);
 		Pending.Clear();
-		foreach (KeyValuePair<KeyValuePair<int, string>, int> entry in batch)
-		{
-			Deliver(entry.Key.Key, entry.Key.Value, entry.Value, max: false);
-		}
-	}
-
-	private static void Deliver(int team, string counter, int value, bool max)
-	{
-		Faction local = LocalFaction;
-		if (local != null && local.ID == team)
-		{
-			Apply(counter, value, max);
-		}
-		if (Neo.IsMultiplayer && NetworkServer.active)
-		{
-			NetworkServer.SendToAll(AchievementMessage, new CounterMessage { Team = team, Counter = counter, Value = value, Max = max });
-		}
-	}
-
-	// A client: what the host reports; counted when it is the player's own team's.
-	private static void Received(NetworkMessage netMsg)
-	{
-		CounterMessage message = netMsg.ReadMessage<CounterMessage>();
-		Faction local = LocalFaction;
-		if (NetworkServer.active || local == null || local.ID != message.Team)
+		bool counting = _leaving ? _lastCounting : Why() == null;
+		if (!counting)
 		{
 			return;
 		}
-		Apply(message.Counter, message.Value, message.Max);
+		Faction local = LocalFaction;
+		int mine = _leaving ? _lastTeam : ((local != null) ? local.ID : -1);
+		foreach (KeyValuePair<KeyValuePair<int, string>, int> entry in batch)
+		{
+			if (entry.Key.Key == mine)
+			{
+				Apply(entry.Key.Value, entry.Value, max: false);
+			}
+			if (Neo.IsMultiplayer && NetworkServer.active)
+			{
+				NetworkServer.SendToAll(AchievementMessage, new CounterMessage { Team = entry.Key.Key, Counter = entry.Key.Value, Value = entry.Value });
+			}
+		}
+	}
+
+	// A client: what the host reports; counted when it is the player's own team's, a known running total, and not
+	// more than one message may add.
+	private static void Received(NetworkMessage netMsg)
+	{
+		try
+		{
+			CounterMessage message = netMsg.ReadMessage<CounterMessage>();
+			Faction local = LocalFaction;
+			if (NetworkServer.active || local == null || local.ID != message.Team || message.Value <= 0)
+			{
+				return;
+			}
+			if (AchievementList.ForCounter(message.Counter).Count == 0 || AchievementList.IsBest(message.Counter))
+			{
+				return;
+			}
+			Apply(message.Counter, Math.Min(message.Value, MostPerMessage), max: false);
+		}
+		catch (Exception ex)
+		{
+			Plugin.Log.LogWarning("Achievements: a message could not be read: " + ex.Message);
+		}
 	}
 
 	private static void Apply(string counter, int value, bool max)
 	{
-		if (value <= 0 || Why() != null)
+		if (value <= 0 || (_leaving ? !_lastCounting : Why() != null))
 		{
 			return;
 		}
@@ -396,59 +441,78 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	// ---- the file
 
-	// Reads the file (the counters stay as they are when it is missing or cannot be read).
+	// Reads the file. Nothing is changed unless the whole file is read; one that cannot be read is copied aside (with the
+	// time in its name, so an earlier copy is never overwritten) and the counters stay as they are.
 	internal static void Load()
 	{
-		Counters.Clear();
-		Unlocked.Clear();
-		CheatedSaves.Clear();
 		_loaded = true;
-		_dirty = false;
 		string file = FilePath;
 		if (!File.Exists(file))
 		{
+			Counters.Clear();
+			Unlocked.Clear();
+			CheatedSaves.Clear();
+			_dirty = false;
 			return;
 		}
 		try
 		{
+			Dictionary<string, int> counters = new Dictionary<string, int>();
+			Dictionary<string, DateTime> unlocked = new Dictionary<string, DateTime>();
+			HashSet<string> cheated = new HashSet<string>();
 			// Dates stay text: the reader would turn them into dates of its own.
 			JObject data;
 			using (Newtonsoft.Json.JsonTextReader reader = new Newtonsoft.Json.JsonTextReader(new StringReader(File.ReadAllText(file))) { DateParseHandling = Newtonsoft.Json.DateParseHandling.None })
 			{
 				data = JObject.Load(reader);
 			}
-			if (data["counters"] is JObject counters)
+			if (data["counters"] is JObject counterData)
 			{
-				foreach (KeyValuePair<string, JToken> entry in counters)
+				foreach (KeyValuePair<string, JToken> entry in counterData)
 				{
-					Counters[entry.Key] = Math.Max(0, (int?)entry.Value ?? 0);
+					counters[entry.Key] = Math.Max(0, (int?)entry.Value ?? 0);
 				}
 			}
-			if (data["unlocked"] is JObject unlocked)
+			if (data["unlocked"] is JObject unlockedData)
 			{
-				foreach (KeyValuePair<string, JToken> entry in unlocked)
+				foreach (KeyValuePair<string, JToken> entry in unlockedData)
 				{
 					if (DateTime.TryParseExact((string)entry.Value, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime at))
 					{
-						Unlocked[entry.Key] = at;
+						unlocked[entry.Key] = at;
 					}
 				}
 			}
-			if (data["cheatedSaves"] is JArray cheated)
+			if (data["cheatedSaves"] is JArray cheatedData)
 			{
-				foreach (JToken folder in cheated)
+				foreach (JToken folder in cheatedData)
 				{
-					CheatedSaves.Add((string)folder);
+					cheated.Add((string)folder);
 				}
 			}
+			Counters.Clear();
+			Unlocked.Clear();
+			CheatedSaves.Clear();
+			foreach (KeyValuePair<string, int> entry in counters)
+			{
+				Counters[entry.Key] = entry.Value;
+			}
+			foreach (KeyValuePair<string, DateTime> entry in unlocked)
+			{
+				Unlocked[entry.Key] = entry.Value;
+			}
+			foreach (string folder in cheated)
+			{
+				CheatedSaves.Add(folder);
+			}
+			_dirty = false;
 		}
 		catch (Exception ex)
 		{
-			// Kept beside the file so the player's progress is not lost to a half-read file being written over.
 			Plugin.Log.LogWarning("Achievements: could not read " + file + ": " + ex.Message);
 			try
 			{
-				File.Copy(file, file + ".unreadable", true);
+				File.Copy(file, file + ".unreadable-" + DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture), true);
 			}
 			catch (Exception)
 			{
@@ -515,6 +579,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 		Unlocked.Clear();
 		CheatedSaves.Clear();
 		Pending.Clear();
+		Baseline.Clear();
 		_dirty = true;
 		_loaded = true;
 		Save();
@@ -525,6 +590,12 @@ internal sealed class AchievementTracker : MonoBehaviour
 	{
 		_cheated = false;
 		_cheatReason = null;
+	}
+
+	// For the tests: the game's baseline period is over (it ran for BaselineSeconds), or starts again.
+	internal static void SetBaselineOverForTest(bool over)
+	{
+		_baselineUntil = over ? 0f : Time.unscaledTime + BaselineSeconds;
 	}
 
 	// Whether the folder is the save of a game cheats were used in.
@@ -543,6 +614,15 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	private void Update()
 	{
+		if (_levelActive && !_leaving)
+		{
+			_lastCounting = Why() == null;
+			Faction local = LocalFaction;
+			if (local != null)
+			{
+				_lastTeam = local.ID;
+			}
+		}
 		if (_levelActive && !_cheated && Architecte.editorMode && InputModeController.DefaultMode != InputMode.worldEditor && !IgnoreRules)
 		{
 			// The game's own instant build (its debug sidebar's, or the editor mode).
@@ -573,14 +653,21 @@ internal sealed class AchievementTracker : MonoBehaviour
 	}
 }
 
-// The game was saved into a folder: a cheated game's folder is remembered as cheated.
+// The game was saved into a folder (its final path is set when the save is done): a game saved after a cheat is
+// remembered as cheated. Asset_Map.Disk_Save itself runs before the path of a new save is set, so it is not used.
 [Feature(Features.Achievements, Features.AchievementsInfo)]
-[HarmonyPatch(typeof(Asset_Map), "Disk_Save")]
+[HarmonyPatch]
 internal static class AchievementSavePatch
 {
+	private static System.Collections.Generic.IEnumerable<System.Reflection.MethodBase> TargetMethods()
+	{
+		yield return AccessTools.Method(typeof(Asset_Map), nameof(Asset_Map.Disk_Overwrite));
+		yield return AccessTools.Method(typeof(Asset_Map), nameof(Asset_Map.Disk_WriteAsNew));
+	}
+
 	private static void Postfix(Asset_Map __instance)
 	{
-		if (!string.IsNullOrEmpty(__instance.path))
+		if (!string.IsNullOrEmpty(__instance.path) && __instance.mapType != Asset_Map.MapType.Map)
 		{
 			AchievementTracker.Saved(__instance.path);
 		}
