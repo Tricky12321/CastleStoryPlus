@@ -60,8 +60,13 @@ internal static class WorkSearchBudget
 		Queue.Clear();
 	}
 
-	private static bool Prefix(Labor __instance, ref Node __result)
+	private static bool Prefix(Labor __instance, ref Node __result, bool __runOriginal)
 	{
+		if (!__runOriginal)
+		{
+			// Another patch (IdleSearchBackoff) already skipped this round: it is no search to count or put off.
+			return false;
+		}
 		int budget = _perTick != null ? _perTick.Value : DefaultPerTick;
 		if (budget <= 0)
 		{
