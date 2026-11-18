@@ -539,6 +539,10 @@ internal static class Features
 
 	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it: iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
 
+	public const string GuardianSounds = "GuardianSounds";
+
+	public const string GuardianSoundsInfo = "The treasure guardians make sounds, positioned in the world and quieter with distance: an idle call now and then, a roar when a player's unit comes near or it is provoked, footsteps that fit its size and gait, attack and hit sounds and a death sound, each with its guardian's material (crystal chimes, crackling embers, grinding stone, clanking iron). Synthesised for the mod (tools/make_guardian_sounds.py), played next to the game's own sound with the game's volume and mute ([Treasure.Sounds] Volume).";
+
 	public const string RandomWorld = "RandomWorld";
 
 	public const string RandomWorldInfo = "A \"Random World\" map in the new game list, made from a seed with noise: choose archipelago, continent or highlands, small to large, forest, winter or desert, how many trees, boulders, surface and deep ore, and a seed (UUID) on the new game screen, and the map's picture shows the world. Floating islands joined by grass routes (land bridges over the sky), with forests, plants, boulders, iron and pyrite, starting points, neutral crystals and corruptron spawn points (all gamemodes).";
