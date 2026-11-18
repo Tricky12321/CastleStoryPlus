@@ -34,7 +34,7 @@ internal static class UpgradeOrders
 	// it (locked at another station, or the stockpiles cannot pay it).
 	internal static bool Research(UpgradeStation station, UpgradeLine line)
 	{
-		if (station == null || Commands == null)
+		if (station == null || Commands == null || !UpgradeLines.IsEnabled(line))
 		{
 			return false;
 		}

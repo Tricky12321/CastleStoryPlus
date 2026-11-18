@@ -406,6 +406,13 @@ def warehouse_building(_):
   {bricks}"""
 
 
+def sprint(t):
+    return f"""<path d="M70 20 L44 70 L64 70 L52 108 L90 54 L68 54 L84 20 Z" fill="#ffd34d" stroke-width="3"/>
+  <path d="M70 26 L52 64" stroke="#fff3b0" stroke-width="3"/>
+  <path d="M10 44 L36 44 M4 62 L32 62 M12 80 L36 80" stroke="{t['light']}" stroke-width="5"/>
+  <path d="M96 86 Q104 78 112 86 Q120 94 112 102" fill="none" stroke="{t['metal']}" stroke-width="5"/>"""
+
+
 LINES = [
     # key, display name, category, drawing, effect per tier
     ("sharpened_blades", "Sharpened Blades", "weapon", sword, ["+15% melee", "+30% melee", "+50% melee"]),
@@ -427,6 +434,7 @@ LINES = [
     ("giants", "Giant Bricktrons", "research", giants, ["unlocks giants"]),
     ("scouting", "Scouting", "research", scouting, ["+15% wave time", "+30% wave time", "+50% wave time"]),
     ("efficient_mining", "Efficient Mining", "research", efficient_mining, ["10% extra ore", "20% extra ore", "30% extra ore"]),
+    ("sprint", "Sprint", "research", sprint, ["5 s sprint", "6.5 s sprint", "8 s sprint"]),
 ]
 
 BUILDINGS = [

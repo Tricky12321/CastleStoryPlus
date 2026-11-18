@@ -171,6 +171,15 @@ internal class UpgradePanel : MonoBehaviour
 			row.ResearchLabel.text = "Done";
 			return;
 		}
+		if (!UpgradeLines.IsEnabled(line))
+		{
+			row.Effect.text = "Switched off (the Sprint feature).";
+			row.Effect.color = TextColor;
+			row.Cost.text = string.Empty;
+			row.Research.interactable = false;
+			row.ResearchLabel.text = "Off";
+			return;
+		}
 		row.Effect.text = ((tier > 0) ? (line.Effect[tier] + "  ->  ") : "Next: ") + line.Effect[next];
 		row.Effect.color = TextColor;
 		row.Cost.text = "Tier " + next + " (" + UpgradeLines.TierName(line, next) + "): " + CostText(line.Cost[next]);

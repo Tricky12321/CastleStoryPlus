@@ -5,20 +5,20 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Multiplayer;
 
-// The mod's network messages are numbered 200 to 211 (the game's own end at 63). A message that reaches a player with
+// The mod's network messages are numbered 200 to 213 (the game's own end at 63). A message that reaches a player with
 // no handler for its number makes UNet stop reading the packet and throw the rest of it away, and other messages (the
 // game's own among them) were in it. So every client gets a handler that ignores the message as soon as it connects
 // (before the level loads), whatever features are on; a feature that wants its message registers its own handler
-// after it, which replaces this one. The host gets the same for the one message a client sends to it.
+// after it, which replaces this one. The host gets the same for the messages a client sends to it.
 [Feature]
 internal static class ModMessages
 {
 	internal const short First = 200;
 
-	internal const short Last = 211;
+	internal const short Last = 213;
 
-	// A client's message to the host (DesyncProtection).
-	private const short ToHost = 203;
+	// A client's messages to the host (DesyncProtection, Sprint's command).
+	private static readonly short[] ToHost = { 203, 212 };
 
 	private static NetworkClient _client;
 
@@ -54,9 +54,12 @@ internal static class ModMessages
 		else if (!_server)
 		{
 			_server = true;
-			if (!NetworkServer.handlers.ContainsKey(ToHost))
+			foreach (short id in ToHost)
 			{
-				NetworkServer.RegisterHandler(ToHost, Ignore);
+				if (!NetworkServer.handlers.ContainsKey(id))
+				{
+					NetworkServer.RegisterHandler(id, Ignore);
+				}
 			}
 		}
 	}

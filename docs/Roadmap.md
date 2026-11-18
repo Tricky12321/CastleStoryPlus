@@ -90,17 +90,3 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: from which wave and how often, whether it can be stunned or slowed, and whether it has its own attack
   (for example a ground slam that hits all round it).
 
-## Research
-
-### Sprint
-
-- A new colony upgrade at the research station: bricktrons can sprint for a short while, then the sprint goes on
-  cooldown.
-- While sprinting a bricktron walks much faster, for example +50% for 5 seconds, then cannot sprint again for
-  30-60 seconds (config settings). Higher tiers make the sprint longer or the cooldown shorter.
-- Paid in dark crystals and researched like the other colony upgrades (free in sandbox); counts for the whole team and
-  is kept in the save.
-- Stacks with Light Boots and roads.
-- To decide: whether the player triggers it (a key or a button for the selected bricktrons, for example to flee or
-  reach a breach) or it starts by itself (soldiers charging, workers fleeing enemies), whether it costs stamina or only
-  has a cooldown, whether it shows on the bricktron (dust trail, a small bar), and whether enemies can sprint too.

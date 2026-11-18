@@ -941,6 +941,8 @@ internal static class KitBundleRecipesPatch
 			Upgrades.UpgradeLines.RegisterLateRecipes();
 			KitBundles.RegisterRecipes();
 			KitBundles.UseRecipes();
+			// Research > Sprint's recipes come after the bundles' so their ids stay as they were.
+			Upgrades.UpgradeLines.RegisterVeryLateRecipes();
 		}
 		catch (Exception ex)
 		{

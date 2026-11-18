@@ -113,6 +113,11 @@ internal class Retreat : MonoBehaviour
 		state.Before = labor.Autonomy;
 		RetreatOrder.Send(labor, destination, Labor.DecisionSource.User);
 		state.Ordered = labor.Autonomy;
+		if (state.Phase == Phase.Fleeing)
+		{
+			// Research > Sprint: a fighter running to safety sprints if it can.
+			CastleStoryPlus.Upgrades.Sprint.TryStart(labor, CastleStoryPlus.Upgrades.SprintTrigger.Flee);
+		}
 	}
 
 	// The retreat is over: the unit goes back to what it did on its own before (a builder to its tasks). Without
