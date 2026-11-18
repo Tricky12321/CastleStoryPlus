@@ -44,6 +44,8 @@ public class HarmonyPatchAuditTests
 		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|RepairNoRebuildPatch", Unreviewed },
 		{ "RecepteurDisplay.UpdateElements|LargeStockpileDisplayPatch", Unreviewed },
 		{ "Script.LoadFile|LuaChunkReuse", Unreviewed },
+		{ "CraftingInstructions.FindResource|ResearchFetchPatch", Unreviewed },
+		{ "Labor.ClosestResource|ResourcePriorityIngredients", Unreviewed },
 		{ "HarvestProject.SelectBestGoal|OreMineSelectPatch", Unreviewed },
 		{ "SearchPathRequest.Work|SearchFrameBudget", Unreviewed },
 		{ "SearchPathRequest.LoopImprovePath|SearchFrameBudget", Unreviewed },
@@ -236,9 +238,19 @@ public class HarmonyPatchAuditTests
 		Dictionary<int, string> seen = new Dictionary<int, string>();
 		List<string> failures = new List<string>();
 		// Constants of the mod's classes: const short ...Message / ToClients / ToHost = 2xx.
+		// ModMessages holds the range of the mod's ids (First, Last: every client ignores them until a feature registers its
+		// own handler) and a copy of the one id a client sends to the host: not ids of its own, but the range they must lie in.
+		Type registry = ModAssembly.GetType("CastleStoryPlus.Multiplayer.ModMessages", true);
+		const BindingFlags constants = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+		int first = (short)registry.GetField("First", constants).GetRawConstantValue();
+		int last = (short)registry.GetField("Last", constants).GetRawConstantValue();
 		foreach (Type type in LoadableTypes(ModAssembly))
 		{
-			foreach (FieldInfo field in type.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+			if (type == registry)
+			{
+				continue;
+			}
+			foreach (FieldInfo field in type.GetFields(constants))
 			{
 				if (!field.IsLiteral || field.FieldType != typeof(short))
 				{
@@ -250,6 +262,10 @@ public class HarmonyPatchAuditTests
 					continue;
 				}
 				string name = type.FullName + "." + field.Name;
+				if (id > last || id < first)
+				{
+					failures.Add(name + " = " + id + " is outside ModMessages " + first + " to " + last + " (the range clients ignore until a feature registers)");
+				}
 				if (seen.TryGetValue(id, out string other))
 				{
 					failures.Add("id " + id + " is used by " + other + " and " + name);
