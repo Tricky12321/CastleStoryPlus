@@ -339,6 +339,10 @@ internal static class Features
 
 	public const string LaddersInfo = "Wood ladder in the build menu (wood group): bricktrons climb it straight up and down, slower than stairs ([Ladders] ClimbSpeed, RouteCost) and only with free hands or a bag.";
 
+	public const string Roads = "Roads";
+
+	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
+
 	public const string GlobalBuildJob = "GlobalBuildJob";
 
 	public const string GlobalBuildJobInfo = "Placing with the idle group or the repair task selected no longer fails, and a new build task no longer takes over the others. With [Building] CombineBuildTasks (in-game: Settings > Build tasks) every blueprint goes into one build task per team and other build tasks are merged into it.";
@@ -538,6 +542,10 @@ internal static class Features
 	public const string Treasure = "Treasure";
 
 	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it: iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
+
+	public const string GuardianSounds = "GuardianSounds";
+
+	public const string GuardianSoundsInfo = "The treasure guardians make sounds, positioned in the world and quieter with distance: an idle call now and then, a roar when a player's unit comes near or it is provoked, footsteps that fit its size and gait, attack and hit sounds and a death sound, each with its guardian's material (crystal chimes, crackling embers, grinding stone, clanking iron). Synthesised for the mod (tools/make_guardian_sounds.py), played next to the game's own sound with the game's volume and mute ([Treasure.Sounds] Volume).";
 
 	public const string RandomWorld = "RandomWorld";
 

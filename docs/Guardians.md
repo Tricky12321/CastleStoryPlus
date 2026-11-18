@@ -71,3 +71,36 @@ defines each kind, `BeastMesh` loads the model, `BeastBody` animates it and `Bea
   break objects or the ruin's blocks to get through (`TreasureChests`, `TreasureRuins`).
 - Guardians are calm until a player's unit hits one. They fight only the players' units, never corruptrons or each
   other (`BeastTemper`).
+
+## Sounds
+
+Every guardian has sounds of its own (`GuardianSounds`, `BeastVoice`), so a new one is not finished without them.
+
+- **The set per guardian:** six events, each with at least one clip (two or three for the ones heard often, so they
+  do not repeat):
+  - `idle`: a call now and then (every 14-35 seconds) while it is not fighting;
+  - `roar`: when a player's unit comes within 16 blocks of it, when it is provoked (the host only, the temper is not synced) and when it goes into combat (at
+    most one every 25 seconds, in real time);
+  - `step`: one for every half stride of its gait, quieter when it walks slowly; the clip and `StepLevel` (in
+    `GuardianSounds`) must fit its size and weight, so the Spirestalker paces lightly and the Boulderback thuds;
+  - `attack`: as the blow starts (the wind-up is silent, the sound comes with the swing);
+  - `hit`: when its health goes down;
+  - `death`: when its corpse appears (only where it is seen, not from the fog).
+- **The material is heard in every event,** not only in the voice: crystal chimes (Spirestalker), crackling embers
+  (Cindermane), grinding and crumbling stone (Boulderback), clanking and ringing iron (Ironhorn). A new material gets
+  its own sound character the same way. The voice fits the animal (a giraffe's high hum, a lion's roar, a gorilla's
+  chesty grunt, a rhino's snort) and its size: a bigger guardian is lower and heavier.
+- **Made for the mod,** never taken from the game's own files: `tools/make_guardian_sounds.py` synthesises them
+  (noise, oscillators, filters, envelopes and damped resonances) into `CastleStoryPlus/Assets/Sounds/Guardians/
+  <Guardian>_<event>_<n>.wav` (mono, 16-bit, 32 kHz). Add the guardian's sound functions and its row in `SOUNDS` there,
+  run `python3 tools/make_guardian_sounds.py` (`--preview DIR` also writes a spectrogram and waveform PNG per clip) and
+  commit the WAVs. The sound set can be swapped as a whole: replace the files with other ones of the same names
+  (for example from a CC0 library; any 16-bit PCM or 32-bit float WAV), or add more numbered files, and the game
+  picks one at random per event.
+- **Played in the world:** as 3D sounds at the guardian, linear fall off from the event's full-volume distance to its
+  furthest distance (the table `GuardianSounds.Settings`: a roar carries 90 blocks, a footstep 32), through
+  `ModAudio`, which also keeps the game's mute and volume (master and effects), the one audio listener (only while a
+  sound plays, following the camera, never two) and a pool of 16 voices, so a crowd of guardians cannot flood the
+  mix: the quietest, least important sound is cut first. Nothing is played from a guardian that is not shown (fog).
+  Nothing is allocated per frame.
+- Add the new guardian to `StepLevel` and the tests in `CastleStoryPlus.DevTools/Tests/GuardianSoundTests.cs`.

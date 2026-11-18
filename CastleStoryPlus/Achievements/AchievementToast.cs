@@ -8,7 +8,7 @@ using UnityEngine.UI;
 namespace CastleStoryPlus.Achievements;
 
 // The short message when an achievement is unlocked: a dark plate at the top of the screen with its picture, name and
-// text, and a chime made in code (three rising notes, played by ModSound at the game's interface volume, so it is
+// text, and a chime made in code (three rising notes, played by ModAudio on the interface channel, so it is
 // heard without a second listener). One at a time; the ones that come together wait their turn.
 [Feature(Features.Achievements, Features.AchievementsInfo)]
 internal sealed class AchievementToast : MonoBehaviour
@@ -136,7 +136,7 @@ internal sealed class AchievementToast : MonoBehaviour
 		_showing = true;
 		Current = achievement;
 		Shown++;
-		ModSound.PlayOnce(Chime(), ChimeVolume * ModSound.UiVolume);
+		ModAudio.PlayUi(Chime(), ChimeVolume);
 	}
 
 	private void Build()

@@ -187,7 +187,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		{
 			_sound.Stop();
 		}
-		ModSound.Listening(this, false);
+		ModAudio.Need(this, false);
 		_live = false;
 		if (_veil != null)
 		{
@@ -390,7 +390,7 @@ internal sealed class RainVisuals : MonoBehaviour
 			_sound.spatialBlend = 0f;
 			_sound.playOnAwake = false;
 		}
-		_sound.volume = wantRain ? RainVolume * _strength * ModSound.AmbienceVolume : 0f;
+		_sound.volume = wantRain ? RainVolume * _strength * ModAudio.GameVolume(ModAudio.Channel.Ambience) : 0f;
 		if (wantRain && !_sound.isPlaying)
 		{
 			_sound.Play();
@@ -399,7 +399,7 @@ internal sealed class RainVisuals : MonoBehaviour
 		{
 			_sound.Stop();
 		}
-		ModSound.Listening(this, _sound.isPlaying);
+		ModAudio.Need(this, _sound.isPlaying);
 	}
 
 	// Three seconds of rain: noise, low-passed to a hiss with the lowest rumble taken off, and now and then a drop;

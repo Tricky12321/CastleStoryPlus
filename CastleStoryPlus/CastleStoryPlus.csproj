@@ -75,12 +75,13 @@
     <None Include="Lua/**/*.lua" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets/**/*.png" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Assets/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets/**/*.wav" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Copies the built plugin and its Lua files into the game's BepInEx/plugins folder. -->
   <Target Name="InstallPlugin" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins')">
     <ItemGroup>
       <ModLua Include="Lua/**/*.lua" />
-      <ModAssets Include="Assets/**/*.png;Assets/**/*.json" />
+      <ModAssets Include="Assets/**/*.png;Assets/**/*.json;Assets/**/*.wav" />
     </ItemGroup>
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)BepInEx/plugins/CastleStoryPlus/" />
     <Copy SourceFiles="@(ModLua)" DestinationFiles="@(ModLua->'$(GameDir)BepInEx/plugins/CastleStoryPlus/Lua/%(RecursiveDir)%(Filename)%(Extension)')" />

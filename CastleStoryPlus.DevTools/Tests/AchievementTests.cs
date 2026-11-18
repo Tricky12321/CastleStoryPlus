@@ -234,11 +234,11 @@ internal static class AchievementTests
 			yield return null;
 		}
 		t.Record("mostListeners", most);
-		t.Record("ownListener", CastleStoryPlus.Core.ModSound.HasOwnListener);
+		t.Record("ownListener", CastleStoryPlus.Core.ModAudio.ListenerPresent);
 		t.True(most <= 1, "Two audio listeners: " + most);
 		t.True(heard, "No audio listener while the chime plays");
 		yield return t.Until(() => !AchievementToast.IsShowing, 10f, "the message to go");
-		yield return t.Until(() => Object.FindObjectsOfType<AudioListener>().Length <= 1 && !CastleStoryPlus.Core.ModSound.HasOwnListener, 10f, "our listener to go when nothing plays");
+		yield return t.Until(() => Object.FindObjectsOfType<AudioListener>().Length <= 1 && !CastleStoryPlus.Core.ModAudio.ListenerPresent, 10f, "our listener to go when nothing plays");
 	}
 
 	[GameTest("Achievements", "The in-game menu lists every achievement, locked ones greyed out", NeedsHostGame = true, TimeoutSeconds = 30f)]

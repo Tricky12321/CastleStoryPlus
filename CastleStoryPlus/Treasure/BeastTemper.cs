@@ -52,6 +52,15 @@ internal static class BeastTemper
 			if (labor != null && Beasts.KindOf(labor) != null && (labor.transform.position - at).sqrMagnitude <= PackRadius * PackRadius)
 			{
 				ProvokedUntil[labor] = until;
+				if (wasCalm)
+				{
+					// Host only (the temper is not synced): other players hear the roar when it goes into combat.
+					BeastBody body = labor.GetComponent<BeastBody>();
+					if (body != null && body.Voice != null)
+					{
+						body.Voice.Provoked();
+					}
+				}
 			}
 		}
 		ProvokedUntil[victim] = until;

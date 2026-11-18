@@ -72,9 +72,12 @@ internal static class CustomBlocks
 
 		// A ladder (Ladders): bricktrons climb it, it does not fill its block.
 		public bool Ladder;
+
+		// A stone road (Roads): a flat stone piece on the ground, it does not fill its block.
+		public bool Road;
 	}
 
-	private static readonly Shape[] Shapes = new Shape[13]
+	private static readonly Shape[] Shapes = new Shape[14]
 	{
 		new Shape { Name = "Stone_Brick2x2", IconFile = "stone_brick_2x2", Id = 9001, Width = 2, Depth = 2, Cost = 2, Hp = 960f, Label = "Large brick 2x2", Icon = "_Block" },
 		new Shape { Name = "Stone_Brick2x4", IconFile = "stone_brick_2x4", Id = 9002, Width = 2, Depth = 4, Cost = 4, Hp = 1920f, Label = "Long brick 2x4", Icon = "_Brick" },
@@ -88,7 +91,8 @@ internal static class CustomBlocks
 		new Shape { Name = "Wood_Slab1x3", IconFile = "wood_slab_1x3", Id = 9011, Wood = true, Width = 1, Depth = 3, Cost = 2, Hp = 360f, Label = "Wood slab 1x3", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab1x5", IconFile = "wood_slab_1x5", Id = 9012, Wood = true, Width = 1, Depth = 5, Cost = 3, Hp = 600f, Label = "Wood slab 1x5", Icon = "_Plank" },
 		new Shape { Name = "Wood_Slab2x3", IconFile = "wood_slab_2x3", Id = 9013, Wood = true, Width = 2, Depth = 3, Cost = 3, Hp = 720f, Label = "Wood slab 2x3", Icon = "_Plank" },
-		new Shape { Name = Ladders.Name, IconFile = "wood_ladder", Id = Ladders.Id, Wood = true, Ladder = true, Width = 1, Depth = 1, Cost = 1, Hp = 120f, Label = "Wood ladder", Icon = "_Plank" }
+		new Shape { Name = Ladders.Name, IconFile = "wood_ladder", Id = Ladders.Id, Wood = true, Ladder = true, Width = 1, Depth = 1, Cost = 1, Hp = 120f, Label = "Wood ladder", Icon = "_Plank" },
+		new Shape { Name = Roads.Name, IconFile = "stone_road", Id = Roads.Id, Road = true, Width = 1, Depth = 1, Cost = 1, Hp = 480f, Label = "Stone road", Icon = "_Block" }
 	};
 
 	private const string StoneBlockSource = "Stone_DoubleBrick";
@@ -126,6 +130,10 @@ internal static class CustomBlocks
 		string stone = string.Empty, wood = string.Empty;
 		foreach (Shape shape in Shapes)
 		{
+			if (shape.Road)
+			{
+				continue;
+			}
 			GameUi.BuildCatalog.AddBlock(shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), shape.Wood ? 5 : 1, shape.Wood ? "Wood_Ramp_TopA" : "Stone_Staircase");
 			string line = "_t.Add(AssetKey.New(\"Blueprints\", \"" + shape.Name + "\"),\t\t{ Name = ||\"" + shape.Label + "\",\t\tIcon = " + UI.BuildIcons.Lua(shape.IconFile, shape.Icon) + ",\tHotkey = \"\",\tgroupId = " + (shape.Wood ? 5 : 1) + " })\n";
 			if (shape.Wood)
@@ -139,6 +147,22 @@ internal static class CustomBlocks
 		}
 		LuaInjection.AddPatch(Features.CustomBlocks, "LUI/Meta/Meta_StoneBlock.lua", "_t.Add(AssetKey.New(\"Blueprints\", \"Stone_Staircase\"),", LuaInjection.Mode.InsertBefore, stone);
 		LuaInjection.AddPatch(Features.CustomBlocks, "LUI/Meta/Meta_StoneBlock.lua", "_t.Add(AssetKey.New(\"Blueprints\", \"Wood_Ramp_TopA\"),", LuaInjection.Mode.InsertBefore, wood);
+	}
+
+	// The stone road's build menu entry (Roads), in the stone group before the staircase.
+	internal static void EnableRoadMenu()
+	{
+		UI.BuildIcons.Register();
+		foreach (Shape shape in Shapes)
+		{
+			if (!shape.Road)
+			{
+				continue;
+			}
+			GameUi.BuildCatalog.AddBlock(shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), 1, "Stone_Staircase");
+			string line = "_t.Add(AssetKey.New(\"Blueprints\", \"" + shape.Name + "\"),\t\t{ Name = ||\"" + shape.Label + "\",\t\tIcon = " + UI.BuildIcons.Lua(shape.IconFile, shape.Icon) + ",\tHotkey = \"\",\tgroupId = 1 })\n";
+			LuaInjection.AddPatch(Features.Roads, "LUI/Meta/Meta_StoneBlock.lua", "_t.Add(AssetKey.New(\"Blueprints\", \"Stone_Staircase\"),", LuaInjection.Mode.InsertBefore, line);
+		}
 	}
 
 	// Factories with the same name are merged; look at the registered ones after every Awake (see CustomBuilding).
@@ -413,7 +437,7 @@ internal static class CustomBlocks
 		Mesh mesh = MeshFor(shape, go.GetComponent<MeshFilter>());
 		go.GetComponent<MeshFilter>().sharedMesh = mesh;
 		// A long stone brick shows its own texture.
-		Material stoneMaterial = (!shape.Wood && shape.Height == 1) ? LongStoneTexture.Make(shape.Name, brick, mesh, brickMaterial) : null;
+		Material stoneMaterial = (!shape.Wood && !shape.Road && shape.Height == 1) ? LongStoneTexture.Make(shape.Name, brick, mesh, brickMaterial) : null;
 		if (stoneMaterial != null)
 		{
 			go.GetComponent<MeshRenderer>().sharedMaterials = new Material[1] { stoneMaterial };
@@ -426,8 +450,7 @@ internal static class CustomBlocks
 		BoxCollider collider = go.GetComponent<BoxCollider>();
 		if (collider != null)
 		{
-			collider.center = mesh.bounds.center;
-			collider.size = mesh.bounds.size;
+			FitCollider(collider, mesh, shape);
 		}
 		BaseVoxelTransform voxelTransform = go.GetComponent<BaseVoxelTransform>();
 		if (voxelTransform != null)
@@ -451,7 +474,7 @@ internal static class CustomBlocks
 					body = cell.Value;
 				}
 			}
-			if (shape.Ladder)
+			if (shape.Ladder || shape.Road)
 			{
 				// Bricktrons climb inside the ladder's block: it takes the block but blocks no one.
 				body &= ~(long)(VPropertyMask.obstacle | VPropertyMask.character);
@@ -488,8 +511,7 @@ internal static class CustomBlocks
 		BoxCollider collider = go.GetComponent<BoxCollider>();
 		if (collider != null)
 		{
-			collider.center = mesh.bounds.center;
-			collider.size = mesh.bounds.size;
+			FitCollider(collider, mesh, shape);
 		}
 		BaseVoxelTransform voxelTransform = go.GetComponent<BaseVoxelTransform>();
 		if (voxelTransform != null)
@@ -694,6 +716,24 @@ internal static class CustomBlocks
 		return new Vector3(-(shape.Width - 1) / 2f, -(shape.Height - 1) / 2f, -(shape.Depth - 1) / 2f);
 	}
 
+	// The collider round the mesh; a road's is thicker than its thin stone, so it can be pointed at.
+	private static void FitCollider(BoxCollider collider, Mesh mesh, Shape shape)
+	{
+		Bounds bounds = mesh.bounds;
+		collider.center = bounds.center;
+		collider.size = bounds.size;
+		if (shape.Road && bounds.size.y < RoadPick)
+		{
+			collider.center = new Vector3(bounds.center.x, bounds.min.y + RoadPick / 2f, bounds.center.z);
+			collider.size = new Vector3(bounds.size.x, RoadPick, bounds.size.z);
+		}
+	}
+
+	// How thick a road's stone is, and its collider (a block high is the voxel).
+	private const float RoadThickness = 0.15f;
+
+	private const float RoadPick = 0.3f;
+
 	private static Mesh MeshFor(Shape shape, MeshFilter source)
 	{
 		if (Meshes.TryGetValue(shape.Name, out Mesh mesh))
@@ -701,6 +741,10 @@ internal static class CustomBlocks
 			return mesh;
 		}
 		mesh = shape.Ladder ? LadderMesh() : (shape.Wood ? SlabMesh(shape) : BrickMesh(shape, source != null ? source.sharedMesh : null, SingleBrickMesh()));
+		if (shape.Road)
+		{
+			Flatten(mesh, RoadThickness);
+		}
 		mesh.name = shape.Name;
 		Meshes[shape.Name] = mesh;
 		return mesh;
@@ -730,6 +774,21 @@ internal static class CustomBlocks
 		// texture with each face's picture continued to the face's size (LongStoneTexture), so it is one stone with
 		// the game's joints and bevels at its edges and nothing stretched.
 		return Lengthened(brick, shape.Width - 1f, shape.Depth - 2f);
+	}
+
+	// The mesh pressed flat from the top down to the given thickness, its bottom where it was: the stone of a road
+	// lies on the ground. Texture coordinates stay.
+	private static void Flatten(Mesh mesh, float thickness)
+	{
+		Bounds bounds = mesh.bounds;
+		float scale = thickness / Mathf.Max(0.01f, bounds.size.y);
+		Vector3[] vertices = mesh.vertices;
+		for (int i = 0; i < vertices.Length; i++)
+		{
+			vertices[i].y = bounds.min.y + (vertices[i].y - bounds.min.y) * scale;
+		}
+		mesh.vertices = vertices;
+		mesh.RecalculateBounds();
 	}
 
 	// A copy of the mesh centred on x and z, its vertices on each side of the middle moved outwards by half the extra
