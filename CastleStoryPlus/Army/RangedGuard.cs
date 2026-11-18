@@ -4,6 +4,7 @@ using Brix.External.Factories;
 using Brix.Game.AI.InstructionType;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
+using Brix.UI.Icons;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Workers;
 using HarmonyLib;
@@ -194,6 +195,61 @@ internal static class RangedGuardOrderPatch
 		if (source == Labor.DecisionSource.User)
 		{
 			RangedGuard.OnPlayerOrder(__instance);
+		}
+	}
+}
+
+// A guarding ranged soldier shows the guard's icon (the "Guard here" button's) in its name tag, as a melee soldier set
+// to defend its position shows a shield, so the guards can be told at a glance (#98). Hold fire keeps its own icon.
+[Feature(Features.RangedGuard, Features.RangedGuardInfo)]
+[HarmonyPatch(typeof(AutonomyStatus), nameof(AutonomyStatus.GetIcon))]
+internal static class RangedGuardIconPatch
+{
+	// The guard flag each name tag shows, so a change of other stats (experience) does not redraw it.
+	private static readonly Dictionary<CharacterState, bool> Shown = new Dictionary<CharacterState, bool>();
+
+	private static void Enable()
+	{
+		WorkerStats.Changed += OnStatsChanged;
+		GameSession.OnLeave(Shown.Clear);
+	}
+
+	private static void Postfix(AutonomyStatus __instance, Labor labor, ref Sprite __result)
+	{
+		if (__instance.Id != AutonomyStatus.Ids.instinctOnly || !RangedGuard.IsGuarding(labor))
+		{
+			return;
+		}
+		Sprite icon = IconKeys._Defend_Area.Get32();
+		if (icon != null)
+		{
+			__result = icon;
+		}
+	}
+
+	// The game redraws the name tag's icon when the stance or the tools change, not when the guard does.
+	private static void OnStatsChanged(CharacterState state)
+	{
+		if (state == null)
+		{
+			return;
+		}
+		Labor labor = state.GetComponent<Labor>();
+		bool guarding = labor != null && RangedGuard.IsGuarding(labor);
+		bool known = Shown.TryGetValue(state, out bool shown);
+		if (known && shown == guarding)
+		{
+			return;
+		}
+		Shown[state] = guarding;
+		if (!known && !guarding)
+		{
+			return;
+		}
+		BricktronOverheadDisplayDriver driver = state.GetComponent<BricktronOverheadDisplayDriver>();
+		if (driver != null && driver.overheadDisplay != null && driver.overheadDisplay.NameTag.IsSpawned)
+		{
+			driver.SetIcon();
 		}
 	}
 }
