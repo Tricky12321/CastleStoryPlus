@@ -29,6 +29,10 @@ internal class AllSettingsPanel : MonoBehaviour
 	// Space between the lists and the description of the value under the mouse.
 	private const float DescriptionGap = 14f;
 
+	// The least width of a value's name: in a narrow list the editor beside it gives way down to its own least width,
+	// so a name is never crushed to a letter per line (#95).
+	private const float NameMinWidth = 150f;
+
 	// Set while Embed adds a panel, so an Awake run at once (an active parent) does not build a window.
 	private static bool _embedding;
 
@@ -442,6 +446,7 @@ internal class AllSettingsPanel : MonoBehaviour
 			column.childForceExpandHeight = false;
 			column.childAlignment = TextAnchor.MiddleLeft;
 			Flexible(names.gameObject);
+			names.GetComponent<LayoutElement>().minWidth = NameMinWidth;
 			Text title = CreateText(names, Spaced(name).ToUpper(), 13, GameText, TextAnchor.MiddleLeft);
 			title.font = CastleStoryPlus.LuaUi.LuiStyle.Bold;
 			string line = ShortDescription(setting);
@@ -463,6 +468,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		{
 			Text label = CreateText(row, name, 13, setting.Orphan ? Grey : TextColor, TextAnchor.MiddleLeft);
 			Flexible(label.gameObject);
+			label.GetComponent<LayoutElement>().minWidth = NameMinWidth;
 		}
 		if (setting.Orphan)
 		{
@@ -472,6 +478,13 @@ internal class AllSettingsPanel : MonoBehaviour
 		ConfigEntryBase entry = setting.Entry;
 		Type type = entry.SettingType;
 		object[] choices = Choices(entry);
+#if UNITY6
+		if (setting.Definition.Section == "Display" && setting.Definition.Key == "RefreshRate" && type == typeof(string))
+		{
+			AddRefreshRateEditor(row, setting);
+			return;
+		}
+#endif
 		if (type == typeof(bool))
 		{
 			AddSwitch(row, setting);
@@ -632,9 +645,59 @@ internal class AllSettingsPanel : MonoBehaviour
 			entry.BoxedValue = choices[(index + 1) % choices.Length];
 			Changed(setting);
 		});
+		Shrinkable(button.gameObject, 100f);
 		Text value = button.GetComponentInChildren<Text>();
 		value.color = Yellow;
 		_refreshers.Add(() => value.text = Text(entry));
+	}
+
+#if UNITY6
+	// [Display] RefreshRate is kept as numerator/denominator (353800000/2454400); shown as hertz, a click picks the
+	// next rate the screen offers at its size (Auto, the system's, first).
+	private void AddRefreshRateEditor(Transform row, Setting setting)
+	{
+		ConfigEntryBase entry = setting.Entry;
+		Button button = CreateButton(row, string.Empty, 200f, () =>
+		{
+			List<string> choices = new List<string> { string.Empty };
+			foreach (RefreshRate rate in CastleStoryPlus.Core.RefreshRateSetting.RatesAt(Screen.width, Screen.height))
+			{
+				choices.Add(CastleStoryPlus.Core.RefreshRateSetting.Text(rate));
+			}
+			string current = (string)entry.BoxedValue ?? string.Empty;
+			int index = choices.IndexOf(current);
+			if (index < 0 && CastleStoryPlus.Core.RefreshRateSetting.TryParse(current, out RefreshRate kept))
+			{
+				// The same rate in another form (143.93 and 144): the next one after it.
+				index = choices.FindIndex((string choice) => CastleStoryPlus.Core.RefreshRateSetting.TryParse(choice, out RefreshRate other) && CastleStoryPlus.Core.RefreshRateSetting.Same(other, kept));
+			}
+			entry.BoxedValue = choices[(index + 1) % choices.Count];
+			Changed(setting);
+		});
+		Shrinkable(button.gameObject, 100f);
+		Text value = button.GetComponentInChildren<Text>();
+		value.color = Yellow;
+		_refreshers.Add(() => value.text = RefreshRateText((string)entry.BoxedValue));
+	}
+
+	private static string RefreshRateText(string text)
+	{
+		if (CastleStoryPlus.Core.RefreshRateSetting.TryParse(text, out RefreshRate rate))
+		{
+			return CastleStoryPlus.Core.RefreshRateSetting.Label(rate).Replace("HZ", "Hz");
+		}
+		return string.IsNullOrEmpty(text) ? "Auto" : text;
+	}
+#endif
+
+	// An editor that gives way to the value's name in a narrow list, down to the given width.
+	private static void Shrinkable(GameObject go, float minWidth)
+	{
+		LayoutElement element = go.GetComponent<LayoutElement>();
+		if (element != null)
+		{
+			element.minWidth = minWidth;
+		}
 	}
 
 	private void AddKeyEditor(Transform row, Setting setting)
@@ -648,6 +711,7 @@ internal class AllSettingsPanel : MonoBehaviour
 			_captureFrame = Time.frameCount;
 			value.text = "Press a key...";
 		});
+		Shrinkable(button.gameObject, 100f);
 		value = button.GetComponentInChildren<Text>();
 		value.color = Yellow;
 		_refreshers.Add(() => value.text = Text(entry));
@@ -693,6 +757,7 @@ internal class AllSettingsPanel : MonoBehaviour
 		ConfigEntryBase entry = setting.Entry;
 		CreateButton(row, "-", 26f, () => Step(setting, -1));
 		InputField field = CreateInputField(row, string.Empty, 100f);
+		Shrinkable(field.gameObject, 50f);
 		field.textComponent.alignment = TextAnchor.MiddleRight;
 		field.contentType = (entry.SettingType == typeof(int) || entry.SettingType == typeof(long)) ? InputField.ContentType.IntegerNumber : InputField.ContentType.DecimalNumber;
 		field.onEndEdit.AddListener((string text) =>
@@ -751,6 +816,7 @@ internal class AllSettingsPanel : MonoBehaviour
 	private void AddTextEditor(Transform row, Setting setting)
 	{
 		InputField field = CreateInputField(row, string.Empty, 260f);
+		Shrinkable(field.gameObject, 100f);
 		field.onEndEdit.AddListener((string text) => Set(setting, text));
 		_refreshers.Add(() =>
 		{

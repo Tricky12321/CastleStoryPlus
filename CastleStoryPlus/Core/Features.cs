@@ -167,6 +167,10 @@ internal static class Features
 
 	public const string ResourceReservationInfo = "A worker reserves the resources it sets out to fetch (a loose item, or as many items of a stockpile as it will take), so other workers fetch elsewhere instead of walking to the same ones.";
 
+	public const string UnloadToWorkshops = "UnloadToWorkshops";
+
+	public const string UnloadToWorkshopsInfo = "A worker emptying its bag first takes what a workshop of its own is still missing for its orders (ingredients or fuel) to that workshop, when the workshop is at most 8 blocks farther than the storage it would have used; only what the workshop is missing goes in, the rest goes to storage as before (#96). Markets are left out. Host only.";
+
 	public const string DirectTask = "DirectTask";
 
 	public const string DirectTaskInfo = "Select bricktrons and right-click a task (blueprint, tree or block of an area...): they start that task at once and join that task's crew, staying on it until its work is done.";
