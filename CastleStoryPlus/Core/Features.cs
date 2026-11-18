@@ -191,6 +191,10 @@ internal static class Features
 
 	public const string PassThroughAlliesInfo = "Bricktrons walk through each other (allies never block a path; enemies still do), and a bricktron in a doorway no longer makes the area behind it unreachable.";
 
+	public const string CrowdPathing = "CrowdPathing";
+
+	public const string CrowdPathingInfo = "Unity 6 port: a unit that cannot walk through others (soldiers, corruptrons, biftrons) and finds an ally standing where it climbs up or steps down climbs beside it, instead of waiting below it until its order gives up (#102).";
+
 	public const string SpeedKeys = "SpeedKeys";
 
 	public const string SpeedKeysInfo = "Game speed keys in single player: 1 = normal, 2 = 2x, 3 = 3x (see [GameSpeed]). With the debug menu's fast speed keys on: 4 = 10x, 5 = 20x.";
