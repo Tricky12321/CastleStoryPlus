@@ -315,7 +315,7 @@ end
 		{
 			Faction faction = Faction.GetFaction(state.gameObject);
 			int coming = Coming(faction, product, recipe.Creates, cached: true);
-			text += " (" + Stock(faction, product, cached: true) + " now" + ((coming > 0) ? ", " + coming + " being made or on the way" : string.Empty) + ")";
+			text += " (" + Stock(faction, product, cached: true) + " now" + ((coming > 0) ? ", " + coming + ((Worn(faction, product) > 0) ? " being made, on the way or worn" : " being made or on the way") : string.Empty) + ")";
 		}
 		int batch = Batch(recipe);
 		if (batch > 1)
@@ -628,7 +628,8 @@ end
 	// - made items in a workshop that makes them (waiting to be carried away), in a bricktron's bag or on the ground;
 	//   not in a workshop that does not make it (there it is an ingredient about to be used);
 	// - the order a workshop is working on, and every queued order of a workshop that does not loop (a looping
-	//   workshop asks again before each order).
+	//   workshop asks again before each order);
+	// - a soldier kit worn by a soldier of its class (Worn).
 	internal static int Coming(Faction faction, Ressource product, Factory.AssetKey creates, bool cached)
 	{
 		KeyValuePair<Faction, Type> key = new KeyValuePair<Faction, Type>(faction, product.GetType());
@@ -675,7 +676,33 @@ end
 				}
 			}
 		}
+		count += Worn(faction, product);
 		ComingCache[key] = new KeyValuePair<float, int>(Time.time, count);
+		return count;
+	}
+
+	// Soldier kits (KitBundles) the team's soldiers of the kit's class wear. A soldier hands its kit in again after a
+	// call to arms, and the call to arms counts it among the class's sets: counted as stock it is not, the workshop
+	// made new kits for the ones worn and the sets went past the limit (15 archer kits looped, 17 sets, #99).
+	internal static int Worn(Faction faction, Ressource product)
+	{
+		Army.KitBundles.Bundle bundle = Array.Find(Army.KitBundles.All, (Army.KitBundles.Bundle b) => b.Resource != null && b.Resource.GetType() == product.GetType());
+		if (bundle == null)
+		{
+			return 0;
+		}
+		int count = 0;
+		foreach (Labor labor in Live<Labor>.Active())
+		{
+			if (labor == null || labor.Profession == null || labor.Occupation == null || labor.Profession.OccupationType == Occupation.Type.Builder)
+			{
+				continue;
+			}
+			if (labor.Occupation.CurrentJob == bundle.Job && Faction.GetFaction(labor.gameObject) == faction)
+			{
+				count++;
+			}
+		}
 		return count;
 	}
 

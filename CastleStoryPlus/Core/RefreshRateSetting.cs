@@ -34,12 +34,18 @@ internal static class RefreshRateSetting
 
 	internal static bool TryGet(out RefreshRate rate)
 	{
+		return TryParse((_rate != null) ? _rate.Value : null, out rate);
+	}
+
+	// A rate in the setting's text form, numerator/denominator.
+	internal static bool TryParse(string text, out RefreshRate rate)
+	{
 		rate = default(RefreshRate);
-		if (_rate == null || string.IsNullOrEmpty(_rate.Value))
+		if (string.IsNullOrEmpty(text))
 		{
 			return false;
 		}
-		string[] parts = _rate.Value.Split('/');
+		string[] parts = text.Split('/');
 		if (parts.Length != 2 || !uint.TryParse(parts[0], out uint numerator) || !uint.TryParse(parts[1], out uint denominator) || numerator == 0 || denominator == 0)
 		{
 			return false;
@@ -53,8 +59,14 @@ internal static class RefreshRateSetting
 	{
 		if (_rate != null)
 		{
-			_rate.Value = (rate.numerator == 0 || rate.denominator == 0) ? string.Empty : rate.numerator + "/" + rate.denominator;
+			_rate.Value = Text(rate);
 		}
+	}
+
+	// A rate in the setting's text form; empty for the system's.
+	internal static string Text(RefreshRate rate)
+	{
+		return (rate.numerator == 0 || rate.denominator == 0) ? string.Empty : rate.numerator + "/" + rate.denominator;
 	}
 
 	// Rates that differ by less than half a hertz are the same (239.96 and 240, 143.93 and 144: the same screen mode as
