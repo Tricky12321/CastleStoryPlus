@@ -244,8 +244,9 @@ internal static class ResourcePriorityTests
 		ProjectEndpoints.Commit(project);
 		// Both items are goals of the area before the worker chooses (the area finds them one after the other).
 		yield return t.UntilGame(() => project.GoalCounts() >= 2, 30f, "both items to be goals of the clean-up area");
+		// Hired in the frame it is made: an idle builder would tidy up one of the items by itself first (the test's pallet
+		// makes the site a base for the idle clean-up).
 		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 3));
-		yield return t.Frames(5);
 		Scenario.Hire(project, builder);
 		GameObject wanted = (higher == "wood") ? log : bricks;
 		GameObject left = (higher == "wood") ? bricks : log;
@@ -255,6 +256,11 @@ internal static class ResourcePriorityTests
 			first = FirstCarried(builder);
 			return first != null;
 		}, 120f, "the clean-up worker to pick something up");
+		if (first != wanted)
+		{
+			RouteDistance.Field field = RouteDistance.For(builder);
+			t.Log("Walk to the log " + RouteDistance.To(field, log.transform.position) + ", to the bricks " + RouteDistance.To(field, bricks.transform.position));
+		}
 		t.True(first == wanted, higher + " at 5 and " + other + " at " + (zeroTheOther ? 0 : 1) + ": the clean-up worker took " + first.name + " first");
 		if (zeroTheOther)
 		{
@@ -293,20 +299,26 @@ internal static class ResourcePriorityTests
 	{
 		XYZ site = Scenario.Site(t, 12, 6);
 		Recepteur stockpile = null;
+		Recepteur ropes = null;
 		CraftingStation station = null;
 		BuildProject build = Scenario.BuildProject(t, site);
 		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 4, site.y, site.z), build, go => stockpile = go.GetComponent<Recepteur>());
+		// A pallet holds one kind of resource: the rope has a pallet of its own, a little farther from the worker than the planks' (planks at 1 and 5 decide it).
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 4, site.y, site.z + 3), build, go => ropes = go.GetComponent<Recepteur>());
 		yield return Scenario.Building(t, Blueprints.Workbench, new XYZ(site.x + 2, site.y, site.z), build, go => station = go.GetComponent<CraftingStation>());
-		t.NotNull(stockpile, "The stockpile's storage");
+		t.NotNull(stockpile, "The plank stockpile's storage");
+		t.NotNull(ropes, "The rope stockpile's storage");
 		t.NotNull(station, "The workbench's crafting station");
 		foreach (GameObject item in Scenario.Items(t, FactoryBlocks.Wood_DoublePlank_AA, 1, stockpile.transform.position + Vector3.up))
 		{
 			stockpile.AddObject(item);
 		}
-		foreach (GameObject item in Scenario.Items(t, BuildResources.Rope, 1, stockpile.transform.position + Vector3.up))
+		foreach (GameObject item in Scenario.Items(t, BuildResources.Rope, 1, ropes.transform.position + Vector3.up))
 		{
-			stockpile.AddObject(item);
+			ropes.AddObject(item);
 		}
+		t.Equal(1, stockpile.ContentDescription.Value(Adjectif.plankBlock), "Planks in their stockpile");
+		t.Equal(1, ropes.ContentDescription.Value(Adjectif.rope), "Rope in its stockpile");
 		Priority(t, "planks", planks);
 		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 2));
 		yield return t.Frames(5);
@@ -320,7 +332,7 @@ internal static class ResourcePriorityTests
 			// The rope is fetched; the plank at 0 never is.
 			yield return t.Seconds(40f);
 			t.Equal(1, stockpile.ContentDescription.Value(Adjectif.plankBlock), "Planks left in the stockpile with planks at 0");
-			t.Equal(0, stockpile.ContentDescription.Value(Adjectif.rope), "Rope left in the stockpile (it must have been fetched)");
+			t.Equal(0, ropes.ContentDescription.Value(Adjectif.rope), "Rope left in the stockpile (it must have been fetched)");
 			yield break;
 		}
 		yield return t.UntilGame(() =>

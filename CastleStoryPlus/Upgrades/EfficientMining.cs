@@ -164,14 +164,21 @@ internal static class EfficientMiningRecipesPatch
 {
 	private static void Postfix()
 	{
-		Metallurgy.MetallurgyLuaPatch.Run();
-		UpgradeLines.RegisterRecipes(UpgradeHall.Research);
-		Market.MarketPrices.RegisterLateTrades();
-		UpgradeLines.RegisterLateRecipes();
-		// With the kit bundles on, their patch makes the very late ones after its own recipes.
-		if (!Plugin.LoadedFeatures.TryGetValue(Features.KitBundles, out bool kits) || !kits)
+		try
 		{
-			UpgradeLines.RegisterVeryLateRecipes();
+			Metallurgy.MetallurgyLuaPatch.Run();
+			UpgradeLines.RegisterRecipes(UpgradeHall.Research);
+			Market.MarketPrices.RegisterLateTrades();
+			UpgradeLines.RegisterLateRecipes();
+			// With the kit bundles on, their patch makes the very late ones after its own recipes.
+			if (!Plugin.LoadedFeatures.TryGetValue(Features.KitBundles, out bool kits) || !kits)
+			{
+				UpgradeLines.RegisterVeryLateRecipes();
+			}
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Upgrades: could not register the late recipes: " + ex);
 		}
 	}
 }

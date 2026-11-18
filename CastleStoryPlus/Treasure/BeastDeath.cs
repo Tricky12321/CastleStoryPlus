@@ -246,6 +246,18 @@ internal static class SoulsToCrystal
 	[HarmonyPrefix]
 	private static void Hit(BricktronDamageReceiver __instance, float value, GameObject attacker)
 	{
+		try
+		{
+			RememberHit(__instance, value, attacker);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Treasure: hit hook: " + ex);
+		}
+	}
+
+	private static void RememberHit(BricktronDamageReceiver __instance, float value, GameObject attacker)
+	{
 		if (value <= 0f || attacker == null || !NetworkServer.active)
 		{
 			return;
@@ -265,6 +277,18 @@ internal static class SoulsToCrystal
 	[HarmonyPatch(typeof(Corpse), nameof(Corpse.Spawn))]
 	[HarmonyPostfix]
 	private static void Died(GameObject original, Corpse __result)
+	{
+		try
+		{
+			RememberDeath(original, __result);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogError("Treasure: death hook: " + ex);
+		}
+	}
+
+	private static void RememberDeath(GameObject original, Corpse __result)
 	{
 		Labor labor = (original != null) ? original.GetComponent<Labor>() : null;
 		if (labor == null || __result == null || !LastHitBy.TryGetValue(labor, out Faction killer))
