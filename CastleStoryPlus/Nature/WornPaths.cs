@@ -8,6 +8,8 @@ using Brix.Engine.Nature;
 using Brix.Game;
 using Brix.Game.AI;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Pathfinding;
+using CastleStoryPlus.Weather;
 using HarmonyLib;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -163,6 +165,12 @@ internal sealed class WornPaths : MonoBehaviour
 			}
 			XYZ feet = XYZ.FromVector3(labor.transform.position);
 			int key = Key(feet.x, feet.z);
+			// A road keeps its ground from wearing: nobody's steps on it count.
+			if (Roads.IsOn(labor.transform))
+			{
+				LastColumn[labor] = key;
+				continue;
+			}
 			if (LastColumn.TryGetValue(labor, out int last) && last == key)
 			{
 				continue;
@@ -224,7 +232,7 @@ internal sealed class WornPaths : MonoBehaviour
 		foreach (KeyValuePair<int, VoxelTerrainType> worn in new List<KeyValuePair<int, VoxelTerrainType>>(Worn))
 		{
 			Wear.TryGetValue(worn.Key, out float steps);
-			if (steps >= RegrowBelow || Random.NextDouble() >= RegrowChance)
+			if (steps >= RegrowBelow || Random.NextDouble() >= RegrowChance * Rain.GrassBoost)
 			{
 				continue;
 			}
@@ -282,7 +290,8 @@ internal sealed class WornPaths : MonoBehaviour
 		_sweepCarry += area * Time.deltaTime / SweepSeconds;
 		int count = Mathf.Min((int)_sweepCarry, 20000);
 		_sweepCarry -= count;
-		double chance = SweepSeconds / 60.0 / _spreadMinutes.Value;
+		// Rain makes it GrassBoost times more likely.
+		double chance = SweepSeconds / 60.0 / _spreadMinutes.Value * Rain.GrassBoost;
 		for (int i = 0; i < count; i++)
 		{
 			if (_cursor >= area)

@@ -46,7 +46,7 @@ internal static class NetEndpoints
 		});
 		routes.Add(new Route("POST", "/api/net/mode", "Host: picks the lobby's game mode and preset (and a map that has the mode), as the lobby's map and mode lists do", Mode)
 		{
-			Parameters = "gamemode (codename, required, e.g. invasion), preset (codename or name; default the mode's default), map (codename or name; default the lobby's map if it has the mode, else the first official one that has it)"
+			Parameters = "gamemode (codename, required unless save is given, e.g. invasion), preset (codename or name; default the mode's default), map (codename or name; default the lobby's map if it has the mode, else the first official one that has it), save (instead of the others: a save's exact name or path, as POST /api/net/save answers it; the save is the lobby's map with the mode and preset it was last played in)"
 		});
 		routes.Add(new Route("POST", "/api/net/team", "Host, in the lobby: puts a player in a team, as the lobby's team choice does (GET /api/net shows each player's team)", Team)
 		{
@@ -384,7 +384,7 @@ internal static class NetEndpoints
 		Asset_Map save = null;
 		foreach (Asset_Map candidate in AssetDispensary.saves.SendQuery(AssetQueryParameters.AllSources | AssetQueryParameters.RefreshCache, AssetPlayableContext.Multiplayer))
 		{
-			if (candidate != null && candidate.customName != null && candidate.customName.IndexOf(saveName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+			if (candidate != null && (string.Equals(candidate.customName, saveName, System.StringComparison.OrdinalIgnoreCase) || string.Equals(candidate.path, saveName, System.StringComparison.Ordinal)))
 			{
 				save = candidate;
 				break;
@@ -436,11 +436,11 @@ internal static class NetEndpoints
 		{
 			throw new ApiException(409, "Only the host saves, in a game");
 		}
-		if (!CastleStoryPlus.Menus.QuitDialogPatch.SaveBeforeLeaving())
+		if (!CastleStoryPlus.Menus.QuitDialogPatch.SaveBeforeLeaving(out Asset_Map written) || written == null)
 		{
 			throw new ApiException(500, "The game could not be saved (see /api/log?problems=true)");
 		}
-		return Obj("saved", true, "name", GameParam.Map.customName, "path", GameParam.Map.path);
+		return Obj("saved", true, "name", written.customName, "path", written.path);
 	}
 
 	private static object Alliances(ApiRequest request)

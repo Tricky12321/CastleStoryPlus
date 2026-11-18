@@ -41,6 +41,11 @@ internal static class WardEffectsTests
 		}
 		XYZ site = Scenario.Site(t, 36, 10, 4);
 		BuildProject project = Scenario.BuildProject(t, site);
+		// At night, when the game lights the wards (ActivateAtNight, once a second): the lights must stay lit near the
+		// camera, not blink off and on against the mod.
+		float hour = Journee.instance.Heure;
+		Journee.instance.SetTime(0f);
+		t.Cleanup(() => Journee.instance.SetTime(hour));
 		HashSet<WardController> before = new HashSet<WardController>(WardEffects.Wards);
 		List<Blueprint> blueprints = new List<Blueprint>();
 		for (int i = 0; i < PerKind * 2; i++)
@@ -79,7 +84,12 @@ internal static class WardEffectsTests
 		Look(site, 25f);
 		int maxLights = WardEffects.MaxLights.Value;
 		yield return t.Until(() => mine.TrueForAll(w => WardEffects.EffectsShown(w)) && (maxLights == 0 || mine.FindAll(w => WardEffects.LightShown(w)).Count <= maxLights), 10f, "the wards' effects to be shown and no more than MaxLights lit with the camera near");
-		t.Record("litNear", mine.FindAll(w => WardEffects.LightShown(w)).Count);
+		yield return t.Seconds(3f);
+		int litNear = mine.FindAll(w => WardEffects.LightShown(w)).Count;
+		t.Record("litNear", litNear);
+		t.True(litNear > 0, "No ward light is lit at night with the camera near");
+		yield return t.Seconds(3f);
+		t.Equal(litNear, mine.FindAll(w => WardEffects.LightShown(w)).Count, "Lit lights a few seconds later (blinking)");
 		float far = WardEffects.EffectDistance.Value;
 		if (far <= 0f)
 		{

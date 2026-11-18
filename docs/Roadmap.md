@@ -73,17 +73,6 @@ and biftron units with their own models and animations, guarding chests.
   - what happens to the bricktrons that travel there (taken out of this save and added to the other one);
   - whether it works in multiplayer.
 
-## Roads
-
-- Stone roads that bricktrons walk faster on.
-- Built like a floor of flat stone pieces on the ground, from stone blocks, in the build menu or as a task dragged along
-  a line.
-- Walking on a road is faster, for example 30-50% (a config setting). The route search counts road nodes as cheaper,
-  so workers and armies choose roads when they are quicker overall.
-- A road keeps its tiles from wearing into worn paths (WornPaths), and grass does not grow over it.
-- To decide: what a road costs per tile, whether enemies get the bonus too, whether roads can be damaged, and whether
-  wooden walkways and bridges count as roads.
-
 ## Building progress
 
 - A building grows a little every time a worker delivers resources to its blueprint, as a slow building animation,
@@ -96,19 +85,6 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: whether the parts are cut from the finished model by height or each building gets its own stages, whether
   the hammering time (not only the delivery) also moves it on, whether a half built building can be used or attacked,
   and what happens to the shown progress when resources are taken back (demolish, cancel).
-
-## Weather
-
-### Rain
-
-- Rain is a natural event: it starts at random, lasts a while (for example a few game hours), and comes about every
-  3 in-game days on average.
-- While it rains, grass spreads faster onto bare earth (WornPaths), worn paths grow back faster, and plants seed and
-  grow faster (WildPlants).
-- Shown with rain falling, a darker sky and a rain sound; a short message when it starts and stops.
-- The host decides when it rains and tells the other players; the weather is saved with the world.
-- To decide: whether rain slows bricktrons or puts out fires, and whether it also comes in winter and desert biomes
-  (snow, or no rain).
 
 ## Enemies
 
@@ -124,18 +100,6 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: from which wave and how often, whether it can be stunned or slowed, and whether it has its own attack
   (for example a ground slam that hits all round it).
 
-### Guardian sounds
-
-- The treasure guardians (Spirestalker, Cindermane, Boulderback, Ironhorn) make no sounds of their own today. Give each
-  one its own sounds: an idle call now and then, a roar when it spots bricktrons, footsteps that fit its size and gait,
-  attack and hit sounds, and a death sound.
-- The material should be heard too: crystal chimes for the Spirestalker, crackling embers for the Cindermane, grinding
-  stone for the Boulderback, clanking iron for the Ironhorn.
-- Played in the world like the game's other unit sounds (positioned, quieter with distance), and part of the guardian
-  rules in `docs/Guardians.md` so every new guardian gets them.
-- To decide: where the sounds come from (made for the mod or from a free library with a licence that allows it; never
-  the game's own files shipped), and how they are played next to the game's Wwise sound banks.
-
 ## Research
 
 ### Sprint
@@ -150,15 +114,3 @@ and biftron units with their own models and animations, guarding chests.
 - To decide: whether the player triggers it (a key or a button for the selected bricktrons, for example to flee or
   reach a breach) or it starts by itself (soldiers charging, workers fleeing enemies), whether it costs stamina or only
   has a cooldown, whether it shows on the bricktron (dust trail, a small bar), and whether enemies can sprint too.
-
-## Achievements
-
-- More achievements beside the game's own: the mod's features get their own (for example trade 100 times at the
-  market, research every colony upgrade, survive wave 20, kill a guardian or a mega corruptron, tame an animal, build
-  a road between two bases, flatten a large area).
-- Shown in a list in the menu with name, text, icon and progress (for example 37/100 trades), locked ones greyed out,
-  and a short message with a sound when one is unlocked.
-- Kept per player in the mod's own file, not in the save and not on Steam, so saves stay loadable without the mod.
-- To decide: whether they also show on Steam (the game's Steam app cannot take new ones), whether sandbox and cheats
-  count, whether they count in multiplayer for every player or only the host, and whether some unlock a reward (a
-  banner colour, a bricktron hat).

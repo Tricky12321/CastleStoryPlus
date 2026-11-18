@@ -104,6 +104,13 @@ internal static class QuitDialogPatch
 	// Also DevTools' POST /api/quit?save=true.
 	internal static bool SaveBeforeLeaving()
 	{
+		return SaveBeforeLeaving(out Asset_Map _);
+	}
+
+	// written: the save the game wrote (the loaded manual save overwritten, else the new one).
+	internal static bool SaveBeforeLeaving(out Asset_Map written)
+	{
+		written = null;
 		try
 		{
 			StatsTracker.SaveStats();
@@ -111,6 +118,7 @@ internal static class QuitDialogPatch
 			if (loadedMap.mapType == Asset_Map.MapType.Save && loadedMap.saveType == Asset_Map.SaveType.Manualsave && !loadedMap.IsShell())
 			{
 				loadedMap.Disk_Overwrite();
+				written = loadedMap;
 				return true;
 			}
 			string baseName = !string.IsNullOrEmpty(loadedMap.customName) ? loadedMap.customName : loadedMap.rawDisplayName;
@@ -126,6 +134,7 @@ internal static class QuitDialogPatch
 			save.customName = baseName.Trim('-', ' ') + " " + DateTime.Now.ToString("yyyy-MM-dd HH-mm", CultureInfo.InvariantCulture);
 			save.saveType = Asset_Map.SaveType.Manualsave;
 			save.Disk_WriteAsNew(AssetAuthorType.Official);
+			written = save;
 			return true;
 		}
 		catch (Exception ex)

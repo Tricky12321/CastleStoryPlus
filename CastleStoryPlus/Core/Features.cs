@@ -139,6 +139,14 @@ internal static class Features
 
 	public const string WornPathsInfo = "Paths wear into the grass: grass the players' units walk much turns to earth, and worn ground nobody walks any more grows its grass back over time; grass also spreads slowly onto bare earth beside it (steps, half life and spread time in [WornPaths]).";
 
+	public const string Rain = "Rain";
+
+	public const string RainInfo = "Weather: now and then (about every 3 game days, for a few game hours: [Rain] DaysBetween, Hours) it rains, decided by the host and told to the other players, saved with the world: drops fall round the camera, the light and sky darken, a rain noise plays and a message shows when it starts and stops. While it rains grass spreads and worn paths grow over faster ([Rain] GrassBoost) and plants seed and grow faster ([Rain] PlantBoost). No rain in a desert world (mostly sand); in a snow world it snows (only shown).";
+
+	public const string Achievements = "Achievements";
+
+	public const string AchievementsInfo = "The mod's own achievements (trading, research, waves survived, guardians and chests, kills, crafting, building, digging...), kept per player in BepInEx/config/castlestoryplus_achievements.json (not in the save, not on Steam, no rewards). A list with progress is opened from the crown button in the in-game menu's right bar, and a short message with a chime shows when one is unlocked. Nothing counts in a sandbox game or in a game where cheats were used (the debug menu's energy, units, resources, enemies, waves, time, fog of war, x-ray, critical hits and spawn points, the game's debug sidebar, instant build, the developer API's cheats); in multiplayer every player counts his own team's deeds.";
+
 	public const string WiderVision = "WiderVision";
 
 	public const string WiderVisionInfo = "Units see 10% further through the fog of war ([FogOfWar] VisionMultiplier).";
@@ -331,6 +339,10 @@ internal static class Features
 
 	public const string LaddersInfo = "Wood ladder in the build menu (wood group): bricktrons climb it straight up and down, slower than stairs ([Ladders] ClimbSpeed, RouteCost) and only with free hands or a bag.";
 
+	public const string Roads = "Roads";
+
+	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
+
 	public const string GlobalBuildJob = "GlobalBuildJob";
 
 	public const string GlobalBuildJobInfo = "Placing with the idle group or the repair task selected no longer fails, and a new build task no longer takes over the others. With [Building] CombineBuildTasks (in-game: Settings > Build tasks) every blueprint goes into one build task per team and other build tasks are merged into it.";
@@ -373,7 +385,7 @@ internal static class Features
 
 	public const string FrameSavers = "FrameSavers";
 
-	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, bricktrons off the screen are not posed, a unit's animation states are checked against its animator once per update instead of once per state, the animators of decoration (stockpile planks, beacon handles, furnace fires) and the overhead icons' unused test scripts and idle animators no longer run off the screen or at all, a unit standing still does not look up the floor under it every frame, who sees whom is refreshed at most as often as at 60 frames a second, a tunnel task's look for work and the map's reach regions are spread over several ticks, sound objects tell Wwise their position with fewer calls, and when the frame rate drops below 25 the units' AI runs in at most 2 of a frame's catch-up fixed updates ([Performance] AiTicksPerFrame), so a slow frame no longer makes the next one slower. Icons sorted by distance set their sorting order only when it changed. A game signal that nothing has connected to yet no longer keeps two empty lists of its own, so each garbage collection has less to look at. Overhead icons read the camera's position once per frame, and how a unit holds what it carries is remembered instead of looked up every frame. A faction's vision pass puts its bricktrons and buildings in buckets by place, so most tracking groups are settled for a whole bucket at once (the worst frame of the pass was up to 9 ms), and reads their positions once per step. Storage fill animations wait while the storage is off the screen. Mouse picking casts each identical ray once per frame. A task's check whether a worker can store or fetch its things stops once the answer is decided (several ms in one frame per asking worker), and a harvest task counts its goals with a plain loop.";
+	public const string FrameSaversInfo = "Less CPU time per frame: hidden icons over bricktrons and things no longer have their canvas rebuilt every frame, stockpile shelf displays only update when what they hold changes, a worker's resource search that found nothing is not repeated for 2 seconds, bricktrons off the screen are not posed, a unit's animation states are checked against its animator once per update instead of once per state, the animators of decoration (stockpile planks, beacon handles, furnace fires) and the overhead icons' unused test scripts and idle animators no longer run off the screen or at all, a unit standing still does not look up the floor under it every frame, who sees whom is refreshed at most as often as at 60 frames a second, a tunnel task's look for work and the map's reach regions are spread over several ticks, sound objects tell Wwise their position with fewer calls, wards far from the camera (70 blocks) hide their aura, particles, light and shadow and only the 12 nearest lights show (Unity 6 port, [Performance] WardEffects), and when the frame rate drops below 25 the units' AI runs in at most 2 of a frame's catch-up fixed updates ([Performance] AiTicksPerFrame), so a slow frame no longer makes the next one slower. Icons sorted by distance set their sorting order only when it changed. A game signal that nothing has connected to yet no longer keeps two empty lists of its own, so each garbage collection has less to look at. Overhead icons read the camera's position once per frame, and how a unit holds what it carries is remembered instead of looked up every frame. A faction's vision pass puts its bricktrons and buildings in buckets by place, so most tracking groups are settled for a whole bucket at once (the worst frame of the pass was up to 9 ms), and reads their positions once per step. Storage fill animations wait while the storage is off the screen. Mouse picking casts each identical ray once per frame. A task's check whether a worker can store or fetch its things stops once the answer is decided (several ms in one frame per asking worker), and a harvest task counts its goals with a plain loop.";
 
 	public const string QuarryLimit = "QuarryLimit";
 
@@ -530,6 +542,10 @@ internal static class Features
 	public const string Treasure = "Treasure";
 
 	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it: iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
+
+	public const string GuardianSounds = "GuardianSounds";
+
+	public const string GuardianSoundsInfo = "The treasure guardians make sounds, positioned in the world and quieter with distance: an idle call now and then, a roar when a player's unit comes near or it is provoked, footsteps that fit its size and gait, attack and hit sounds and a death sound, each with its guardian's material (crystal chimes, crackling embers, grinding stone, clanking iron). Synthesised for the mod (tools/make_guardian_sounds.py), played next to the game's own sound with the game's volume and mute ([Treasure.Sounds] Volume).";
 
 	public const string RandomWorld = "RandomWorld";
 
