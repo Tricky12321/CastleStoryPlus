@@ -441,6 +441,7 @@ internal static class OreMineHarvestAwakePatch
 // An ore mine's bricktrons choose among its dig goals.
 [Feature(Features.OreMine, Features.OreMineInfo)]
 [HarmonyPatch(typeof(HarvestProject), "SelectBestGoal")]
+[HarmonyPriority(Priority.First)]
 internal static class OreMineSelectPatch
 {
 	private static bool Prefix(HarvestProject __instance, Labor labor, Var<Goal> result, ref Node __result)

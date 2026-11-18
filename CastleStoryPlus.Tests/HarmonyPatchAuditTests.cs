@@ -25,32 +25,43 @@ public class HarmonyPatchAuditTests
 	// is known to be fine. Key: "<Target type>.<method>|<skipping patch class>", value: why it is fine.
 	private static readonly Dictionary<string, string> SkipWhitelist = new Dictionary<string, string>
 	{
-		{ "BlueprintMapper.AddMappings|LargeStockpileBlueprintMappingPatch", Unreviewed },
-		{ "BlueprintMapper.AddMappings|MarketBlueprintMappingPatch", Unreviewed },
-		{ "Container.ItemClick|ContinueClickPatch", Unreviewed },
-		{ "CraftingInstructions.FindResource|MarketFetchPatch", Unreviewed },
-		{ "DigGoal.MustOverkill|QuarryBlueCrystalOverkillPatch", Unreviewed },
-		{ "GoalSelector.ProcessGoalAndReturnIsBest|TaskReservationSkipPatch", Unreviewed },
-		{ "Instructions.Execute|GlobalBuildJobNewTaskPatch", Unreviewed },
-		{ "Knowledge.ClosestObjectToPickup|PickupSearchOrder", Unreviewed },
-		{ "Labor.CheckProjectForWork|WorkSearchBudget", Unreviewed },
-		{ "Labor.ClosestResource|ResearchClosestResourcePatch", Unreviewed },
+		{ "Asset_Map.Disk_ReadThumbnail|RandomWorldThumbnailPatch", WaitOnly },
+		{ "BlueprintMapper.AddMappings|LargeStockpileBlueprintMappingPatch", BlueprintGuard },
+		{ "BlueprintMapper.AddMappings|MarketBlueprintMappingPatch", BlueprintGuard },
+		{ "BlueprintMapper.AddMappings|UpgradeBlueprintMappingPatch", BlueprintGuard },
+		{ "Container.ItemClick|ContinueClickPatch", ExclusiveOperation },
+		{ "Container.ItemClick|QuitDialogPatch", ExclusiveOperation },
+		{ "CraftingInstructions.FindResource|MarketFetchPatch", ExclusiveStation },
+		{ "CraftingInstructions.FindResource|ResearchFetchPatch", ExclusiveStation },
+		{ "DigGoal.MustOverkill|QuarryBlueCrystalOverkillPatch", ExclusiveKey },
+		{ "DigGoal.MustOverkill|QuarryCoalOverkillPatch", ExclusiveKey },
+		{ "GoalSelector.ProcessGoalAndReturnIsBest|TaskReservationSkipPatch", SameAnswer },
+		{ "GoalSelector.ProcessGoalAndReturnIsBest|UnreachableTasksSkipPatch", SameAnswer },
+		{ "HarvestProject.SelectBestGoal|OreMineSelectPatch", OreFirst },
+		{ "Instructions.Execute|GlobalBuildJobNewTaskPatch", DisjointExecute },
+		{ "Labor.ClosestResource|ResourcePriorityIngredients", ExclusiveClosestResource },
+		{ "Labor.ClosestResource|TaskFlowClosestResourcePatch", ExclusiveClosestResource },
 		{ "Labor.HasToFight|ArtificerHealingFightPatch", HasToFightOr },
 		{ "Labor.HasToFight|PlayerOrdersFirstFightPatch", HasToFightOr },
 		{ "Labor.HasToFight|RetreatInstinctPatch", HasToFightOr },
-		{ "LuaMenuComponent.Load|CsGameMenuLoadPatch", Unreviewed },
-		{ "PickUpNode.TakeSome|ResearchTakePatch", Unreviewed },
-		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|RepairNoRebuildPatch", Unreviewed },
-		{ "RecepteurDisplay.UpdateElements|LargeStockpileDisplayPatch", Unreviewed },
-		{ "Script.LoadFile|LuaChunkReuse", Unreviewed },
-		{ "CraftingInstructions.FindResource|ResearchFetchPatch", Unreviewed },
-		{ "Labor.ClosestResource|ResourcePriorityIngredients", Unreviewed },
-		{ "HarvestProject.SelectBestGoal|OreMineSelectPatch", Unreviewed },
-		{ "SearchPathRequest.Work|SearchFrameBudget", Unreviewed },
-		{ "SearchPathRequest.LoopImprovePath|SearchFrameBudget", Unreviewed },
-		{ "ResourceConverter.get_CurrentAutoConvertRule|EmptyStockpileConvertPatch", Unreviewed },
-		{ "ResourceConverter.get_CurrentConvertRule|EmptyStockpileConvertPatch", Unreviewed },
-		{ "SharedFactionVision.BrixUpdate|VisionRate", Unreviewed },
+		{ "Labor.HasToFight|UnarmedWorkersPatch", HasToFightOr },
+		{ "Labor.SendOrder|PlayerOrdersFirstSendPatch", ExclusiveSource },
+		{ "LuaMenuComponent.Load|CsGameMenuLoadPatch", ExclusiveMenu },
+		{ "LuaMenuComponent.Load|CsWorldEditorLoadPatch", ExclusiveMenu },
+		{ "PickUpNode.TakeSome|ResearchTakePatch", FetchAmount },
+		{ "PickUpNode._GoPickUp|StockpilePickup", ReservationOnWalk },
+		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|RepairNoRebuildPatch", RebuildMarks },
+		{ "PlaceBlueprintsOnBrokenBlocks.OnBlockRemoved|TreeStumpsNoRebuildPatch", RebuildMarks },
+		{ "RecepteurDisplay.UpdateElements|LargeStockpileDisplayPatch", DisplayExclusive },
+		{ "RecepteurDisplay.UpdateElements|MixedStockpileDisplayPatch", DisplayExclusive },
+		{ "ResourceConverter.get_CurrentAutoConvertRule|EmptyStockpileConvertPatch", SameResult },
+		{ "ResourceConverter.get_CurrentAutoConvertRule|WarehouseAutoConvertPatch", SameResult },
+		{ "ResourceConverter.get_CurrentConvertRule|EmptyStockpileConvertPatch", SameResult },
+		{ "ResourceConverter.get_CurrentConvertRule|WarehouseConvertPatch", SameResult },
+		{ "Script.LoadFile|LuaChunkReuse", ChunkTiming },
+		{ "SearchPathRequest.LoopImprovePath|SearchFrameBudget", SearchBudget },
+		{ "SearchPathRequest.Work|SearchFrameBudget", SearchBudget },
+		{ "SharedFactionVision.BrixUpdate|VisionRate", VisionStep },
 	};
 
 	// Found by the first run of this audit (18-11-2026): each of these prefixes replaces the original (sets __result and
@@ -61,7 +72,47 @@ public class HarmonyPatchAuditTests
 	// as OR, so the order does not matter and a later prefix that runs on is harmless.
 	private const string HasToFightOr = "only sets false: the prefixes combine as OR";
 
-	private const string Unreviewed = "baseline 18-11-2026, not reviewed";
+	private const string FetchAmount = "the later prefix (WorkshopFetchAmount) only lowers upTo, which is harmless on an already replaced call";
+
+	private const string SearchBudget = "the later prefixes check __runOriginal (NavMeshRoutes) or only set a flag that their finalizer restores (HeuristicAiSearchPatch)";
+
+	private const string BlueprintGuard = "all the prefixes are the same pure test (the key is mapped already) with no side effects: running on is harmless";
+
+	private const string ExclusiveOperation = "the prefixes act on different menu operations (quit vs continue/load); the other returns true for this item";
+
+	private const string ExclusiveStation = "the prefixes act on different station types (market vs research); the other returns true for this station";
+
+	private const string ExclusiveKey = "the prefixes test different resource keys (coal vs blue crystal): only one can match, the other returns true";
+
+	private const string SameAnswer = "both prefixes only answer false for the goal (UnreachableTasks also logs an error): the same answer twice, no other side effect";
+
+	private const string DisjointExecute = "the later prefix (OreMineToolPatch) only clears the ore-mine placing flag, which any other tool must clear as well";
+
+	private const string ExclusiveClosestResource = "mutually exclusive: TaskFlow acts with a destination, a research with ForResearch and no destination, workshop priorities with neither; each returns true in the others' cases";
+
+	private const string ExclusiveSource = "the later prefixes only act for DecisionSource.User; the skipper only skips Character/Project orders";
+
+	private const string ExclusiveMenu = "the prefixes each match their own menu component (game menu vs world editor): the other returns true";
+
+	private const string ReservationOnWalk = "the reservation is meant for every pick-up walk, also the replaced one (it is released on TakeSome)";
+
+	private const string RebuildMarks = "both only veto the rebuild of a block (a stump, a marked block): both skipping is the same outcome as one";
+
+	private const string DisplayExclusive = "a mixed pallet has more than one type, so it is not HandlesSmall and the later prefix only clears a visual that is not there; large stockpiles are excluded from the mixed prefix";
+
+	private const string ChunkTiming = "the later prefix (LuaFileTiming) only measures time: timing a reused chunk is what it should show";
+
+	private const string OreFirst = "OreMineSelectPatch runs first (Priority.First); the later prefixes leave ore mines alone (ResourcePriority) or check __runOriginal (RouteOrder)";
+
+	private const string SameResult = "both set the result to null: the same answer";
+
+	private const string VisionStep = "the later prefix only counts a step for its snapshot cache: an extra count on a skipped call means at most a re-read";
+
+	private const string AnimIdempotent = "the later prefix only disables the animator and hides the crate: repeating it changes nothing";
+
+	private const string WaitOnly = "the later prefix only waits for a save in progress to finish: harmless when the thumbnail read is replaced";
+
+	private const string KitFirst = "KitBundleGetKitPatch has Priority.High and runs before MixedRackGetKitPatch, which checks __runOriginal itself";
 
 	// Patches that are known not to match their target (a game version that has none of it, or a target that is
 	// made on purpose by a TargetMethod that returns null for the other game version). Key: patch class full name.
@@ -205,6 +256,7 @@ public class HarmonyPatchAuditTests
 	{
 		List<string> failures = new List<string>();
 		List<string> shared = new List<string>();
+		HashSet<string> hit = new HashSet<string>();
 		foreach (KeyValuePair<MethodBase, List<PatchMethod>> group in PrefixesByTarget())
 		{
 			if (group.Value.Count < 2)
@@ -232,6 +284,7 @@ public class HarmonyPatchAuditTests
 					string key = Describe(group.Key) + "|" + skipper.PatchClass.Name;
 					if (SkipWhitelist.ContainsKey(key))
 					{
+						hit.Add(key);
 						continue;
 					}
 					failures.Add(Describe(group.Key) + ": " + skipper.PatchClass.Name + " can skip the original, then " + later.PatchClass.Name + " can run without looking at __runOriginal (whitelist key: " + key + ")");
@@ -239,6 +292,13 @@ public class HarmonyPatchAuditTests
 			}
 		}
 		TestContext.Out.WriteLine("Targets with prefixes from several patch classes (" + shared.Count + "):\n" + string.Join("\n", shared.ToArray()));
+		foreach (string key in SkipWhitelist.Keys)
+		{
+			if (!hit.Contains(key))
+			{
+				failures.Add("stale whitelist entry (no later prefix ignores __runOriginal any more): " + key);
+			}
+		}
 		Assert.That(failures, Is.Empty, "Prefixes that skip the original before a prefix that does not check __runOriginal:\n" + string.Join("\n", failures.ToArray()));
 	}
 
@@ -373,11 +433,12 @@ public class HarmonyPatchAuditTests
 		return type.GetCustomAttributes(typeof(HarmonyPatch), false).Length > 0;
 	}
 
-	// The class's [HarmonyPatch] attributes merged as Harmony does (a later attribute's set values win). Harmony's own
+	// The class's [HarmonyPatch] and [HarmonyPriority] attributes (a class-level priority applies to every patch
+	// method) merged as Harmony does (a later attribute's set values win). Harmony's own
 	// HarmonyMethod.Merge needs AccessTools, which does not start on .NET 8.
 	private static HarmonyMethod ClassInfo(Type type)
 	{
-		return Merge(null, type.GetCustomAttributes(typeof(HarmonyPatch), false));
+		return Merge(null, type.GetCustomAttributes(typeof(HarmonyAttribute), false));
 	}
 
 	private static HarmonyMethod Merge(HarmonyMethod start, object[] attributes)
@@ -392,7 +453,7 @@ public class HarmonyPatchAuditTests
 			merged.argumentTypes = start.argumentTypes;
 			merged.priority = start.priority;
 		}
-		foreach (HarmonyPatch attribute in attributes.Cast<HarmonyPatch>())
+		foreach (HarmonyAttribute attribute in attributes.Cast<HarmonyAttribute>())
 		{
 			HarmonyMethod info = attribute.info;
 			merged.declaringType = info.declaringType ?? merged.declaringType;
