@@ -24,7 +24,7 @@ Workers find, share and finish their work on their own.
 | **New (#88):** more than 8 bricktrons per task. "Max bricktrons per task" (1 to 31, default 15; the game: 8) sets the most a task's crew holds; a task starts with 8 and putting more bricktrons on it grows its crew up to the maximum. Multiplayer: the host chooses it in the lobby and every player gets it; single player: Settings > Castle Story Plus, `[Workers] MaxBricktronsPerTask`. | `TaskCrewSize` |
 | Give a single blueprint (e.g. a warehouse) top priority from the context wheel over it. | `BuildPriority` |
 | Cleanup and repair round the base are two fixed tasks with their own priority and crew, instead of chores for every idle worker. | `BaseJobs` |
-| Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |
+| Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red (blueprints always; the others get a red ring while their task is selected, `[UnreachableTasks] Rings`: SelectedTask, All or Off) and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |
 | "Can't reach my destination" says what the worker could not reach and how far ("Log, 12 blocks away, 3 up"); host and single player. | `UnreachableThought` |
 | **New:** a bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes, also one that keeps trying tasks it cannot reach from there (host only; uses the route map of `UnreachableTasks`). | `StuckEscape` |
 | No duplicate build jobs; workers carry a full armful for a blueprint and the ones near it and deliver to them on one trip; builders also build blueprints that cost nothing; a building of several floors is built floor by floor, posts and stairs no longer rise past a floor that still has gaps. | `BuildJobs` |
@@ -39,7 +39,7 @@ Workers find, share and finish their work on their own.
 | The pick up order on a loose item: each selected bricktron takes an item of that kind no other one is after (not all the same one), then picks up more of that kind lying round it until its hands are full. | `PickUpAround` |
 | Idle workers pick up loose items near the base (home crystal and stockpiles) and store them, no cleanup zone needed; items on top of a building are taken from its foot. The range is the home crystal's blue ring. Items of other players are left alone. With the base's "Auto cleanup" task they leave the items inside its zone to its crew and still take the ones outside it. | `AutoCleanup` |
 | Idle builders repair damaged blocks near the base, no repair zone needed. The range is the home crystal's green ring. | `AutoRepair` |
-| Damaged doors are repaired: a repair zone (and the base's repair task) repairs the doors inside it, and idle builders repair the team's damaged doors near the base (with `AutoRepair`). | `DoorRepair` |
+| Damaged doors are repaired: a repair zone (and the base's repair task) repairs the doors inside it, puts a destroyed door inside it back up as a blueprint of the same door, and idle builders repair the team's damaged doors near the base (with `AutoRepair`). | `DoorRepair` |
 | Auto spawn bricktrons: a switch in the home crystal's popup makes a new bricktron whenever the crystal has the energy for one and the team is under its limit (`[Crystal] AutoSpawn`, per player). | always on |
 
 The ranges of `AutoCleanup` and `AutoRepair` are set on the home crystal's task; "Show ranges" / "Hide ranges" on the crystal's context wheel shows or hides the rings.
@@ -83,7 +83,7 @@ New blocks, new buildings and faster ways to build.
 | Feature | Switch |
 |---|---|
 | New blocks: stone bricks of 2 x 2, 2 x 4, 1 x 3 and 1 x 4 that stand on one supported block (the long ones bridge gaps between walls), a brick on end (1 x 1, 2 high), and wooden slabs (half high) of 1 x 1, 2 x 1, 2 x 2, 2 x 4, 1 x 3, 1 x 5 and 2 x 3 that hold on to the side of stone. | `CustomBlocks` |
-| Wood ladder: bricktrons climb straight up and down it, and step onto or off it from the side halfway up; slower than stairs (`[Ladders] ClimbSpeed`, `RouteCost`), only with free hands or a bag. | `Ladders` |
+| Wood ladder: dragged upwards when placed, stays up against wood (a wooden wall or column, the ladder below it) as against stone; bricktrons climb straight up and down it, and step onto or off it from the side halfway up; slower than stairs (`[Ladders] ClimbSpeed`, `RouteCost`), only with free hands or a bag. | `Ladders` |
 | Wood blocks and wooden slabs can be built out sideways from other wood (a slab in line with a slab walkway holds): up to 5 blocks may hang into the air from a supported wood block (`[WoodOverhang] MaxOverhang`). | `WoodOverhang` |
 | A drag build stops when the mouse button is let go, also over the interface or outside the window. | `DragRelease` |
 | In build mode X picks which cell of the held block goes where the mouse points (Shift+X the other way), through all of its cells; choosing another block starts again. | `BlockAnchor` |

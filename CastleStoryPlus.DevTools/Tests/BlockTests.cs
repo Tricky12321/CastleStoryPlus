@@ -10,6 +10,8 @@ using Brix.Game.AI.Damage;
 using Brix.Game.Components;
 using Brix.Game.Network;
 using Brix.Utils;
+using Brix.Input;
+using UnityEngine;
 using CastleStoryPlus.DevTools.Building;
 using CastleStoryPlus.DevTools.Testing;
 using FactoryBlocks = Brix.External.Factories.Blocks;
@@ -114,6 +116,37 @@ internal static class BlockTests
 		PlacedBlockDamageReceiver receiver = block.PlacedBlock.GetComponent<PlacedBlockDamageReceiver>();
 		t.NotNull(receiver, "The brick's damage receiver");
 		return receiver;
+	}
+
+	private static readonly Factory.AssetKey LadderBlueprint = new Factory.AssetKey("Blueprints", CastleStoryPlus.Pathfinding.Ladders.Name);
+
+	[GameTest("Blocks", "Two wood ladders built one on the other, away from stone, both stay up; the ladder blueprint is dragged upwards (#97)")]
+	private static IEnumerator LadderOnLadderStays(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 3, 3, 4);
+		XYZ above = site + XYZ.up;
+		BuildProject project = Scenario.BuildProject(t, site);
+		BlueprintPlacer.Result lower = BlueprintPlacer.Place(LadderBlueprint, site, 0, project, force: false);
+		t.True(lower.Placed, "The lower ladder: " + lower.Outcome + " " + lower.Detail);
+		RemoveAfter(t, lower.Blueprint);
+		RemoveBlockAfter(t, site);
+		yield return t.Frames(3);
+		BlueprintPlacer.Result upper = BlueprintPlacer.Place(LadderBlueprint, above, 0, project, force: false);
+		t.True(upper.Placed, "The upper ladder: " + upper.Outcome + " " + upper.Detail);
+		RemoveAfter(t, upper.Blueprint);
+		RemoveBlockAfter(t, above);
+		InstantBuild.Complete(new[] { lower.Blueprint });
+		yield return t.Until(() => Engine.GetBlockID(site) == CastleStoryPlus.Pathfinding.Ladders.Id, 5f, "the lower ladder to be built");
+		InstantBuild.Complete(new[] { upper.Blueprint });
+		yield return t.Until(() => Engine.GetBlockID(above) == CastleStoryPlus.Pathfinding.Ladders.Id, 5f, "the upper ladder to be built");
+		// A ladder found unsupported falls within a few frames.
+		yield return t.Seconds(3f);
+		t.Equal(CastleStoryPlus.Pathfinding.Ladders.Id, Engine.GetBlockID(site), "The block of the lower ladder");
+		t.Equal(CastleStoryPlus.Pathfinding.Ladders.Id, Engine.GetBlockID(above), "The block of the upper ladder (it fell: wood under it did not hold it)");
+		GameObject template = Factory.Peek(LadderBlueprint);
+		t.NotNull(template, "The ladder blueprint");
+		IDragger dragger = template.GetInterface<IDragger>();
+		t.True(dragger is VerticalDragger, "The ladder blueprint's dragger is " + ((dragger != null) ? dragger.GetType().Name : "missing") + ", not the vertical one");
 	}
 
 	// The player's delete of a blueprint not yet built (UNetBlueprint.CmdDestroyBluePrint).

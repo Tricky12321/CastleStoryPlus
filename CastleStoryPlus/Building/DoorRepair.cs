@@ -4,12 +4,17 @@ using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game.AI;
 using Brix.Game.AI.Damage;
+using Brix.Game;
 using Brix.Game.Components;
+using Brix.Game.Components.Volumes;
+using Brix.Game.Network;
 using Brix.Legacy;
 using Brix.Lifecycle.Pooling;
+using Brix.Transactions;
 using CastleStoryPlus.Core;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace CastleStoryPlus.Building;
 
@@ -150,5 +155,112 @@ internal static class DoorRepairTargetPatch
 			made.Dispose();
 		}
 		__result = health;
+	}
+}
+
+// A door destroyed inside a repair area is put back up as a blueprint of the same door, in the same place and turned
+// the same way, as the repair area does for every block an attack breaks (PlaceBlueprintsOnBrokenBlocks only hears of
+// blocks, never of doors). The blueprint is the repair area's own, so its builders build it. A door taken down by a
+// deconstruction is released without dying and is not rebuilt.
+[Feature(Features.DoorRepair, Features.DoorRepairInfo)]
+[HarmonyPatch(typeof(ObjectDamageReceiver), nameof(ObjectDamageReceiver.Kill))]
+internal static class DoorRebuildPatch
+{
+	internal struct Lost
+	{
+		public Factory.AssetKey Blueprint;
+
+		public Faction Faction;
+
+		public Vector3 Position;
+
+		public Quaternion Rotation;
+	}
+
+	private static void Prefix(ObjectDamageReceiver __instance, out Lost? __state)
+	{
+		__state = null;
+		if (!NetworkServer.active || __instance == null)
+		{
+			return;
+		}
+		Porte door = __instance.GetComponent<Porte>();
+		if (door == null || door.faction == null)
+		{
+			return;
+		}
+		Factory.AssetKey blueprint = BlueprintOf(door.gameObject);
+		if (blueprint == null)
+		{
+			return;
+		}
+		__state = new Lost { Blueprint = blueprint, Faction = door.faction, Position = door.transform.position, Rotation = door.transform.rotation };
+	}
+
+	private static void Postfix(Lost? __state)
+	{
+		if (__state.HasValue)
+		{
+			Rebuild(__state.Value);
+		}
+	}
+
+	// The blueprint the door was built from.
+	private static Factory.AssetKey BlueprintOf(GameObject door)
+	{
+		AutoList list = BrixSingleton<AutoList>.Instance;
+		if (list == null)
+		{
+			return null;
+		}
+		if (Holds(list, ObjetsDynamiques.Porte, door))
+		{
+			return Blueprints.Door;
+		}
+		if (Holds(list, ObjetsDynamiques.HeavyDoor, door))
+		{
+			return Blueprints.HeavyDoor;
+		}
+		if (Holds(list, ObjetsDynamiques.ShakyDoor, door))
+		{
+			return Blueprints.ShakyDoor;
+		}
+		return null;
+	}
+
+	private static bool Holds(AutoList list, Factory.AssetKey kind, GameObject door)
+	{
+		HashSet<GameObject> doors = list.GetInstances(kind);
+		return doors != null && doors.Contains(door);
+	}
+
+	internal static void Rebuild(Lost lost)
+	{
+		XYZ anchor = XYZ.FromVector3(lost.Position + Vector3.up * 0.5f);
+		foreach (PlaceBlueprintsOnBrokenBlocks rebuilder in Object.FindObjectsOfType<PlaceBlueprintsOnBrokenBlocks>())
+		{
+			RepairProject project = (rebuilder != null) ? rebuilder.project : null;
+			if (project == null || rebuilder.provider == null || project.faction != lost.Faction || !project.IsInRange(anchor))
+			{
+				continue;
+			}
+			// Another task's blueprint already there (a new door, a wall): leave it be.
+			foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(anchor, VProperty.fantome))
+			{
+				if (volume != null)
+				{
+					return;
+				}
+			}
+			GameObject made = Transactor.SpawnUNet(lost.Blueprint, project.faction, lost.Position, lost.Rotation);
+			if (made == null)
+			{
+				Plugin.Log.LogWarning("DoorRepair: no blueprint for the destroyed door at " + anchor);
+				return;
+			}
+			((IBlueprintTracker)rebuilder.provider).AddObject(made);
+			Plugin.Log.LogInfo("DoorRepair: destroyed door at " + anchor + " put back up as a blueprint (" + lost.Blueprint.Name + ")");
+			return;
+		}
 	}
 }
