@@ -272,6 +272,7 @@ internal static class SoulsToCrystal
 			return;
 		}
 		LastHitBy.Remove(labor);
+		Achievements.AchievementHooks.Killed(labor, killer);
 		if (CorpseKiller.Count > 200)
 		{
 			Prune(CorpseKiller);

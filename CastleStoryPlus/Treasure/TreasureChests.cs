@@ -702,6 +702,7 @@ internal class TreasureChests : MonoBehaviour
 			Drop(loot, ObjetsDynamiques.Baril, 1 + random.Next(2), at);
 		}
 		Recepteur.ScatterObjects(loot, at);
+		Achievements.AchievementTracker.Add(opener.faction, Achievements.AchievementCounter.Chests);
 		Plugin.Log.LogInfo("Treasure: " + opener.gameObject.name + " opened a chest of " + g + " guards at " + at + " (" + loot.Count + " items)");
 	}
 
