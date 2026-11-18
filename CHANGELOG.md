@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [ADD] **Stone roads:** a stone road in the build menu (stone group), a flat stone piece laid on the ground for one stone block, placed singly or dragged along a line. A road does not fill its voxel (its floor is level with the ground), so units walk onto it without a step. Every unit, enemies included, walks and runs 40% faster on a road (`[Roads] SpeedBonus`), and route searches (the game's graph and the Unity 6 navigation mesh) count road steps as cheaper, so units choose a road when it is quicker overall even if it is longer. Steps on a road do not wear the ground into worn paths and grass and plants do not grow over it. Roads are normal blocks for damage. Needs `CustomBlocks` (`[Features] Roads`).
+
 ## 0.8.13 — 2026-11-18
 
 - [FIX] **Enemies stuck behind a biftron (#102):** with `PassThroughAllies` the route search ignores allies, but the walk itself lets only a working builder into a voxel where an ally stands: soldiers, corruptrons and biftrons halt before climbing up or stepping down into it. Corruptrons below a ledge with a biftron standing on its edge therefore got the route that climbs into the biftron again and again, halted below it and gave their order up, instead of climbing the free ledge beside it. A unit that cannot pass allies and finds its walk blocked by one now has that ally's voxel closed to its own route searches for 5 seconds (up to 4 such voxels at a time), so it walks round it; with no other way it fails as before. Unity 6 port, feature switch `CrowdPathing`.

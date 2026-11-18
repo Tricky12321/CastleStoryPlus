@@ -766,17 +766,47 @@ internal static class NavMeshRoutes
 
 	private static readonly List<PathBranch> EaseRun = new List<PathBranch>();
 
+	// The same look for a road: the mesh's line runs along the edge between a road and the ground beside it (both cost
+	// less than the ground), so its voxels are mostly the ground's. A route voxel on plain ground beside a road gets the
+	// graph's cheapest way (its weights count the road) to one of the next route voxels, over the road when that is
+	// quicker. At most RoadLooks of these a route.
+	private const int RoadAhead = 14;
+
+	private const int RoadReach = 16;
+
+	private const int RoadPlaces = 700;
+
+	private const int RoadLooks = 12;
+
+	private static bool BesideRoad(XYZ p)
+	{
+		return !Roads.IsRoad(p) && (Roads.IsRoad(p + XYZ.right) || Roads.IsRoad(p - XYZ.right) || Roads.IsRoad(p + XYZ.forward) || Roads.IsRoad(p - XYZ.forward));
+	}
+
 	private static void Ease(PathBranchEvaluator evaluator)
 	{
+		int roadLooks = 0;
 		for (int i = 1; i < Route.Count; i++)
 		{
-			if (Route[i].Weight < SteepWeight || !IsWalk(Route[i].Type) || !(Route[i - 1].Node is TerrainPathNode start) || start.siblings == null)
+			if (!IsWalk(Route[i].Type) || !(Route[i - 1].Node is TerrainPathNode start) || start.siblings == null)
 			{
 				continue;
 			}
+			bool steep = Route[i].Weight >= SteepWeight;
+			if (!steep && (roadLooks >= RoadLooks || !Roads.Any || !BesideRoad(start.position)))
+			{
+				continue;
+			}
+			int ahead = steep ? EaseAhead : RoadAhead;
+			int reach = steep ? EaseReach : RoadReach;
+			int places = steep ? EasePlaces : RoadPlaces;
+			if (!steep)
+			{
+				roadLooks++;
+			}
 			EaseTargets.Clear();
 			int routeCost = 0;
-			for (int j = i; j < Route.Count && j <= i + EaseAhead && IsWalk(Route[j].Type); j++)
+			for (int j = i; j < Route.Count && j <= i + ahead && IsWalk(Route[j].Type); j++)
 			{
 				routeCost += Route[j].Weight;
 				if (Route[j].Node is TerrainPathNode target && !EaseTargets.ContainsKey(target))
@@ -793,7 +823,7 @@ internal static class NavMeshRoutes
 			EaseOpen.Clear();
 			EaseCost[start] = 0;
 			EaseOpen.Add(start);
-			while (EaseOpen.Count > 0 && EaseDone.Count < EasePlaces)
+			while (EaseOpen.Count > 0 && EaseDone.Count < places)
 			{
 				int pick = 0;
 				for (int o = 1; o < EaseOpen.Count; o++)
@@ -817,7 +847,7 @@ internal static class NavMeshRoutes
 					bestIndex = target.Key;
 					bestSaving = target.Value - cost;
 				}
-				if (here.siblings == null || Mathf.Abs(here.position.x - start.position.x) + Mathf.Abs(here.position.z - start.position.z) >= EaseReach)
+				if (here.siblings == null || Mathf.Abs(here.position.x - start.position.x) + Mathf.Abs(here.position.z - start.position.z) >= reach)
 				{
 					continue;
 				}

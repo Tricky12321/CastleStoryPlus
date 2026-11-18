@@ -49,6 +49,10 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	internal const int AreaObstacle = 7;
 
+	// A stone road's tiles (Roads): ground at a lower cost, 1 / the road's speed factor, so routes keep to a road where
+	// that is quicker. Unity's built-in "Jump" area, which nothing else here uses.
+	internal const int AreaRoad = 2;
+
 	// A stockpile's pallets: walkable while empty (PassThroughStockpile), which nothing signals, so they are ground at
 	// a higher cost (routes keep off them where they can) and a route across a full one is mended voxel by voxel.
 	internal const int AreaStockpile = 8;
@@ -62,8 +66,11 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	internal const int DoorAreas = 23;
 
-	// Mesh layers of a chunk: plain ground, forest, building ground (left out), stockpile, then one per door area.
-	private const int Layers = 4 + DoorAreas;
+	// Mesh layers of a chunk: plain ground, forest, building ground (left out), stockpile, then one per door area, and
+	// last the road.
+	private const int Layers = 5 + DoorAreas;
+
+	private const int RoadLayer = 4 + DoorAreas;
 
 	// Main-thread time a frame the chunk meshes may take while they are made.
 	private const double MeshBudgetMs = 3.0;
@@ -260,6 +267,7 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		{
 			areas[4 + i] = AreaDoor + i;
 		}
+		areas[RoadLayer] = AreaRoad;
 		return areas;
 	}
 
@@ -978,6 +986,10 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 			{
 				kind = 1;
 			}
+			if (kind == 0 && Roads.IsRoad(p))
+			{
+				kind = RoadLayer;
+			}
 			if (kind == 2)
 			{
 				// Ground under a building is no ground at all: no unit's search crosses it, and as an area of its own
@@ -1164,7 +1176,7 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 	internal static NavMeshQueryFilter Filter(bool canClimb, bool forest, bool obstacles, bool doors)
 	{
 		NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = Settings.agentTypeID };
-		int mask = (1 << AreaWalk) | (1 << AreaStepDown) | (1 << AreaStockpile);
+		int mask = (1 << AreaWalk) | (1 << AreaStepDown) | (1 << AreaStockpile) | (1 << AreaRoad);
 		if (canClimb || forest)
 		{
 			mask |= (1 << AreaClimb) | (1 << AreaLadder);
@@ -1183,6 +1195,7 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		}
 		filter.areaMask = mask;
 		filter.SetAreaCost(AreaStockpile, StockpileCost);
+		filter.SetAreaCost(AreaRoad, 1f / Roads.Factor);
 		return filter;
 	}
 
