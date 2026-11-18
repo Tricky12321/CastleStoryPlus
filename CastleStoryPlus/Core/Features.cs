@@ -339,6 +339,10 @@ internal static class Features
 
 	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
 
+	public const string Sprint = "Sprint";
+
+	public const string SprintInfo = "Research > Sprint (research station, needs Upgrades): bricktrons can sprint, +50% walking and running speed for 5 seconds, then a cooldown of 60 seconds (higher tiers: longer sprint, shorter cooldown; [Sprint] settings). Soldiers sprint by themselves when sent at an enemy from afar, fighters when they run to safety (Retreat), and the selected bricktrons on a key ([Sprint] Key, G); in multiplayer the host decides. Multiplies with Light Boots and roads; enemies never sprint. A trail of dust shows it.";
+
 	public const string GlobalBuildJob = "GlobalBuildJob";
 
 	public const string GlobalBuildJobInfo = "Placing with the idle group or the repair task selected no longer fails, and a new build task no longer takes over the others. With [Building] CombineBuildTasks (in-game: Settings > Build tasks) every blueprint goes into one build task per team and other build tasks are merged into it.";

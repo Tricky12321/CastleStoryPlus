@@ -197,7 +197,7 @@ internal class CsUpgradeWindow : CsStationWindow
 				break;
 			default:
 				AddGroup("Colony", UpgradeLines.Housing, UpgradeLines.Stacking, UpgradeLines.Scouting);
-				AddGroup("Workers", UpgradeLines.WorkMethods, UpgradeLines.LightBoots, UpgradeLines.EfficientMining);
+				AddGroup("Workers", UpgradeLines.WorkMethods, UpgradeLines.LightBoots, UpgradeLines.Sprint, UpgradeLines.EfficientMining);
 				AddGroup("Crystal", UpgradeLines.CrystalAttunement, UpgradeLines.FireflyLore, UpgradeLines.Giants);
 				break;
 		}

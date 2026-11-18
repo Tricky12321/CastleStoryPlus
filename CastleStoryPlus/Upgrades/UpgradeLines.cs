@@ -105,6 +105,8 @@ internal static class UpgradeLines
 
 	public const int EfficientMining = 18;
 
+	public const int Sprint = 19;
+
 	public static readonly string[] TierNames = { string.Empty, "Iron", "Steel", "Crystal" };
 
 	public static readonly string[] ResearchTierNames = { string.Empty, "Novice", "Adept", "Master" };
@@ -178,7 +180,12 @@ internal static class UpgradeLines
 		Add(EfficientMining, "efficient_mining", "Efficient Mining", UpgradeHall.Research, "Diggers", "Better ways to break rock. Digging out terrain and mining rocks and ore deposits gives more.",
 			new[] { 0f, 0.1f, 0.2f, 0.3f }, "+{0}% stone, ore and crystal from digging and mining",
 			Cost(Crystal, 20), Cost(Crystal, 40), Cost(Crystal, 80));
+		Add(Sprint, "sprint", "Sprint", UpgradeHall.Research, "All bricktrons", "Drills for short bursts of speed. A bricktron can sprint for a few seconds, then has to catch its breath. Soldiers sprint into a charge, fighters when they flee, and selected bricktrons on a key.",
+			new[] { 0f, 1f, 2f, 3f }, "sprint tier {2}",
+			Cost(Crystal, 30), Cost(Crystal, 60), Cost(Crystal, 120));
 		All[EfficientMining].Late = true;
+		All[Sprint].Late = true;
+		CastleStoryPlus.Upgrades.Sprint.RefreshText();
 		RegisterRecipes(UpgradeHall.Smithy, UpgradeHall.Armoury);
 	}
 
