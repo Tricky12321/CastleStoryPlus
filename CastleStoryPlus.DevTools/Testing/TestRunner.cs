@@ -23,6 +23,22 @@ internal class TestRunner : MonoBehaviour
 		Error
 	}
 
+	// Whether the player runs without a window or graphics (-batchmode, -nographics, or a null graphics device).
+	internal static bool Headless
+	{
+		get
+		{
+			foreach (string argument in Environment.GetCommandLineArgs())
+			{
+				if (argument == "-batchmode" || argument == "-nographics")
+				{
+					return true;
+				}
+			}
+			return SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null;
+		}
+	}
+
 	internal sealed class TestInfo
 	{
 		public string Name;
@@ -34,6 +50,9 @@ internal class TestRunner : MonoBehaviour
 		public float TimeoutSeconds;
 
 		public bool NeedsHostGame;
+
+		// Needs rendering: skipped in a headless player.
+		public bool NeedsGraphics;
 
 		// May run next to other tests ([ParallelTests] on its class and not Exclusive).
 		public bool Parallel;
@@ -138,6 +157,7 @@ internal class TestRunner : MonoBehaviour
 					Description = attribute.Description,
 					TimeoutSeconds = attribute.TimeoutSeconds,
 					NeedsHostGame = attribute.NeedsHostGame,
+					NeedsGraphics = attribute.NeedsGraphics,
 					MaxSpeed = attribute.MaxSpeed,
 					Method = method
 				});
@@ -391,6 +411,12 @@ internal class TestRunner : MonoBehaviour
 		result.Data = context.Data;
 		float start = Time.realtimeSinceStartup;
 		context.Deadline = start + test.TimeoutSeconds;
+		if (test.NeedsGraphics && Headless)
+		{
+			result.Outcome = Outcome.Skipped;
+			result.Message = "Needs rendering (this player runs headless: -batchmode or -nographics)";
+			yield break;
+		}
 		if (test.NeedsHostGame && !InHostGame())
 		{
 			result.Outcome = Outcome.Skipped;

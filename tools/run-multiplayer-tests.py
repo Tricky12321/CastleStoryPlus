@@ -14,6 +14,10 @@ game. The checks compare what the client has with what the host has, through the
                           client's bricktrons put on its own task all join its crew there and on the host (issue #88)
 
     tools/run-multiplayer-tests.py [--filter Cap] [--port 27890] [--player DIR] [--root-src DIR] [--keep] [--hold N]
+                                   [--headless]
+
+--headless starts both players with -batchmode -nographics (no windows). A check that needs rendering is listed in
+NEEDS_GRAPHICS and left out of a headless run (none does today: they all read state through the API).
 
 --port is the host's API port, the client's is the next one (never 27860, the player's own game). The players share
 the player folder (default: the Unity 6 port's CastleStoryPlus.Player/Build/Linux) and start one after the other.
@@ -90,6 +94,8 @@ class Player:
         os.makedirs(os.path.join(self.root, "Info", "Saves"), exist_ok=True)
         env = dict(os.environ, CSP_GAME_ROOT=self.root, CSP_API_PORT=str(self.port))
         command = ["./run_bepinex.sh", "-force-glcore", "-screen-fullscreen", "0", "-screen-width", "1600", "-screen-height", "900", "-logFile", self.log_file]
+        if self.args.headless:
+            command += ["-batchmode", "-nographics"]
         self.process = subprocess.Popen(command, cwd=self.args.player, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         log("[%s]" % self.name, "player", self.process.pid, "port", self.port)
         self.wait_for("the DevTools API", self.answers, 300)
@@ -279,6 +285,9 @@ def check_task_crew(host, client):
     return True, "the client's task holds %d on both players" % TASK_CREW
 
 
+# Checks that read what is drawn (a screenshot, a camera, a light): left out of a --headless run.
+NEEDS_GRAPHICS = set()
+
 CHECKS = [
     ("BricktronCap", check_bricktron_cap),
     ("ArmySelection", check_army_selection),
@@ -297,6 +306,7 @@ def main():
     parser.add_argument("--root-src", default=os.path.expanduser("~/.cache/csp-bench/root-src"))
     parser.add_argument("--work", default=os.path.expanduser("~/.cache/csp-tests"), help="folder for the copies, logs and results")
     parser.add_argument("--keep", action="store_true", help="keep the game root copies afterwards")
+    parser.add_argument("--headless", action="store_true", help="start the players with -batchmode -nographics (no windows); checks that need rendering are left out")
     parser.add_argument("--hold", type=int, default=0, help="keep the players running this many seconds after the checks")
     args = parser.parse_args()
     if not os.path.isfile(os.path.join(args.player, "run_bepinex.sh")):
@@ -304,6 +314,10 @@ def main():
     if args.port <= USER_PORT <= args.port + 1:
         sys.exit("port %d is the player's own game: choose another --port" % USER_PORT)
     checks = [(name, check) for name, check in CHECKS if args.filter.lower() in name.lower()]
+    if args.headless:
+        for name in sorted(name for name, check in checks if name in NEEDS_GRAPHICS):
+            log("headless: %s needs rendering and is left out" % name)
+        checks = [(name, check) for name, check in checks if name not in NEEDS_GRAPHICS]
     if not checks:
         sys.exit("no check matches " + repr(args.filter))
     stamp = time.strftime("%Y-%m-%d-%H%M%S")

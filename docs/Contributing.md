@@ -35,6 +35,10 @@ requests opened from 31-10-2026 on.
 
 Keep a pull request to one thing, and add a line to `CHANGELOG.md` under `## Unreleased`.
 
+**Logic comes with unit tests.** New decisions and calculations go into a `Logic` folder as pure classes with unit tests
+(`dotnet test CastleStoryPlus.UnitTests`, no game needed); patches and components stay thin. See [Testing](Testing.md).
+The "Unit tests" check runs them on every pull request.
+
 **The code style is checked.** A pull request can only be merged when the "Code style" check passes. It runs
 `tools/check-style.sh`, which you can run yourself before pushing (no game install needed):
 

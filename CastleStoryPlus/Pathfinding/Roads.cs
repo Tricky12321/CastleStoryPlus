@@ -41,14 +41,14 @@ internal static class Roads
 
 	private static void Enable()
 	{
-		SpeedBonus = Plugin.Cfg.Bind("Roads", "SpeedBonus", 40, new ConfigDescription("How much faster (percent) every unit walks and runs on a stone road; in the Unity 6 port route searches favour roads by the same share. 0: roads are no faster than the ground. In multiplayer the host's value counts.", new AcceptableValueRange<int>(0, 200)));
+		SpeedBonus = Plugin.Cfg.Bind("Roads", "SpeedBonus", RoadRules.DefaultBonus, new ConfigDescription("How much faster (percent) every unit walks and runs on a stone road; in the Unity 6 port route searches favour roads by the same share. 0: roads are no faster than the ground. In multiplayer the host's value counts.", new AcceptableValueRange<int>(RoadRules.MinBonus, RoadRules.MaxBonus)));
 		GameSession.OnLeave(Positions.Clear);
 		CustomBlocks.EnableRoadMenu();
 	}
 
 	// How many times faster a road is than the ground (a client uses the host's setting, RoadsSync). Weights the graph
 	// made are kept until its places are made again.
-	internal static float Factor => 1f + (RoadsSync.HostBonus ?? ((SpeedBonus != null) ? SpeedBonus.Value : 40)) / 100f;
+	internal static float Factor => RoadRules.Factor(RoadsSync.HostBonus, (SpeedBonus != null) ? SpeedBonus.Value : (int?)null);
 
 	internal static void Added(XYZ position)
 	{
@@ -79,7 +79,7 @@ internal static class Roads
 	// nudged up before rounding.
 	internal static XYZ VoxelAt(Vector3 position)
 	{
-		return XYZ.FromVector3(position + new Vector3(0f, 0.25f, 0f));
+		return XYZ.FromVector3(position + new Vector3(0f, RoadRules.VoxelNudge, 0f));
 	}
 
 	internal static bool IsOn(Transform unit)
@@ -87,21 +87,10 @@ internal static class Roads
 		return Positions.Count > 0 && unit != null && IsRoad(VoxelAt(unit.position));
 	}
 
-	// The weight of a plain step between two voxels, scaled by the road under them. A flat step has weight 10 and each
-	// third of a block of slope adds to it. The A* ranks a step by length * 10 + weight * 2 (PathAStarQueue.Evaluate), so
-	// a flat step ranks 30; the road's share of that (30 / speed factor) is reached by a weight of 15 * share - 5. Only
-	// the flat step's part is discounted, not the slope.
+	// The weight of a plain step between two voxels, scaled by the road under them (the arithmetic is RoadRules.Scale).
 	internal static int Scale(int weight, XYZ from, XYZ to)
 	{
-		bool a = IsRoad(from);
-		bool b = IsRoad(to);
-		if (!a && !b)
-		{
-			return weight;
-		}
-		float cost = 1f / Factor;
-		float share = ((a ? cost : 1f) + (b ? cost : 1f)) / 2f;
-		return Mathf.Max(1, weight - 10 + Mathf.RoundToInt(15f * share - 5f));
+		return RoadRules.Scale(weight, IsRoad(from), IsRoad(to), Factor);
 	}
 }
 

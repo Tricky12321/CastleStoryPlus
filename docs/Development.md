@@ -25,7 +25,7 @@ How to add a building with its own model and textures is described in [Custom bu
 ### Testing and the developer API
 
 Three projects next to the plugin, never part of a release (see [DevTools](DevTools.md)):
-- `CastleStoryPlus.Tests`: unit tests of the mod's pure logic, no game needed: `dotnet test CastleStoryPlus.Tests`.
+- `CastleStoryPlus.UnitTests`: unit tests of the mod's pure logic (the `Logic` folders), no game needed, also run in CI: `dotnet test CastleStoryPlus.UnitTests`. `CastleStoryPlus.Tests`: the local-only tests that need the game's assemblies (Harmony patch audit). See [Testing](Testing.md).
 - `CastleStoryPlus.DevTools`: a plugin of its own (`BepInEx/plugins/CastleStoryPlus.DevTools/`) with an HTTP API on `http://127.0.0.1:27860/api` into the running game, and in-game tests (pathfinding, ...) that run in the game that is loaded.
 - `CastleStoryPlus.Mcp`: an MCP server that offers the API as tools to MCP clients (game state, log, screenshots, route searches, running the in-game tests, fast-forwarding the game up to 20x with `game_speed`). Registered in `.mcp.json`.
 
@@ -63,7 +63,8 @@ CastleStoryPlus/
 CastleStoryPlus.UI/          the C# in-game menu's builders and views (CastleStoryPlus.UI.dll, reloadable in game)
 CastleStoryPlus.DevTools/    developer plugin (not released): HTTP API into the game, in-game test runner and tests
 CastleStoryPlus.Mcp/         MCP server (stdio), calls the DevTools API
-CastleStoryPlus.Tests/       unit tests of the mod's pure logic (NUnit, dotnet test)
+CastleStoryPlus.UnitTests/   unit tests of the mod's pure logic (NUnit, no game, also in CI)
+CastleStoryPlus.Tests/       local tests that need the game's assemblies (Harmony patch audit)
 installer/             install.sh (Linux), install.ps1 + install.bat (Windows): install and update from GitHub releases
 tools/                 package.sh (Linux + Windows packages), release.sh (tag + GitHub release), release-notes.md, make_logo.py
 docs/                  technical notes and the gallery

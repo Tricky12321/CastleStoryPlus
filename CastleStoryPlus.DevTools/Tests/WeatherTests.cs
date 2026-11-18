@@ -81,7 +81,7 @@ internal static class WeatherTests
 		yield return null;
 	}
 
-	[GameTest("Weather", "Rain is shown (drops, veil, darker light) and taken away again", TimeoutSeconds = 90f)]
+	[GameTest("Weather", "Rain is shown (drops, veil, darker light) and taken away again", TimeoutSeconds = 90f, NeedsGraphics = true)]
 	private static IEnumerator RainIsShown(TestContext t)
 	{
 		t.Cleanup(() => Rain.Begin(WeatherKind.None, 0f));
