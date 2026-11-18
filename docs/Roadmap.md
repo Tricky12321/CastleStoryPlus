@@ -18,16 +18,6 @@ Features planned for Castle Story Plus over time. Nothing here is built yet. Whe
 - To decide: whether placing a blueprint over an existing workshop changes its recipes, and how blueprints saved before
   this (without recipes) behave.
 
-## Resource priorities
-
-- A priority per resource (for example stone, iron, orange crystal, coal, wood) from 1 to 5, set by the player: wood at
-  5 and coal at 1 means workers fetch, gather and carry wood before coal.
-- Used where workers choose between resources: quarries and mining (which ore to dig first), clean-up and hauling to
-  the stockpiles, gathering (trees, rocks), and workshops waiting for ingredients.
-- Set in a small table in the in-game menu (next to the resource list), saved with the world, per team in multiplayer.
-- To decide: whether priority 0 means "never", how it mixes with the task priorities and the distance to the resource,
-  and whether QuarryLimit's per-resource limits move into the same table.
-
 ## Animals
 
 The treasure beasts (Spirestalker, Cindermane, Boulderback, Ironhorn) are the starting point. Today they are corruptron

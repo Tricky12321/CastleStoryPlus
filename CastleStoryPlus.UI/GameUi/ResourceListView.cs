@@ -12,7 +12,7 @@ namespace CastleStoryPlus.UI;
 // per resource the team has stocked once (ResourceSeen), red at 0. Read twice a second.
 internal class ResourceListView : MonoBehaviour
 {
-	private const float Width = 220f;
+	internal const float Width = 220f;
 
 	private const float RowHeight = 24f;
 

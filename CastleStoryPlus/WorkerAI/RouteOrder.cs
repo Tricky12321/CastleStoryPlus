@@ -35,15 +35,24 @@ internal static class RouteOrder
 
 	[HarmonyPatch(typeof(HarvestProject), "SelectBestGoal")]
 	[HarmonyPrefix]
-	private static bool HarvestSelect(HarvestProject __instance, Labor labor, Var<Goal> result, ref Node __result)
+	private static bool HarvestSelect(HarvestProject __instance, Labor labor, Var<Goal> result, ref Node __result, bool __runOriginal)
 	{
+		if (!__runOriginal)
+		{
+			return true;
+		}
 		return Select(__instance, labor, result, ref __result);
 	}
 
 	[HarmonyPatch(typeof(CleanupProject), "SelectBestGoal")]
 	[HarmonyPrefix]
-	private static bool CleanupSelect(CleanupProject __instance, Labor labor, Var<Goal> result, ref Node __result)
+	private static bool CleanupSelect(CleanupProject __instance, Labor labor, Var<Goal> result, ref Node __result, bool __runOriginal)
 	{
+		if (!__runOriginal)
+		{
+			// Another patch (resource priorities) chose the goal already.
+			return true;
+		}
 		return Select(__instance, labor, result, ref __result);
 	}
 
@@ -100,7 +109,7 @@ internal static class RouteOrder
 		return project is HarvestProject || project is CleanupProject;
 	}
 
-	private static int Rank(RouteDistance.Field field, Vector3 from, Goal goal)
+	internal static int Rank(RouteDistance.Field field, Vector3 from, Goal goal)
 	{
 		int rank = RouteDistance.Rank(field, from, goal.transform.position);
 		return (goal is TreeGoal || goal is NatureHarvestGoal) ? rank + FellExtra : rank;
@@ -118,6 +127,13 @@ internal static class RouteOrder
 		}
 		rank = Rank(field, labor.transform.position, goal);
 		return true;
+	}
+
+	// The distance a goal's priority counts: the walk while the worker's field from this search is there, else the
+	// straight line.
+	internal static float Distance(Labor labor, Goal goal)
+	{
+		return Walked(labor, goal, out int rank) ? rank : Vector3.Distance(labor.transform.position, goal.transform.position);
 	}
 
 	[HarmonyPatch(typeof(CleanUpGoal), nameof(CleanUpGoal.PriorityFor), new[] { typeof(Labor), typeof(float) }, new[] { ArgumentType.Normal, ArgumentType.Ref })]
