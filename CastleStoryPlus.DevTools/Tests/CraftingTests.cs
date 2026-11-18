@@ -218,6 +218,88 @@ internal static class CraftingTests
 		t.Equal(0, shop.Station.QueueCount, "Orders after clearing the queue");
 	}
 
+	[GameTest("Crafting", "A worker emptying its bag brings its log to a chopping block whose Planks order needs it, though the stockpile is nearer (#96)", TimeoutSeconds = 180f)]
+	private static IEnumerator UnloadBringsWorkshopItsLog(TestContext t)
+	{
+		Unload unload = null;
+		yield return UnloadNextTo(t, -4, made => unload = made);
+		t.Record("stockpileBlocks", unload.StockpileDistance);
+		t.Record("workshopBlocks", unload.WorkshopDistance);
+		t.Equal(1, unload.InWorkshop, "Logs the chopping block got");
+		t.Equal(0, unload.InStockpile, "Logs in the stockpile");
+	}
+
+	[GameTest("Crafting", "A worker emptying its bag next to a stockpile stores its log there when the chopping block needing it is far away (#96)", TimeoutSeconds = 180f)]
+	private static IEnumerator UnloadSkipsFarWorkshop(TestContext t)
+	{
+		Unload unload = null;
+		yield return UnloadNextTo(t, 12, made => unload = made);
+		t.Record("stockpileBlocks", unload.StockpileDistance);
+		t.Record("workshopBlocks", unload.WorkshopDistance);
+		t.Equal(0, unload.InWorkshop, "Logs the chopping block got");
+		t.Equal(1, unload.InStockpile, "Logs in the stockpile");
+	}
+
+	private sealed class Unload
+	{
+		public float StockpileDistance;
+
+		public float WorkshopDistance;
+
+		public int InWorkshop;
+
+		public int InStockpile;
+	}
+
+	// A stockpile with a builder next to it carrying the only log in the world, and a chopping block workshopX
+	// voxels along from the site's centre (the stockpile is at -10) with a Planks order waiting for a log. The builder
+	// is told to store its bag; where the log is when the bag is empty.
+	private static IEnumerator UnloadNextTo(TestContext t, int workshopX, Action<Unload> made)
+	{
+		int removed = Scenario.RemoveAll(FactoryBlocks.Wood_DoubleLog_AA);
+		t.Record("leftoverLogsRemoved", removed);
+		Scenario.SidelineOthers(t);
+		yield return t.Frames(3);
+		XYZ site = Scenario.Site(t, 28, 6);
+		BuildProject build = Scenario.BuildProject(t, site);
+		Recepteur stockpile = null;
+		CraftingStation station = null;
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 10, site.y, site.z), build, go => stockpile = go.GetComponent<Recepteur>());
+		yield return Scenario.Building(t, Blueprints.ChoppingBlock, new XYZ(site.x + workshopX, site.y, site.z), build, go => station = go.GetComponent<CraftingStation>());
+		t.NotNull(stockpile, "The stockpile's storage");
+		t.NotNull(station, "The chopping block's crafting station");
+		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 10, site.y, site.z - 2));
+		yield return t.Frames(5);
+		GameObject log = Scenario.Items(t, FactoryBlocks.Wood_DoubleLog_AA, 1, worker.transform.position + Vector3.up * 2f)[0];
+		worker.recepteur.AddObject(log);
+		yield return t.Frames(2);
+		Unload unload = new Unload
+		{
+			StockpileDistance = Mathf.Round(Vector3.Distance(worker.transform.position, stockpile.transform.position)),
+			WorkshopDistance = Mathf.Round(Vector3.Distance(worker.transform.position, station.transform.position))
+		};
+		// The new stockpile is known to the workers' storage search a moment after it is built.
+		yield return t.UntilGame(() => worker.BestRecepteurToStore(log) == stockpile.gameObject, 20f, "the builder to see the stockpile as the storage for its log");
+		Scenario.ProjectCommands.CmdcraftingQueueRecipe(station.gameObject, CookBook.Planks.id, 1);
+		yield return t.Frames(2);
+		t.True(station.StuffToFetch() != null, "The chopping block's Planks order waits for a log");
+		t.Equal(1, worker.recepteur.ContentDescription.Value(Adjectif.woodBlock), "Logs in the builder's bag when it is sent to store it");
+		Order.Transfer.GoStore.Send(worker, Labor.DecisionSource.Project);
+		// Read in the frame the bag is emptied: the builder, idle then, soon takes the chopping block's order by itself
+		// and fetches the log from the stockpile.
+		yield return t.UntilGame(() =>
+		{
+			if (!worker.recepteur.IsEmpty())
+			{
+				return false;
+			}
+			unload.InWorkshop = station.recepteur.ContentDescription.Value(Adjectif.woodBlock);
+			unload.InStockpile = stockpile.ContentDescription.Value(Adjectif.woodBlock);
+			return true;
+		}, 90f, "the builder to empty its bag", 15f, () => t.Log(worker.name + " " + worker.Activity + ", task " + ((worker.CurrentTask != null) ? worker.CurrentTask.ToString() : "none") + ", bag " + worker.recepteur.ContentString() + ", station " + station.recepteur.ContentString() + ", stockpile " + stockpile.ContentString()));
+		made(unload);
+	}
+
 	// ---- helpers
 
 	// A stockpile with logs logs in it and a chopping block next to it, with a worker when withWorker. The planks

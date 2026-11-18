@@ -282,6 +282,8 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 | `CraftingTests.NoWorkerNoPlanks` | A chopping block without a worker, and no other bricktron about, makes nothing (`Scenario.SidelineOthers` switches the bricktrons that are not the test's off for the test) |
 | `CraftingTests.IdleBuilderTakesWorkshopOrder` | An idle builder takes a chopping block's order by itself, no worker assigned, and makes the planks (a builder with nothing to do, even one on a project without work, does so) |
 | `CraftingTests.LoopUsesAllLogs` | A looping Planks order goes on while there are logs: 2 logs make 6 planks |
+| `CraftingTests.UnloadBringsWorkshopItsLog` | A builder told to store a log in its bag, next to a stockpile, brings it to a chopping block 6 blocks away whose Planks order waits for a log (`UnloadToWorkshops`, #96) |
+| `CraftingTests.UnloadSkipsFarWorkshop` | The same with the chopping block 22 blocks away: the log goes into the stockpile next to the builder |
 | `TaskTests.FelledTreeDropsThreeLogs` | A felled tree drops its 3 logs next to its stump |
 | `TaskTests.LooseIronIsHauled` | A builder told to clean up carries 3 lumps of iron ore into a stockpile |
 | `TaskTests.DeletedProjectReleasesCrew` | A deleted project's bricktrons are on no project afterwards |
