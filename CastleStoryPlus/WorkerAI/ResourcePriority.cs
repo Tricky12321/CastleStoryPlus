@@ -15,6 +15,7 @@ using Brix.Game.Semantique;
 using Brix.IO.Serialization.Contracts;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Economy;
+using CastleStoryPlus.Metallurgy;
 using CastleStoryPlus.Upgrades;
 using HarmonyLib;
 using Motus.Behavior;
@@ -297,7 +298,7 @@ internal static class ResourcePriority
 
 	internal static void MarkWorkshopList(Description list)
 	{
-		if (list != null && !ReferenceEquals(list, Adjectif.orangeCrystal.Profile.description))
+		if (list != null && !ReferenceEquals(list, Adjectif.orangeCrystal.Profile.description) && !ReferenceEquals(list, Metallurgy.Metallurgy.Coal.Profile.description))
 		{
 			WorkshopLists.GetValue(list, (Description unused) => new object());
 		}
@@ -380,6 +381,18 @@ internal static class ResourcePriority
 		}
 		Wanted.Clear();
 		return true;
+	}
+
+	// Whether priorities apply to a goal: a quarry's or ore mine's blocks (not a tunnel's), a harvest's or clean-up
+	// area's goals (not the loose items a repair area clears, nor the other tasks').
+	internal static bool Applies(Goal goal)
+	{
+		if (goal is DigGoal dig)
+		{
+			return dig.ResourceSetting is QuarryData || (dig.project is HarvestProject harvest && OreMine.IsOreMine(harvest));
+		}
+		Project project = goal.project;
+		return project is CleanupProject || project is HarvestProject;
 	}
 
 	// The kind of resource a worker gets from a goal, or -1 (loose items by what they are, trees as wood, a quarry's
@@ -540,7 +553,7 @@ internal static class ResourcePriorityMatch
 
 	private static void Postfix(Goal __instance, Labor labor, AIErrorsStore errorDestination, ref bool __result)
 	{
-		if (!__result || labor == null || !ResourcePriority.Customised(labor.faction) || ResourcePriority.Get(labor.faction, __instance) != ResourcePriority.Never)
+		if (!__result || labor == null || !ResourcePriority.Customised(labor.faction) || !ResourcePriority.Applies(__instance) || ResourcePriority.Get(labor.faction, __instance) != ResourcePriority.Never)
 		{
 			return;
 		}
@@ -567,7 +580,7 @@ internal static class ResourcePriorityGoal
 	[HarmonyPriority(Priority.Last)]
 	private static void Postfix(Goal __instance, Labor labor, ref int __result)
 	{
-		if (__result == int.MinValue || labor == null || !ResourcePriority.Customised(labor.faction))
+		if (__result == int.MinValue || labor == null || !ResourcePriority.Customised(labor.faction) || !ResourcePriority.Applies(__instance))
 		{
 			return;
 		}
@@ -595,6 +608,9 @@ internal static class ResourcePriorityGoal
 [HarmonyPatch]
 internal static class ResourcePrioritySelect
 {
+	// The goals of the decision being made; the selector copies them (PooledListEnumerator.Request).
+	private static readonly List<Goal> Goals = new List<Goal>();
+
 	private static readonly List<KeyValuePair<float, Goal>> Ranked = new List<KeyValuePair<float, Goal>>();
 
 	private static readonly Comparison<KeyValuePair<float, Goal>> LowestFirst = (KeyValuePair<float, Goal> a, KeyValuePair<float, Goal> b) => a.Key.CompareTo(b.Key);
@@ -648,11 +664,13 @@ internal static class ResourcePrioritySelect
 
 	private static bool Select(Project project, Labor labor, Var<Goal> result, ref Node __result)
 	{
-		if (labor == null || !ResourcePriority.Customised(labor.faction))
+		// An ore mine has its own selection (OreMineSelectPatch).
+		if (labor == null || !ResourcePriority.Customised(labor.faction) || (project is HarvestProject mine && OreMine.IsOreMine(mine)))
 		{
 			return true;
 		}
-		List<Goal> goals = new List<Goal>();
+		List<Goal> goals = Goals;
+		goals.Clear();
 		foreach (IGoalProvider provider in project.GetGoalProviders())
 		{
 			provider?.GetAll(goals);
@@ -705,6 +723,7 @@ internal static class ResourcePriorityFetchOrder
 [HarmonyPatch(typeof(CraftingStation), nameof(CraftingStation.StuffToFetch))]
 internal static class ResourcePriorityWorkshopList
 {
+	[HarmonyPriority(Priority.Last)]
 	private static void Postfix(Description __result)
 	{
 		ResourcePriority.MarkWorkshopList(__result);

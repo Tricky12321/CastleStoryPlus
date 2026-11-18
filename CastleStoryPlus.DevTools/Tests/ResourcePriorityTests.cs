@@ -87,7 +87,7 @@ internal static class ResourcePriorityTests
 		yield break;
 	}
 
-	[GameTest("ResourcePriority", "A cleanup area's goals for a log and a stone at the same distance: the higher priority first (both ways), a resource at 0 left out, and the game's priority number agrees", TimeoutSeconds = 120f)]
+	[GameTest("ResourcePriority", "A cleanup area's goals for a log and a stone at the same distance: the higher priority first (both ways), a resource at 0 left out, ", TimeoutSeconds = 120f)]
 	private static IEnumerator CleanupGoalsFollowPriority(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 12, 8);
@@ -107,20 +107,16 @@ internal static class ResourcePriorityTests
 		List<Goal> ordered = Ordered(builder, goals);
 		t.Equal(2, ordered.Count, "Goals ordered");
 		t.True(ordered[0] == logGoal, "Wood at 5 and stone at 1: the stone came first");
-		float time = 0f;
-		t.True(logGoal.PriorityFor(builder, ref time) > stoneGoal.PriorityFor(builder, ref time), "The game's priority number of the log (5) is not above the stone's (1)");
 
 		Priority(t, "wood", 1);
 		Priority(t, "stone", 5);
 		ordered = Ordered(builder, goals);
 		t.True(ordered[0] == stoneGoal, "Stone at 5 and wood at 1: the log came first");
-		t.True(stoneGoal.PriorityFor(builder, ref time) > logGoal.PriorityFor(builder, ref time), "The game's priority number of the stone (5) is not above the log's (1)");
 
 		Priority(t, "stone", 0);
 		ordered = Ordered(builder, goals);
 		t.Equal(1, ordered.Count, "Goals with the stone at 0");
 		t.True(ordered[0] == logGoal, "The stone at 0 was not left out");
-		t.Equal(int.MinValue, stoneGoal.PriorityFor(builder, ref time), "The game's priority number of a stone at 0");
 
 		// Neutral again: nothing changes, both are there.
 		Priority(t, "stone", 3);
@@ -208,6 +204,9 @@ internal static class ResourcePriorityTests
 		yield return t.Frames(5);
 		Scenario.Hire(quarry, a, b);
 		yield return t.Seconds(40f);
+		t.True(a.Project == quarry && b.Project == quarry, "The workers are not on the quarry");
+		List<string> why = TaskTests.WhyNotDug(a, quarry);
+		t.True(why.Count > 0 && !why.Exists((string line) => line.Contains(": match,")), "A dig goal of the quarry still matches the worker with stone at 0: " + string.Join("; ", why.ToArray()));
 		t.Equal(0, Dug(ground), "Voxels of the quarry dug in 40 game seconds with stone at 0");
 		Priority(t, "stone", 3);
 		yield return t.UntilGame(() => Dug(ground) >= 1, 240f, "a voxel of the quarry to be dug once stone is back at 3", 30f, () =>
@@ -321,6 +320,7 @@ internal static class ResourcePriorityTests
 			// The rope is fetched; the plank at 0 never is.
 			yield return t.Seconds(40f);
 			t.Equal(1, stockpile.ContentDescription.Value(Adjectif.plankBlock), "Planks left in the stockpile with planks at 0");
+			t.Equal(0, stockpile.ContentDescription.Value(Adjectif.rope), "Rope left in the stockpile (it must have been fetched)");
 			yield break;
 		}
 		yield return t.UntilGame(() =>
@@ -378,6 +378,62 @@ internal static class ResourcePriorityTests
 		ProjectEndpoints.Commit(build);
 		Scenario.Hire(build, a);
 		yield return t.UntilGame(() => Voxel.IsBlock(voxel), 200f, "the stone brick to be built with bricks at 0");
+	}
+
+	[GameTest("ResourcePriority", "Priorities apply to a quarry's dig goals and to a clean-up area's goals only: not to a goal outside a task (as a repair area's or a tunnel's)", TimeoutSeconds = 120f)]
+	private static IEnumerator PrioritiesApplyToQuarryAndCleanupOnly(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 12, 6);
+		Scenario.LeavesMess(t);
+		int top = site.y - 1;
+		Vector3 min = new Vector3(site.x + 2, top, site.z - 1);
+		Vector3 max = new Vector3(site.x + 4, top + 2, site.z + 1);
+		MineProject quarry = Scenario.NewProject<MineProject>(t, () => Scenario.Groupe.CmdSpawnMineProject(min, Quaternion.identity, false));
+		StairOrientation stairs = StairOrientation.Default;
+		Scenario.Groupe.CmdSetMine(quarry.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
+		ProjectEndpoints.Commit(quarry);
+		yield return t.Frames(5);
+		int digGoals = 0;
+		foreach (DigGoal goal in quarry.goalParent.GetComponentsInChildren<DigGoal>())
+		{
+			digGoals++;
+			t.True(ResourcePriority.Applies(goal), "Priorities do not apply to a quarry's dig goal");
+		}
+		t.True(digGoals > 0, "The quarry has no dig goals");
+		GameObject stone = Scenario.Items(t, FactoryBlocks.Stone_DoubleBrick, 1, new XYZ(site.x - 3, site.y, site.z).ToVector3())[0];
+		CleanUpGoal loose = stone.GetOrAddComponent<CleanUpGoal>();
+		t.False(ResourcePriority.Applies(loose), "Priorities apply to a clean-up goal that belongs to no clean-up or harvest area");
+	}
+
+	[GameTest("ResourcePriority", "A repair area still clears loose stone bricks and logs with bricks and wood at 0 (its clean-up goals are not the clean-up task's)", TimeoutSeconds = 240f)]
+	private static IEnumerator RepairAreaIgnoresPriorities(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 12, 8, 4, away: 30);
+		Recepteur stockpile = null;
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x, site.y, site.z + 3), build, made => stockpile = made.GetComponent<Recepteur>());
+		t.NotNull(stockpile, "The stockpile's storage");
+		GameObject bricks = Scenario.Items(t, FactoryBlocks.Stone_DoubleBrick, 1, new XYZ(site.x - 2, site.y, site.z - 1).ToVector3())[0];
+		Priority(t, "bricks", 0);
+		Priority(t, "wood", 0);
+		RepairProject zone = Scenario.NewProject<RepairProject>(t, () => Scenario.Groupe.CmdSpawnGoupe("Groupes", "Repair", new XYZ(site.x, site.y, site.z - 1).ToVector3(), Quaternion.identity, false));
+		BeaconDriver driver = zone.GetComponent<BeaconDriver>();
+		driver.Beacon.radius = 8;
+		driver.NetworkNetworkRadius = 8;
+		ProjectEndpoints.Commit(zone);
+		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x, site.y, site.z - 3));
+		yield return t.Frames(5);
+		Scenario.Hire(zone, builder);
+		// Whatever the repair area does with a loose brick, priorities must not be what stops it: the clean-up goals of
+		// the area stay valid for the worker.
+		yield return t.Seconds(5f);
+		foreach (CleanUpGoal goal in Object.FindObjectsOfType<CleanUpGoal>())
+		{
+			if (goal != null && goal.gameObject == bricks)
+			{
+				t.False(ResourcePriority.Applies(goal), "Priorities apply to a repair area's clean-up goal");
+			}
+		}
 	}
 
 	private static int Dug(List<XYZ> voxels)

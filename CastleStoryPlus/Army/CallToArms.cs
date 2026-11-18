@@ -77,6 +77,7 @@ internal static class CallToArms
 		{
 			return;
 		}
+		Achievements.AchievementTracker.Local(Achievements.AchievementCounter.CallToArms);
 		List<Labor> builders = new List<Labor>();
 		List<Labor> soldiers = new List<Labor>();
 		foreach (Labor labor in UIGameObserver.bricktrons.CheckCreation())

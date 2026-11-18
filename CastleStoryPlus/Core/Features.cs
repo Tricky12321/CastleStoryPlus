@@ -147,6 +147,10 @@ internal static class Features
 
 	public const string RainInfo = "Weather: now and then (about every 3 game days, for a few game hours: [Rain] DaysBetween, Hours) it rains, decided by the host and told to the other players, saved with the world: drops fall round the camera, the light and sky darken, a rain noise plays and a message shows when it starts and stops. While it rains grass spreads and worn paths grow over faster ([Rain] GrassBoost) and plants seed and grow faster ([Rain] PlantBoost). No rain in a desert world (mostly sand); in a snow world it snows (only shown).";
 
+	public const string Achievements = "Achievements";
+
+	public const string AchievementsInfo = "The mod's own achievements (trading, research, waves survived, guardians and chests, kills, crafting, building, digging...), kept per player in BepInEx/config/castlestoryplus_achievements.json (not in the save, not on Steam, no rewards). A list with progress is opened from the crown button in the in-game menu's right bar, and a short message with a chime shows when one is unlocked. Nothing counts in a sandbox game or in a game where cheats were used (the debug menu's energy, units, resources, enemies, waves, time, fog of war, x-ray, critical hits and spawn points, the game's debug sidebar, instant build, the developer API's cheats); in multiplayer every player counts his own team's deeds.";
+
 	public const string WiderVision = "WiderVision";
 
 	public const string WiderVisionInfo = "Units see 10% further through the fog of war ([FogOfWar] VisionMultiplier).";
@@ -338,6 +342,10 @@ internal static class Features
 	public const string Ladders = "Ladders";
 
 	public const string LaddersInfo = "Wood ladder in the build menu (wood group): bricktrons climb it straight up and down, slower than stairs ([Ladders] ClimbSpeed, RouteCost) and only with free hands or a bag.";
+
+	public const string Roads = "Roads";
+
+	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
 
 	public const string GlobalBuildJob = "GlobalBuildJob";
 
@@ -538,6 +546,10 @@ internal static class Features
 	public const string Treasure = "Treasure";
 
 	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it: iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
+
+	public const string GuardianSounds = "GuardianSounds";
+
+	public const string GuardianSoundsInfo = "The treasure guardians make sounds, positioned in the world and quieter with distance: an idle call now and then, a roar when a player's unit comes near or it is provoked, footsteps that fit its size and gait, attack and hit sounds and a death sound, each with its guardian's material (crystal chimes, crackling embers, grinding stone, clanking iron). Synthesised for the mod (tools/make_guardian_sounds.py), played next to the game's own sound with the game's volume and mute ([Treasure.Sounds] Volume).";
 
 	public const string RandomWorld = "RandomWorld";
 

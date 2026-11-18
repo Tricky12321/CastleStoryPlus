@@ -8,6 +8,7 @@ using Brix.Engine.Nature;
 using Brix.Game;
 using Brix.Game.AI;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Pathfinding;
 using CastleStoryPlus.Weather;
 using HarmonyLib;
 using Newtonsoft.Json.Linq;
@@ -164,6 +165,12 @@ internal sealed class WornPaths : MonoBehaviour
 			}
 			XYZ feet = XYZ.FromVector3(labor.transform.position);
 			int key = Key(feet.x, feet.z);
+			// A road keeps its ground from wearing: nobody's steps on it count.
+			if (Roads.IsOn(labor.transform))
+			{
+				LastColumn[labor] = key;
+				continue;
+			}
 			if (LastColumn.TryGetValue(labor, out int last) && last == key)
 			{
 				continue;
