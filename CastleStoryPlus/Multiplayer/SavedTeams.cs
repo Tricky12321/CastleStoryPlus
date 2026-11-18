@@ -35,6 +35,25 @@ internal static class SavedTeams
 	// Players who picked their team in the lobby: they keep it.
 	internal static readonly HashSet<LobbyPlayer> Chosen = new HashSet<LobbyPlayer>();
 
+	// The teams before the game's lobby check ran (a player who picked his team is put back to it afterwards).
+	private static readonly Dictionary<LobbyPlayer, int> BeforeFix = new Dictionary<LobbyPlayer, int>();
+
+	internal static void SnapshotTeams()
+	{
+		BeforeFix.Clear();
+		if (UNetManager.instance == null || UNetManager.instance.LobbyPlayerList == null)
+		{
+			return;
+		}
+		foreach (LobbyPlayer player in UNetManager.instance.LobbyPlayerList)
+		{
+			if (player != null)
+			{
+				BeforeFix[player] = player.TeamNumber;
+			}
+		}
+	}
+
 	// Host: called when the game has written a save into its folder.
 	internal static void Write(string folder)
 	{
@@ -156,7 +175,7 @@ internal static class SavedTeams
 	}
 
 	// After the game's own lobby check (GameParam.FixTeams) has moved players to make the teams valid: the saved teams
-	// are put back if they are valid too (all the players of the save are there), else the game's repair stays.
+	// are put back if they are valid for the mode too (enough of the save's players are there), else the game's repair stays.
 	internal static void KeepSaved()
 	{
 		if (!NetworkServer.active || Applying || UNetManager.instance == null || UNetManager.instance.LobbyPlayerList == null)
@@ -171,7 +190,23 @@ internal static class SavedTeams
 			repaired[i] = players[i].TeamNumber;
 		}
 		ApplyAll();
-		if (GameParam.AreTeamsValid())
+		// A player who picked his team keeps it, also when the game's check moved him.
+		Applying = true;
+		try
+		{
+			foreach (LobbyPlayer player in players)
+			{
+				if (Chosen.Contains(player) && BeforeFix.TryGetValue(player, out int before) && player.TeamNumber != before)
+				{
+					player.NetworkTeamNumber = before;
+				}
+			}
+		}
+		finally
+		{
+			Applying = false;
+		}
+		if (SavedAreValid(players))
 		{
 			return;
 		}
@@ -187,6 +222,19 @@ internal static class SavedTeams
 		{
 			Applying = false;
 		}
+	}
+
+	// The game's own check (GameParam.AreTeamsValid) wants every team slot to have a player, so it never accepts a lobby with
+	// fewer players than slots; the mode's limits are checked here instead (TeamRules).
+	private static bool SavedAreValid(List<LobbyPlayer> players)
+	{
+		int[] teams = new int[players.Count];
+		for (int i = 0; i < teams.Length; i++)
+		{
+			teams[i] = players[i].TeamNumber;
+		}
+		GameParam.GameParameters limits = GameParam.instance.Parameters;
+		return TeamRules.IsValid(teams, GameParam.CurrentTeamInfos.Length, GameParam.MinTeamCount, GameParam.MaxTeamCount, limits.MinPlayersPerTeam, limits.MaxPlayersPerTeam);
 	}
 
 	// The save's teams by faction name, or null (an older save, a new game).
@@ -318,6 +366,11 @@ internal static class SavedTeams
 [HarmonyPatch(typeof(GameParam), "FixTeams")]
 internal static class SavedTeamsFixPatch
 {
+	private static void Prefix()
+	{
+		SavedTeams.SnapshotTeams();
+	}
+
 	private static void Postfix()
 	{
 		SavedTeams.KeepSaved();

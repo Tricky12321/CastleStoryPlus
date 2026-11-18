@@ -18,10 +18,13 @@ game. The checks compare what the client has with what the host has, through the
                           (issue #39). Runs last, in lobbies of its own: the other checks' game is left first
 
     tools/run-multiplayer-tests.py [--filter Cap] [--port 27890] [--player DIR] [--root-src DIR] [--keep] [--hold N]
-                                   [--headless]
+                                   [--headless] [--no-save-copy]
 
 --headless starts both players with -batchmode -nographics (no windows). A check that needs rendering is listed in
 NEEDS_GRAPHICS and left out of a headless run (none does today: they all read state through the API).
+
+--no-save-copy: SavedTeams copies the save to the clients' saves by default; with this option the game's own download of a
+missing save to the clients is used instead (slower, and loading a downloaded save has not been verified).
 
 --port is the host's API port, the client's is the next one, SavedTeams' third player the one after (never 27860, the player's own game). The players share
 the player folder (default: the Unity 6 port's CastleStoryPlus.Player/Build/Linux) and start one after the other.
@@ -326,17 +329,25 @@ def open_lobby(players, setup):
         time.sleep(3)
 
 
-def start_from_lobby(players):
+def start_from_lobby(players, loaded=False):
     host, clients = players[0], players[1:]
     for client in clients:
         client.call("POST", "/api/net/ready", value="true")
     time.sleep(2)
     log("lobby before the start:", lobby_players(host))
     host.call("POST", "/api/net/start", button="true")
+    # A new game opens an introduction; a loaded save goes straight into the game.
+    def started(p):
+        if p.call("GET", "/api/dialog").get("open"):
+            return True
+        status = p.call("GET", "/api/status")
+        return loaded and status.get("inGame") and not status.get("loading")
+
     for player in players:
-        player.wait_for("the game's introduction", lambda p=player: p.call("GET", "/api/dialog").get("open"), 600, 2)
+        player.wait_for("the game's introduction" if not loaded else "the loaded game", lambda p=player: started(p), 600, 2)
     for player in players:
-        player.call("POST", "/api/dialog/press?index=0")
+        if player.call("GET", "/api/dialog").get("open"):
+            player.call("POST", "/api/dialog/press?index=0")
     time.sleep(5)
 
 
@@ -404,6 +415,10 @@ def check_saved_teams(host, client, in_game):
     saved = host.call("POST", "/api/net/save")
     log("saved as", saved["name"])
     leave_to_menu(players)
+    # The players find the save in their own saves, as friends who play on one machine's saves do (the file times are
+    # kept, the game matches on them); --no-save-copy leaves it to the game to send the save to the clients.
+    for other in () if host.args.no_save_copy else players[1:]:
+        shutil.copytree(os.path.join(host.root, "Info", "Saves", saved["name"]), os.path.join(other.root, "Info", "Saves", saved["name"]))
     open_lobby(players, lambda h: log("lobby:", h.call("POST", "/api/net/mode", save=saved["name"])))
     time.sleep(3)
     log("lobby of the loaded save:", lobby_players(host))
@@ -413,7 +428,7 @@ def check_saved_teams(host, client, in_game):
         return False, "the loaded save's lobby changed the teams: %s (saved %s)" % (after, before)
     if seen != after:
         return False, "the client sees the teams %s, the host %s" % (seen, after)
-    start_from_lobby(players)
+    start_from_lobby(players, loaded=True)
     groups = alliance_groups(host)
     if groups != [["Client", "Host"], ["Client2"]]:
         return False, "teams %s in the lobby, but allied groups %s in the loaded game" % (after, groups)
@@ -440,6 +455,7 @@ def main():
     parser.add_argument("--work", default=os.path.expanduser("~/.cache/csp-tests"), help="folder for the copies, logs and results")
     parser.add_argument("--keep", action="store_true", help="keep the game root copies afterwards")
     parser.add_argument("--headless", action="store_true", help="start the players with -batchmode -nographics (no windows); checks that need rendering are left out")
+    parser.add_argument("--no-save-copy", action="store_true", help="SavedTeams: do not copy the save to the clients, so the game has to send it (the download path)")
     parser.add_argument("--hold", type=int, default=0, help="keep the players running this many seconds after the checks")
     args = parser.parse_args()
     if not os.path.isfile(os.path.join(args.player, "run_bepinex.sh")):
