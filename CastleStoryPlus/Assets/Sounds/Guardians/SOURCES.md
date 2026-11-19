@@ -1,38 +1,74 @@
 # Sources of the guardian sounds
 
-The animal voices in `<Guardian>_<event>_<n>.wav` are parts of the recordings below, cleaned (noise reduction, noise
-gate, rumble filter), pitched down and layered by `tools/make_guardian_sounds.py`. The crystal chimes, stone thuds,
-iron clanks and ember pops on top are made in that script (no recording). The trimmed, decoded source clips are in
-`tools/guardian_sources/` (mono, 16-bit, 32 kHz; `tools/cut_guardian_sources.py` re-creates them).
+Every sound in `<Guardian>_<event>_<n>.wav` is a part of a recording below: the animal voices and the material
+(crystal, fire, stone, iron, footfalls). Nothing is synthesised. `tools/make_guardian_sounds.py` cuts the parts,
+cleans them (noise reduction of the animal recordings, noise gate, rumble filter), pitches them, layers them, levels
+and fades them. The trimmed, decoded source clips are in `tools/guardian_sources/` (mono, 16-bit, 32 kHz, the start
+of the kept part is in the file name; `tools/cut_guardian_sources.py` re-creates them).
 
 Every recording is **CC0 1.0 (public domain dedication)**, checked on its own Freesound page (the licence link on the
-page is `http://creativecommons.org/publicdomain/zero/1.0/`, checked 19-11-2026). CC0 needs no attribution; the
-authors are named here anyway. The audio used is the high quality MP3 preview that Freesound serves to every visitor,
-decoded to WAV. No recording under CC-BY, CC-BY-NC, CC-BY-SA or any other licence is used.
+page is `http://creativecommons.org/publicdomain/zero/1.0/`, checked 19-11-2026), and the page description was read to
+rule out imitations, synthesised or effect-made sounds and human voices. CC0 needs no attribution; the authors are
+named here anyway. The audio used is the high quality MP3 preview that Freesound serves to every visitor, decoded to
+WAV. No recording under CC-BY, CC-BY-NC, CC-BY-SA or any other licence is used.
 
-| Source clip | Recording (Freesound page) | Author | Licence | Used in |
-|---|---|---|---|---|
-| `lion_bidone_69570_t3.4.wav` | https://freesound.org/people/Bidone/sounds/69570/ "Lion loud" (field recording of lions) | Bidone | CC0 1.0 | Cindermane roar 1-3, attack 1-2, death 1 |
-| `lion_bidone_69571_t1.5.wav` | https://freesound.org/people/Bidone/sounds/69571/ "Lions two" | Bidone | CC0 1.0 | Cindermane idle 1-3 |
-| `lion_bidone_69572_t4.8.wav` | https://freesound.org/people/Bidone/sounds/69572/ "Lion roaring" | Bidone | CC0 1.0 | Cindermane idle 4, roar 4, hit 1, death 2 |
-| `lion_stratcat322_270383_t0.3.wav` | https://freesound.org/people/stratcat322/sounds/270383/ "lion_growls.wav" (cut and rearranged from roman_cgr's field recording https://freesound.org/people/roman_cgr/sounds/223978/ "Lion lament", also CC0 1.0) | stratcat322 | CC0 1.0 | Cindermane attack 3, hit 2-3 |
-| `gorilla_j0ck0_397054_t0.1.wav` | https://freesound.org/people/J0ck0/sounds/397054/ "Gorillaschrei.wav" (roar of an alpha gorilla, recorded in a zoo) | J0ck0 | CC0 1.0 | Boulderback idle 2 and 4, roar 1-4, attack 1-3, hit 1-3, death 1-2 |
-| `gorilla_chest_shutup_outcast_367821_t3.4.wav` | https://freesound.org/people/shutup_outcast/sounds/367821/ "Chest banging.wav" (the chest beats) | shutup_outcast | CC0 1.0 | Boulderback idle 1, 3 and 4, roar 1, 2 and 4, attack 2 |
-| `rhino_breviceps_535810_t0.0.wav` | https://freesound.org/people/Breviceps/sounds/535810/ "Indian rhinoceros (Rhinoceros unicornis)" | Breviceps | CC0 1.0 | Ironhorn idle 1-4, roar 1-3, attack 2-3, hit 1-3, death 1-2 |
-| `horse_black_trillium_397236_t0.3.wav` | https://freesound.org/people/black_trillium/sounds/397236/ "Horse Snort.wav" | black_trillium | CC0 1.0 | Ironhorn idle 1 and 3, attack 1 and 3; Spirestalker idle 3, attack 1 |
-| `camel_schots_693564_t2.5.wav` | https://freesound.org/people/schots/sounds/693564/ "Dromedaries mooing" (field recording) | schots | CC0 1.0 | Spirestalker idle 1-4, roar 1-3, hit 2-3, death 1-2 |
-| `alpaca_thekingofgeeks360_852641_t0.0.wav` | https://freesound.org/people/TheKingOfGeeks360/sounds/852641/ "Camelids - Alpaca; High Moan" | TheKingOfGeeks360 | CC0 1.0 | Spirestalker idle 4, attack 2, hit 1 |
+## Animals
 
-## What is not an exact match
+| Source clip | Recording (Freesound page) | Author | Used in |
+|---|---|---|---|
+| `lion_bidone_69570_t11.2.wav` | https://freesound.org/people/Bidone/sounds/69570/ "Lion loud" (field recording of lions) | Bidone | Cindermane roar 2 and 4, attack 2, death 1 |
+| `lion_bidone_69571_t1.6.wav` | https://freesound.org/people/Bidone/sounds/69571/ "Lions two" | Bidone | Cindermane idle 1-3 |
+| `lion_roman_cgr_223978_t0.0.wav` | https://freesound.org/people/roman_cgr/sounds/223978/ "Lion lament" (zoo, Sennheiser K6 + Zoom H4N) | roman_cgr | Cindermane idle 4, roar 3, attack 1, hit 3 |
+| `lion_felix_blume_405211_t11.0.wav` | https://freesound.org/people/felix.blume/sounds/405211/ "Lions screaming during the night" (zoo in Quilpue, Chile) | felix.blume | Cindermane roar 1, death 2 |
+| `lion_stratcat322_270383_t0.3.wav` | https://freesound.org/people/stratcat322/sounds/270383/ "lion_growls.wav" | stratcat322 | Cindermane attack 3, hit 1-2 |
+| `gorilla_j0ck0_397054_t0.1.wav` | https://freesound.org/people/J0ck0/sounds/397054/ "Gorillaschrei.wav" (roar of an alpha gorilla, recorded in a zoo) | J0ck0 | Boulderback idle 2 and 4, roar 1-4, attack 1-3, hit 1-3, death 1-2 |
+| `gorilla_chest_shutup_outcast_367821_t3.4.wav` | https://freesound.org/people/shutup_outcast/sounds/367821/ "Chest banging.wav" (chest beats only) | shutup_outcast | Boulderback idle 1, 3 and 4, roar 1, 2, 3 and 4, attack 2 |
+| `rhino_breviceps_535810_t0.0.wav` | https://freesound.org/people/Breviceps/sounds/535810/ "Indian rhinoceros (Rhinoceros unicornis)" (phone recording) | Breviceps | Ironhorn idle 1-4, roar 1-3, attack 1-3, hit 1-3, death 1-2 |
+| `camel_schots_693564_t3.0.wav` | https://freesound.org/people/schots/sounds/693564/ "Dromedaries mooing" (field recording) | schots | Spirestalker idle 1, 2, roar 1, 3, hit 3, death 1 |
+| `moose_elk_gleith_486554_t0.7.wav` | https://freesound.org/people/gleith/sounds/486554/ "Moose_Elk.mp3" | gleith | Spirestalker idle 3, 4, roar 2, hit 2, death 2 |
+| `horse_black_trillium_397236_t0.3.wav` | https://freesound.org/people/black_trillium/sounds/397236/ "Horse Snort.wav" | black_trillium | Spirestalker idle 3, attack 1 |
+| `alpaca_thekingofgeeks360_852641_t0.0.wav` | https://freesound.org/people/TheKingOfGeeks360/sounds/852641/ "Camelids - Alpaca; High Moan" | TheKingOfGeeks360 | Spirestalker idle 4, attack 2, hit 1 |
 
-- **Giraffe (Spirestalker):** giraffes are almost silent and no CC0 or public domain giraffe recording was found (the
-  giraffe recordings on Wikimedia Commons are CC BY-SA and so not used). The voice is dromedary moans, an alpaca moan
-  and horse snorts, used as stand-ins for the giraffe's night humming, bleats and snorts.
+## Material (accents and footfalls)
+
+| Source clip | Recording (Freesound page) | Author | Used in |
+|---|---|---|---|
+| `crystal_caiogracco_150453_t0.0.wav` | https://freesound.org/people/caiogracco/sounds/150453/ "Crystal bowl hit F3 1.wav" | caiogracco | Spirestalker idle, roar, attack, death |
+| `crystal_caiogracco_150454_t0.0.wav` | https://freesound.org/people/caiogracco/sounds/150454/ "Crystal bowl F#3 1.wav" | caiogracco | Spirestalker idle, roar, attack, death |
+| `crystal_caiogracco_150456_t0.0.wav` | https://freesound.org/people/caiogracco/sounds/150456/ "Crystal bowl nail E4 1.wav" | caiogracco | Spirestalker step, hit |
+| `fire_nic3_one_166553_t0.7.wav` | https://freesound.org/people/Nic3_one/sounds/166553/ "spray fire bursts 1.wav" (field recording of flame bursts) | Nic3_one | Cindermane attack 1 and 3, death |
+| `fire_j1987_111331_t0.0.wav` | https://freesound.org/people/j1987/sounds/111331/ "flameclic.wav" (a fireplace lighter) | j1987 | Cindermane attack 2 |
+| `fire_craigsmith_675771_t0.1.wav` | https://freesound.org/people/craigsmith/sounds/675771/ "S31-08 Acetylene torch; multiple pops.wav" | craigsmith | Cindermane hit, death |
+| `stone_lolamadeus_179365_t0.3.wav` | https://freesound.org/people/lolamadeus/sounds/179365/ "Small Rock and Stone Hits.wav" | lolamadeus | Boulderback step, idle, attack, hit; Spirestalker step, attack |
+| `stone_northern87_369981_t4.3.wav` | https://freesound.org/people/northern87/sounds/369981/ "Stone dropping to ground_northern87" | northern87 | Boulderback step, roar, attack, death |
+| `stone_kastenfrosch_521956_t0.0.wav` | https://freesound.org/people/Kastenfrosch/sounds/521956/ "Stone Crumble 2" | Kastenfrosch | Boulderback attack, death |
+| `iron_ldezem_386129_t0.0.wav` | https://freesound.org/people/ldezem/sounds/386129/ "Anvil - Lokomo 125 kg - Hammer on 6mm steel 1 time" | ldezem | Ironhorn roar 2, attack 1 |
+| `iron_alan3809_103071_t3.0.wav` | https://freesound.org/people/alan3809/sounds/103071/ "Anvil Strikes_5.wav" | alan3809 | Ironhorn attack 2-3, hit 3 |
+| `iron_michorvath_270589_t0.1.wav` | https://freesound.org/people/michorvath/sounds/270589/ "Anvil Hit 1" | michorvath | Ironhorn roar 1, hit 1 |
+| `iron_rsellick_545547_t6.9.wav` | https://freesound.org/people/rsellick/sounds/545547/ "metal clanks.wav" | rsellick | Ironhorn step, roar 3, hit 2, death |
+| `iron_roxis_boy_401622_t2.6.wav` | https://freesound.org/people/Roxis_Boy/sounds/401622/ "Chain Rattling - 1" | Roxis_Boy | Ironhorn death |
+| `thud_sgrowe_342535_t0.0.wav` | https://freesound.org/people/sgrowe/sounds/342535/ "Medium Thud 1" | sgrowe | Cindermane step 1-2 |
+| `thud_7of9designs_640204_t0.0.wav` | https://freesound.org/people/7of9Designs/sounds/640204/ "Heavy Metal Thud on Ground" | 7of9Designs | Ironhorn step, attack |
+| `stomp_oscaraudiogeek_334228_t1.5.wav` | https://freesound.org/people/oscaraudiogeek/sounds/334228/ "Stomping Ground Super Bassy" (stomps on cement, contact mic) | oscaraudiogeek | Cindermane step 3, Boulderback step 1-2 |
+
+Licence of every row: CC0 1.0.
+
+## What is not an exact match (stand-ins)
+
+- **Giraffe (Spirestalker):** giraffes are almost silent and no CC0 or public domain giraffe recording exists (the
+  giraffe recordings on Wikimedia Commons are CC BY-SA, so not used). The voice is dromedary moans, elk / moose
+  grunts, an alpaca moan and a horse snort, standing in for the giraffe's humming, grunts, bleats and snorts.
 - **Gorilla (Boulderback):** the only real gorilla recording under CC0 that was found is one roar (J0ck0). It is used
-  at several pitches and lengths, with the chest beats of the second recording. The chest beats are the sound of a
-  chest being beaten, the page does not say whose.
-- **Rhinoceros (Ironhorn):** the rhino calls are a phone recording (noisy, the noise is reduced); the snorts come from
-  a horse.
-- Not used although they are on Freesound under CC0: recordings that are human imitations, synthesised or a mix of other
-  sounds (for example a "gorilla audio" that is a man saying the word, a "rhinoceros trumpeting" made with a French horn,
-  a "Lion Growl" whose page says it is not real, a "LION ROAR" made with a filter).
+  at several pitches and lengths with real chest beats. The chest beats are the sound of a chest being beaten; the
+  page does not say whose.
+- **Rhinoceros (Ironhorn):** the only real rhinoceros recording found under CC0 is the phone recording of an Indian
+  rhinoceros (noisy, the noise is reduced). Horse snorts are not used for the Ironhorn.
+- **Material:** the "spray fire bursts" are flames from a spray can, the "acetylene torch" pops come from an
+  old film effects archive (digitised, some noise), the "stone drop" and "rock hits" are close recordings of stones.
+
+## Rejected after reading the page
+
+Human voices or imitations ("gorilla audio", "Big Lion Roar", "Monster Gorilla Imitation"), synthesised or
+effect-made sounds ("Rhinoceros Trumpeting Angry" is a French horn, "Flame Burst" is CO2 and plug-in effects, "lion_mad",
+"Alien ..." files), mixes of other sounds ("G-Gorilla_1-2"), a circuit-bent toy, recordings with a lot of ambience
+(hippo, bison herd, bonobo chorus, a sanctuary full of lions), and everything under another licence.
