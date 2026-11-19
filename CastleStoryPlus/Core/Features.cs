@@ -433,7 +433,7 @@ internal static class Features
 
 	public const string StuckReset = "StuckReset";
 
-	public const string StuckResetInfo = "Failsafe for a hanging worker: one that has not moved for 10 seconds in a walking task (60 in any other) has its task cancelled and puts down what it carries, then starts afresh ([StuckReset] Seconds, LongSeconds).";
+	public const string StuckResetInfo = "Failsafe for a hanging worker: one that has not moved for 10 seconds in a walking task (60 in any other) has its task cancelled and puts down what it carries, then starts afresh ([StuckReset] Seconds, LongSeconds). Also: a worker whose tasks fail four times in a row lets go of them (and is taken off its task when it happens again), a task whose target fell off the map ends, and the settings page has a button that resets all bricktrons.";
 
 	public const string LoadRelief = "LoadRelief";
 

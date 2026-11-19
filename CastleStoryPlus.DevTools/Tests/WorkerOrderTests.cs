@@ -14,6 +14,7 @@ using CastleStoryPlus.DevTools.Endpoints;
 using CastleStoryPlus.DevTools.Pathing;
 using CastleStoryPlus.DevTools.Testing;
 using UnityEngine;
+using FactoryBlocks = Brix.External.Factories.Blocks;
 
 namespace CastleStoryPlus.DevTools.Tests;
 
@@ -108,6 +109,62 @@ internal static class WorkerOrderTests
 		yield return t.UntilGame(() => CastleStoryPlus.WorkerAI.HoldAfterOrder.IsHeld(worker), 10f, "the worker to wait after the second dig");
 		yield return t.UntilGame(() => !CastleStoryPlus.WorkerAI.HoldAfterOrder.IsHeld(worker) && worker.CurrentTask != null, 30f, "the worker to stop waiting and take up something", 10f, () => t.Log(Describe(worker)));
 		t.Log("After the wait: " + Describe(worker));
+	}
+
+	[GameTest("Tasks", "A worker that joins a quarry with planks in its bag stores them in a storage before it digs a block (#129, #124)", TimeoutSeconds = 300f)]
+	private static IEnumerator StoresForeignLoadBeforeDigging(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 14, 8);
+		Scenario.LeavesMess(t);
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
+		MineProject quarry = Quarry(t, site);
+		// It keeps nothing: the pallet holds the plank (one resource at a time), so there is no storage for stone, and the blocks are dug without a drop.
+		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 1, site.y, site.z - 3));
+		yield return t.Frames(5);
+		int before = QuarryGround(site);
+		GameObject plank = Scenario.Items(t, FactoryBlocks.Wood_DoublePlank_AA, 1, worker.transform.position + Vector3.up * 3f)[0];
+		t.True(worker.recepteur.HasRoomFor(plank), "The bag has no room for a plank");
+		worker.recepteur.AddObject(plank);
+		Scenario.Hire(quarry, worker);
+		yield return t.UntilGame(() =>
+		{
+			if (worker.recepteur.Carries(plank))
+			{
+				t.True(QuarryGround(site) == before, worker.name + " dug a block with the plank in its bag: " + Describe(worker));
+				return false;
+			}
+			return true;
+		}, 120f, "the worker to put the plank down", 15f, () => t.Log(Describe(worker)));
+		t.Equal(1, InStorage(new List<GameObject> { plank }), "Planks in a storage (not dropped)");
+		t.Equal(before, QuarryGround(site), "Quarry blocks left when the plank was stored");
+		yield return t.UntilGame(() => QuarryGround(site) < before, 120f, "the worker to dig in the quarry afterwards", 15f, () => t.Log(Describe(worker)));
+	}
+
+	[GameTest("Tasks", "Reset all bricktrons: a worker waiting after its dig order is let go of the wait and looks for work at once (#121)", TimeoutSeconds = 300f)]
+	private static IEnumerator ResetAllBricktrons(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 14, 8);
+		Scenario.LeavesMess(t);
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x - 5, site.y, site.z), build, _ => { });
+		MineProject quarry = Quarry(t, site);
+		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 1, site.y, site.z - 3));
+		yield return t.Frames(5);
+		Scenario.Hire(quarry, worker);
+		yield return t.UntilGame(() => TaskProject(worker) == quarry, 60f, "the worker to start in the quarry", 15f, () => t.Log(Describe(worker)));
+		XYZ voxel = new XYZ(site.x - 1, site.y - 1, site.z + 3);
+		t.True(Voxel.IsFull(voxel), "The voxel to dig is not ground");
+		OrderDig(worker, voxel);
+		yield return t.UntilGame(() => !Voxel.IsFull(voxel), 60f, "the ordered voxel to be dug", 15f, () => t.Log(Describe(worker)));
+		yield return t.UntilGame(() => CastleStoryPlus.WorkerAI.HoldAfterOrder.IsHeld(worker), 10f, "the worker to wait after the dig order");
+		int count = CastleStoryPlus.WorkerAI.BricktronRecovery.ResetTeam(Scenario.Player);
+		t.True(count >= 1, "The reset reached " + count + " bricktrons");
+		t.True(!CastleStoryPlus.WorkerAI.HoldAfterOrder.IsHeld(worker), worker.name + " still waits for an order after the reset");
+		t.True(worker.PendingTask == null, worker.name + " still has a queued task after the reset");
+		yield return t.UntilGame(() => worker.CurrentTask != null && TaskProject(worker) != null, 40f, "the worker to take up work after the reset", 10f, () => t.Log(Describe(worker)));
+		t.Log("After the reset: " + Describe(worker));
 	}
 
 	[GameTest("Tasks", "A worker put on a tree harvest stays on it while another task of higher priority has work", TimeoutSeconds = 480f)]
@@ -331,6 +388,23 @@ internal static class WorkerOrderTests
 		OrderPackage<Labor> package = Order.Package.OfLocation(Order.ForLabor.GoDig, new SpaceLocation(voxel.ToVector3(), walkable: false));
 		package.DecisionSource = Labor.DecisionSource.User;
 		package.Send(worker);
+	}
+
+	// The quarry's top layer (Quarry(t, site)) that is still ground.
+	private static int QuarryGround(XYZ site)
+	{
+		int count = 0;
+		for (int x = site.x + 2; x <= site.x + 5; x++)
+		{
+			for (int z = site.z - 2; z <= site.z + 1; z++)
+			{
+				if (Voxel.IsFull(new XYZ(x, site.y - 1, z)))
+				{
+					count++;
+				}
+			}
+		}
+		return count;
 	}
 
 	private static void EmptyBag(Labor worker)
