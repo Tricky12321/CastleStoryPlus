@@ -157,6 +157,23 @@ internal static class KitReservation
 		return result;
 	}
 
+	// Whether anyone is on the way to take a kit from the stand or to put one on it.
+	public static bool HasAny(GameObject rack)
+	{
+		if (!Enabled || rack == null || !ByRack.TryGetValue(rack, out List<Reservation> list))
+		{
+			return false;
+		}
+		for (int i = list.Count - 1; i >= 0; i--)
+		{
+			if (!IsValid(list[i]))
+			{
+				Release(list[i].Labor);
+			}
+		}
+		return ByRack.TryGetValue(rack, out list) && list.Count > 0;
+	}
+
 	// A reservation lasts while its bricktron is on the task it was made for.
 	private static bool IsValid(Reservation reservation)
 	{

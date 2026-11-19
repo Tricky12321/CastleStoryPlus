@@ -237,6 +237,8 @@ Units, stockpiles and workshops a test made are destroyed by its clean-up (`Scen
 | `TaskTests.BuilderFellsTreeOnOrder` | A builder ordered to cut a tree (planted by the test) fells it: the tree leaves the tree registry and its logs lie there |
 | `TaskTests.HarvestProjectFellsTrees` | A tree harvest project with two builders fells a tree in its circle (three planted by the test) |
 | `TaskTests.LooseItemsAreHauled` | A builder told to clean up carries 4 loose stones into an empty stockpile |
+| `ConsolidationTests.SmallStockpileIsEmptiedOverSeveralTrips` | An idle builder empties a stockpile holding more stone bricks than one load into a clearly fuller one, over several trips (#80) |
+| `ConsolidationTests.EquallyFullStockpilesStayPut` | An idle builder leaves two stockpiles holding the same number of stone bricks alone for 40 game seconds (#80) |
 | `TaskTests.QuarryIsDug` | A 3 x 3 quarry with two builders and a stockpile: at least 3 voxels of ground are dug out |
 | `TaskTests.WorkersBuildBlueprints` | Two builders build 3 stone brick blueprints with stone blocks (`Blocks.Stone_DoubleBrick`, what a stone brick takes; raw stone does not do) from a stockpile |
 | `CraftingTests.ChoppingBlockMakesPlanks` | A chopping block with a worker and logs in a stockpile: one Planks order makes 3 planks from one log |
