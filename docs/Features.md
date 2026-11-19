@@ -210,7 +210,7 @@ New blocks, new buildings and faster ways to build.
 | Units see 10% further through the fog of war (`[FogOfWar] VisionMultiplier`). | `WiderVision` |
 | Castle Story Plus logo on the splash screen, main menu and loading screen, with the version number on the main menu and loading screen. | `PlusLogo` |
 | **New:** coming back to the game with alt+tab no longer opens the construction menu: the build-mode key (Tab) is ignored for half a second after the window regains focus. | `FocusInputGuard` |
-| **New:** the camera ignores mouse movement while the window has no focus or the cursor is outside it, and after a level load or focus change until the cursor really moves (no more camera scrolling off by itself at game start); huge per-frame mouse jumps are clamped. | `CameraMouseGuard` |
+| **New:** the game's edge scrolling (cursor within 5 px of a window edge) and the mouse drag of the camera wait until the cursor has really moved inside the window after a level load or focus change, and never run without window focus (no more camera scrolling off by itself at game start); huge per-frame mouse jumps are clamped. | `CameraMouseGuard` |
 
 ## Menus, saving and loading
 

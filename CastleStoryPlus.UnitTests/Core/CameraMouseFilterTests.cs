@@ -131,4 +131,59 @@ public class CameraMouseFilterTests
 		f.Tick(false, true, 960f, 540f, W, H);
 		Assert.That(f.Delta(10f), Is.EqualTo(0f));
 	}
+
+	[Test]
+	public void DragAcrossWindowEdgeStaysArmed()
+	{
+		CameraMouseFilter f = Armed();
+		f.Tick(true, false, -50f, 300f, W, H, true);
+		Assert.That(f.Armed, Is.True);
+		Assert.That(f.Delta(7f), Is.EqualTo(7f));
+	}
+
+	[Test]
+	public void DragOutsideDoesNotArmAFreshFilter()
+	{
+		CameraMouseFilter f = new CameraMouseFilter();
+		f.Tick(true, false, -50f, 300f, W, H, true);
+		Assert.That(f.Armed, Is.False);
+	}
+
+	[Test]
+	public void ReleasingOutsideDisarms()
+	{
+		CameraMouseFilter f = Armed();
+		f.Tick(true, false, -50f, 300f, W, H, true);
+		f.Tick(true, false, -60f, 300f, W, H, false);
+		Assert.That(f.Armed, Is.False);
+	}
+
+	// The edge nudge (Armed decides whether the game's nudge runs): cursor at (0,0) right after load must not scroll.
+	[Test]
+	public void NudgeNotAllowedWithCursorStuckAtOriginAfterLoad()
+	{
+		CameraMouseFilter f = new CameraMouseFilter();
+		for (int i = 0; i < 10; i++)
+		{
+			f.Tick(true, false, 0f, 0f, W, H);
+			Assert.That(f.Armed, Is.False);
+		}
+	}
+
+	[Test]
+	public void NudgeAllowedOnceCursorMovesToTheEdge()
+	{
+		CameraMouseFilter f = new CameraMouseFilter();
+		f.Tick(true, false, 300f, 300f, W, H);
+		f.Tick(true, false, 2f, 300f, W, H);
+		Assert.That(f.Armed, Is.True);
+	}
+
+	[Test]
+	public void NudgeNotAllowedWhenUnfocusedEvenAtEdge()
+	{
+		CameraMouseFilter f = Armed();
+		f.Tick(false, false, 2f, 300f, W, H);
+		Assert.That(f.Armed, Is.False);
+	}
 }

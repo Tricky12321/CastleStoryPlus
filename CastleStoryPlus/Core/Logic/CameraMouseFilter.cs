@@ -2,14 +2,14 @@ using System;
 
 namespace CastleStoryPlus.Core;
 
-// Decides when the camera may use the mouse's movement (drag-pan, drag-rotate, the mouse look), as pure logic (no
-// Unity, no game): CameraMouseGuard reads the window and the mouse and calls this. Unit tests:
-// CastleStoryPlus.UnitTests/Core.
+// Decides when the camera may react to the mouse, as pure logic (no Unity, no game): CameraMouseGuard reads the window
+// and the mouse and calls this. Unit tests: CastleStoryPlus.UnitTests/Core.
 //
-// Right after a level loads, when the window regains focus and when the cursor comes in from outside the window, the
-// mouse's frame delta can be garbage (a whole jump from the last known position, or from (0,0)), and the camera
-// scrolls far off by itself. So the mouse is ignored until the window has focus, the cursor is inside it and the
-// cursor has really moved since the last reset; after that the game's delta is used, clamped to a sane size.
+// Two uses: (1) the game's edge nudge (Curseur.CheckToNudgeScreen scrolls the camera while the cursor is within 5 px
+// of a window edge): right after a level load the cursor position can still be (0,0) or outside the window, and the
+// camera scrolled off by itself; (2) the mouse's frame delta (drag-pan, drag-rotate), which can be a huge jump then.
+// Both are ignored until the window has focus, the cursor is inside it and the cursor has really moved since the
+// last reset (level load, focus loss, cursor left the window). The delta is also clamped to a sane size.
 internal class CameraMouseFilter
 {
 	// The largest per-frame delta (per axis) let through; anything larger is a spike.
@@ -32,11 +32,20 @@ internal class CameraMouseFilter
 
 	// Once per frame, before the camera reads the mouse. With a locked cursor the position does not move, so the
 	// movement is trusted from the second frame on.
-	internal void Tick(bool focused, bool cursorLocked, float x, float y, float width, float height)
+	// A mouse button held keeps an armed filter armed when the cursor leaves the window (a drag across monitors).
+	internal void Tick(bool focused, bool cursorLocked, float x, float y, float width, float height, bool buttonHeld = false)
 	{
-		if (!focused || (!cursorLocked && !IsInside(x, y, width, height)))
+		if (!focused)
 		{
 			Reset();
+			return;
+		}
+		if (!cursorLocked && !IsInside(x, y, width, height))
+		{
+			if (!(_armed && buttonHeld))
+			{
+				Reset();
+			}
 			return;
 		}
 		if (!_hasBaseline)
