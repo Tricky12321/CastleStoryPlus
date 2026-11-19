@@ -74,7 +74,7 @@ defines each kind, `BeastMesh` loads the model, `BeastBody` animates it and `Bea
 
 ## Sounds
 
-Every guardian has sounds of its own (`GuardianSounds`, `BeastVoice`), so a new one is not finished without them.
+Every guardian can have sounds of its own (`GuardianSounds`, `BeastVoice`); the mod ships none for now (see **Sound design wanted** below).
 
 - **The set per guardian:** six events, each with at least one clip (two or three for the ones heard often, so they
   do not repeat):
@@ -86,17 +86,18 @@ Every guardian has sounds of its own (`GuardianSounds`, `BeastVoice`), so a new 
   - `attack`: as the blow starts (the wind-up is silent, the sound comes with the swing);
   - `hit`: when its health goes down;
   - `death`: when its corpse appears (only where it is seen, not from the fog).
-- **The material is heard in every event,** not only in the voice: crystal chimes (Spirestalker), crackling embers
-  (Cindermane), grinding and crumbling stone (Boulderback), clanking and ringing iron (Ironhorn). A new material gets
-  its own sound character the same way. The voice fits the animal (a giraffe's high hum, a lion's roar, a gorilla's
-  chesty grunt, a rhino's snort) and its size: a bigger guardian is lower and heavier.
-- **Made for the mod,** never taken from the game's own files: `tools/make_guardian_sounds.py` synthesises them
-  (noise, oscillators, filters, envelopes and damped resonances) into `CastleStoryPlus/Assets/Sounds/Guardians/
-  <Guardian>_<event>_<n>.wav` (mono, 16-bit, 32 kHz). Add the guardian's sound functions and its row in `SOUNDS` there,
-  run `python3 tools/make_guardian_sounds.py` (`--preview DIR` also writes a spectrogram and waveform PNG per clip) and
-  commit the WAVs. The sound set can be swapped as a whole: replace the files with other ones of the same names
-  (for example from a CC0 library; any 16-bit PCM or 32-bit float WAV), or add more numbered files, and the game
-  picks one at random per event.
+- **Sound design wanted.** The mod ships no guardian sounds for now: synthesised ones and ones cut from CC0
+  recordings were tried and did not sound right, so the guardians are silent until someone with sound design skills
+  makes a set. If that is you, open an [issue](https://github.com/Tricky12321/CastleStoryPlus/issues) or a pull request.
+  What a set needs:
+  - one voice per animal that fits it and its size (a bigger guardian is lower and heavier): Spirestalker (giraffe,
+    blue crystal), Cindermane (lion, fire and embers), Boulderback (gorilla, stone), Ironhorn (rhino, iron);
+  - clean clips: no background noise, no room or crowd, true silence before and after, no clicks;
+  - never taken from the game's own files, and a licence that lets the mod ship them (your own work, CC0 or public
+    domain), with the sources listed;
+  - files named `CastleStoryPlus/Assets/Sounds/Guardians/<Guardian>_<event>_<n>.wav` (n from 1; any 16-bit PCM or
+    32-bit float WAV, mono is best). The game reads every numbered file in the folder and picks one at random per
+    event, so no code change is needed to add or swap sounds.
 - **Played in the world:** as 3D sounds at the guardian, linear fall off from the event's full-volume distance to its
   furthest distance (the table `GuardianSounds.Settings`: a roar carries 90 blocks, a footstep 32), through
   `ModAudio`, which also keeps the game's mute and volume (master and effects), the one audio listener (only while a

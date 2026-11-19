@@ -28,6 +28,10 @@
 - **Saving and performance:** autosave, non-freezing saves, faster loading, more frames per second and fixes for the game's memory leaks.
 - **Every feature can be switched off** in the config file or the in-game settings.
 
+## Help wanted: sound design
+
+The treasure guardians (Spirestalker, Cindermane, Boulderback and Ironhorn) have no sounds yet. The mod can already play them (idle calls, roars, footsteps, attacks, hits and deaths, in 3D and at the game's volume); what is missing is someone with sound design skills to make them. If that is you, see [Guardians: sounds](docs/Guardians.md#sounds) for what is needed and open an [issue](https://github.com/Tricky12321/CastleStoryPlus/issues) or a pull request.
+
 ## Install
 
 Castle Story Plus runs on the Unity 6 port: Castle Story on a current Unity, made from your own Castle Story install the first time it starts (you must own the game on Steam; nothing of the game is in the packages). Download the package for your system from the [latest release](https://github.com/Tricky12321/CastleStoryPlus/releases/latest). Each package is complete: installer, the port with Castle Story Plus and BepInEx 5.4.23.5.

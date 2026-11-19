@@ -561,7 +561,7 @@ internal static class Features
 
 	public const string GuardianSounds = "GuardianSounds";
 
-	public const string GuardianSoundsInfo = "The treasure guardians make sounds, positioned in the world and quieter with distance: an idle call now and then, a roar when a player's unit comes near or it is provoked, footsteps that fit its size and gait, attack and hit sounds and a death sound, each with its guardian's material (crystal chimes, crackling embers, grinding stone, clanking iron). Synthesised for the mod (tools/make_guardian_sounds.py), played next to the game's own sound with the game's volume and mute ([Treasure.Sounds] Volume).";
+	public const string GuardianSoundsInfo = "The treasure guardians make sounds, positioned in the world and quieter with distance: an idle call now and then, a roar when a player's unit comes near or it is provoked, footsteps that fit its size and gait, attack and hit sounds and a death sound, played next to the game's own sound with the game's volume and mute ([Treasure.Sounds] Volume). The mod ships no sound files for now: put WAV files in BepInEx/plugins/CastleStoryPlus/Assets/Sounds/Guardians (<Guardian>_<event>_<n>.wav) and they are played; without them the guardians are silent.";
 
 	public const string RandomWorld = "RandomWorld";
 
