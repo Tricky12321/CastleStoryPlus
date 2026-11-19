@@ -113,7 +113,7 @@ internal class TaskCrewSizeLobby : MonoBehaviour
 		}
 		_less.interactable = host && value > 1;
 		_more.interactable = host && value < TaskCrewSize.Most;
-		_info.text = "A task starts with " + Mathf.Min(TaskCrewSize.GameValue, value) + " and holds up to " + value + " bricktrons (the game: " + TaskCrewSize.GameValue + ")." + (host ? " Host only." : " The host decides.");
+		_info.text = "A task holds up to " + value + " bricktrons, free workers fill it by themselves (the game: " + TaskCrewSize.GameValue + ")." + (host ? " Host only." : " The host decides.");
 	}
 }
 

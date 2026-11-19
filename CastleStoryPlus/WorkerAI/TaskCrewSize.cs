@@ -11,15 +11,18 @@ using UnityEngine.Networking;
 
 namespace CastleStoryPlus.WorkerAI;
 
-// How many bricktrons a task's crew can hold (#88). The game fixes 8: a task's crew size (its WorkForceProvider's
-// MaxPopulation, a network value the clients get from the host) starts at 8 for every kind of task, and the game's
-// own "assign to a full task" (UNetProjectCmd.CmdChangeProject: one more place, then hire) clamps it to 8 in
-// Project.MaximumCrewSize, so a ninth bricktron put on a task was turned away. [Workers] MaxBricktronsPerTask (1 to
-// 31, default 15) replaces that clamp: a task still starts with the game's 8 (or the maximum when lower), and putting
-// more bricktrons on it grows its crew up to the maximum. The game does not save the crew size (SaveUpdater19to20
-// dropped it), so loaded tasks start the same way as new ones. In a multiplayer game the host's setting applies (chosen in the lobby, TaskCrewSizeLobby); it is sent to
-// the other players (message 208) for their lobby and the task's "Workers at a time" steps (WorkLimit). Labor's
-// _maxConcurrentBricktrons (also 8) only spreads the workers' decisions over the physics ticks; it caps nothing.
+// How many bricktrons a task's crew can hold (#88, #127). The game fixes 8: a task's crew size (its WorkForceProvider's
+// MaxPopulation, a network value the clients get from the host) is 8 for every kind of task, free workers only join a
+// task that is not full (Project.HasRoomFor), and the game's own "assign to a full task" (UNetProjectCmd.CmdChangeProject:
+// one more place, then hire) clamps it to 8 in Project.MaximumCrewSize. [Workers] MaxBricktronsPerTask (1 to 31,
+// default 15) replaces that: every task's crew size is the maximum (set as the task starts, and on every task when the
+// setting changes), so free workers fill a task up to it by themselves, and the clamp lets a manual assign grow it
+// too. The per-task "Workers at a time" (WorkLimit) can still lower the room. (Before #127 tasks stayed at 8 and only
+// grew when the player assigned a bricktron to a full one, so "Workers at a time" showed e.g. "8/22" while no free
+// worker came.) The game does not save the crew size (SaveUpdater19to20 dropped it), so loaded tasks start the same
+// way as new ones. In a multiplayer game the host's setting applies (chosen in the lobby, TaskCrewSizeLobby); it is
+// sent to the other players (message 208) for their lobby and the task's "Workers at a time" steps (WorkLimit).
+// Labor's _maxConcurrentBricktrons (also 8) only spreads the workers' decisions over the physics ticks; it caps nothing.
 [Feature(Features.TaskCrewSize, Features.TaskCrewSizeInfo)]
 internal static class TaskCrewSize
 {
@@ -72,7 +75,7 @@ internal static class TaskCrewSize
 
 	private static void Enable()
 	{
-		Setting = Plugin.Cfg.Bind("Workers", "MaxBricktronsPerTask", DefaultMost, new ConfigDescription("The most bricktrons a task's crew can hold (the game: 8). A task starts with 8; putting more bricktrons on it grows its crew up to this. In a multiplayer game the host's setting applies; the host can also change it in the lobby.", new AcceptableValueRange<int>(1, Most)));
+		Setting = Plugin.Cfg.Bind("Workers", "MaxBricktronsPerTask", DefaultMost, new ConfigDescription("The most bricktrons a task's crew can hold (the game: 8). Free workers fill a task up to this by themselves; \"Workers at a time\" on a task can lower it. In a multiplayer game the host's setting applies; the host can also change it in the lobby.", new AcceptableValueRange<int>(1, Most)));
 		Plugin.Root.AddComponent<TaskCrewSizeDriver>();
 		GameSession.OnLeave(() => _applied = 0);
 	}
@@ -137,8 +140,7 @@ internal static class TaskCrewSize
 		}
 	}
 
-	// A task that starts on the server (made, loaded, or taken from the pool) gets the game's crew size of 8, or the
-	// maximum when it is lower. Set as the
+	// A task that starts on the server (made, loaded, or taken from the pool) gets the maximum as its crew size. Set as the
 	// network value's field: the provider's workforce may not be made yet, and the initial state sent to the
 	// clients follows.
 	internal static void Started(WorkForceProvider provider)
@@ -148,7 +150,7 @@ internal static class TaskCrewSize
 		{
 			return;
 		}
-		int value = CrewRules.StartSize(Value);
+		int value = Value;
 		if (MaxPopulationField(provider) != value)
 		{
 			MaxPopulationField(provider) = value;
@@ -160,36 +162,6 @@ internal static class TaskCrewSize
 	internal static int Clamp(Project project, int value)
 	{
 		return Mathf.Clamp(value, 0, Applies(project) ? Value : GameValue);
-	}
-
-	// Server: a bricktron is about to join a full task: its crew size grows by one place, set on the provider itself
-	// (the game's own grow, project.MaximumCrewSize++, goes through the clamp setter, which a caller may have inlined
-	// and so skipped: single player stayed at 8, #127). True when it grew.
-	internal static bool GrowFor(Project project, Labor labor)
-	{
-		if (project == null || labor == null || labor.Project == project || !Applies(project))
-		{
-			return false;
-		}
-		WorkForceProvider provider = ProviderField(project);
-		if (provider == null)
-		{
-			return false;
-		}
-		int limit = WorkLimit.Get(project);
-		if (limit > 0 && project.CrewCount() >= limit)
-		{
-			// Held back by "Workers at a time", not by the crew size.
-			return false;
-		}
-		int size = provider.MaxPopulation;
-		int grown = CrewRules.GrowFor(project.CrewCount(), size, Value);
-		if (grown == size)
-		{
-			return false;
-		}
-		provider.MaxPopulation = grown;
-		return true;
 	}
 
 	// Every frame: the client's handler, the host's broadcast, and a changed value applied to the tasks.
@@ -238,8 +210,8 @@ internal static class TaskCrewSize
 		}
 	}
 
-	// Host: a lower maximum brings the tasks above it down to it; a higher one leaves the tasks as they are (they
-	// grow as bricktrons are put on them).
+	// Host: every task takes the new maximum as its crew size (a lower one sends the crew above it to the free
+	// workers; a higher one lets more free workers join).
 	private static void ApplyAll(int old, int value)
 	{
 		int changed = 0;
@@ -249,14 +221,13 @@ internal static class TaskCrewSize
 			{
 				continue;
 			}
-			int size = project.MaximumCrewSize;
-			if (size > value)
+			if (project.MaximumCrewSize != value)
 			{
 				SetCrewSize(project, value);
 				changed++;
 			}
 		}
-		Plugin.Log.LogInfo("TaskCrewSize: at most " + value + " bricktrons per task (was " + old + "), " + changed + " tasks made smaller");
+		Plugin.Log.LogInfo("TaskCrewSize: at most " + value + " bricktrons per task (was " + old + "), " + changed + " tasks changed");
 	}
 
 	private static void Received(NetworkMessage netMsg)
@@ -309,17 +280,5 @@ internal static class TaskCrewSizeStartPatch
 	private static void Postfix(WorkForceProvider __instance)
 	{
 		TaskCrewSize.Started(__instance);
-	}
-}
-
-// Any bricktron put on a task (the game's assign, the mod's direct orders) finds a place when the maximum allows one.
-[Feature(Features.TaskCrewSize, Features.TaskCrewSizeInfo)]
-[HarmonyPatch(typeof(Project), nameof(Project.Hire))]
-internal static class TaskCrewSizeHirePatch
-{
-	[HarmonyPriority(Priority.First)]
-	private static void Prefix(Project __instance, Labor labor)
-	{
-		TaskCrewSize.GrowFor(__instance, labor);
 	}
 }

@@ -39,10 +39,14 @@ internal static class RoofItemTests
 		float top = bounds.max.y;
 		yield return t.Until(() => RoofItems.Moved > 0 && log.transform.position.y < top - 1f, 30f, "the log to be moved off the roof");
 		body.useGravity = true;
+		// Still there a second later: the item's synced position did not pull it back to the roof.
+		float settle = Time.time + 1f;
+		yield return t.UntilGame(() => Time.time >= settle, 10f, "a second to pass");
 		Vector3 p = log.transform.position;
 		t.Record("movedTo", p.ToString());
 		t.False(RoofItems.ItemsOnRoof(building).Contains(log), "The log is still on the roof");
 		bool outside = p.x < bounds.min.x - 0.2f || p.x > bounds.max.x + 0.2f || p.z < bounds.min.z - 0.2f || p.z > bounds.max.z + 0.2f;
+		t.True(log.transform.position.y < top - 1f, "The log went back up to " + p);
 		t.True(outside, "The log was put " + p + ", not beside the building " + bounds);
 	}
 }

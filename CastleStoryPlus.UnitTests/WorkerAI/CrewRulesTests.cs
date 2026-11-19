@@ -7,23 +7,26 @@ namespace CastleStoryPlus.UnitTests.WorkerAI;
 public class CrewRulesTests
 {
 	[Test]
-	public void AFullCrewGrowsByOneUpToTheMaximum()
+	public void WithoutALimitTheRoomIsTheCrewSize()
 	{
-		Assert.That(CrewRules.GrowFor(8, 8, 22), Is.EqualTo(9));
-		Assert.That(CrewRules.GrowFor(21, 21, 22), Is.EqualTo(22));
-		Assert.That(CrewRules.GrowFor(22, 22, 22), Is.EqualTo(22));
+		Assert.That(CrewRules.Capacity(22, 0), Is.EqualTo(22));
+		Assert.That(CrewRules.Capacity(-1, 0), Is.EqualTo(-1));
 	}
 
 	[Test]
-	public void ACrewWithRoomStaysTheSize()
+	public void ALimitOnlyLowersTheRoom()
 	{
-		Assert.That(CrewRules.GrowFor(3, 8, 22), Is.EqualTo(8));
+		Assert.That(CrewRules.Capacity(22, 5), Is.EqualTo(5));
+		Assert.That(CrewRules.Capacity(8, 22), Is.EqualTo(8));
+		Assert.That(CrewRules.Capacity(-1, 5), Is.EqualTo(5));
 	}
 
 	[Test]
-	public void ANewTaskStartsAtTheGamesEightOrTheLowerMaximum()
+	public void TheMarkerShowsTheRoomInEffect()
 	{
-		Assert.That(CrewRules.StartSize(22), Is.EqualTo(8));
-		Assert.That(CrewRules.StartSize(5), Is.EqualTo(5));
+		Assert.That(CrewRules.Marker(8, 22, 0), Is.EqualTo(" x 8/22"));
+		Assert.That(CrewRules.Marker(3, 22, 5), Is.EqualTo(" x 3/5"));
+		Assert.That(CrewRules.Marker(8, 8, 22), Is.EqualTo(" x 8/8"));
+		Assert.That(CrewRules.Marker(2, -1, 0), Is.EqualTo(" x 2"));
 	}
 }

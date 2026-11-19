@@ -5,6 +5,7 @@ using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.Game.Components.Volumes;
+using Brix.Game.Network;
 using Brix.Game.Semantique;
 using Brix.Lifecycle.Pooling;
 using Brix.Utils;
@@ -17,9 +18,10 @@ namespace CastleStoryPlus.Building;
 
 // Logs (felled trees roll and fall everywhere) and other loose items came to rest on the roofs of the mod's buildings
 // (market, research station, smithy, armoury, warehouse), where no worker can stand: they stayed there for ever (#128).
-// The host looks at the roof of every mod building every few seconds; a loose item that has lain still on it for a
+// The host looks at the roof of the mod's large buildings every few seconds; a loose item that has lain still on it for a
 // while is put on open ground next to the building (the nearest place workers can reach, else the nearest ground),
-// where the cleanup picks it up. Generic: every building made by CustomBuilding is looked at, whatever its model.
+// where the cleanup picks it up. Generic: every building made by CustomBuilding that sets RoofCleanup is looked at,
+// whatever its model.
 [Feature(Features.RoofItems, Features.RoofItemsInfo)]
 internal static class RoofItems
 {
@@ -29,7 +31,7 @@ internal static class RoofItems
 	private const float RestSeconds = 3f;
 
 	// The roof zone: from this far under the building's top up to this far over it, and this far beyond its edges.
-	private const float Depth = 1.5f;
+	private const float Depth = 0.4f;
 
 	private const float Above = 3f;
 
@@ -79,8 +81,13 @@ internal static class RoofItems
 			return;
 		}
 		Seen.Clear();
+		Placed.Clear();
 		foreach (CustomBuilding building in CustomBuilding.All)
 		{
+			if (!building.RoofCleanup)
+			{
+				continue;
+			}
 			HashSet<GameObject> instances = list.GetInstances(building.BuildingKey);
 			if (instances == null)
 			{
@@ -251,6 +258,14 @@ internal static class RoofItems
 		item.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
 		item.Deposer();
 		item.SetActive(true);
+		// The item's synced position follows at once: its transform snaps back to the last synced one when it is more
+		// than 10 away from it (UNetTransform.BrixUpdate).
+		UNetTransform synced = item.GetComponent<UNetTransform>();
+		if (synced != null)
+		{
+			synced.NetworkLastServerPosition = at;
+			synced.NetworkLastServerRotation = item.transform.rotation;
+		}
 		Rigidbody body = item.GetComponent<Rigidbody>();
 		if (body != null && !body.isKinematic)
 		{

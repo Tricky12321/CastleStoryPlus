@@ -1,25 +1,27 @@
 namespace CastleStoryPlus.WorkerAI;
 
-// The pure rules of a task's crew size (TaskCrewSize), without the game.
+// The pure rules of a task's crew room (TaskCrewSize, WorkLimit), without the game.
 internal static class CrewRules
 {
-	// The game's crew size and limit: what a task starts with.
+	// The game's crew size and limit.
 	internal const int GameValue = 8;
 
-	// The crew size after one more bricktron is put on a task: one place more when the crew fills the size and the
-	// size is below the maximum, otherwise unchanged.
-	internal static int GrowFor(int crew, int size, int most)
+	// The room a task really has: its crew size (-1: no limit), lowered to the per-task "Workers at a time" limit
+	// (0: none) when that is lower.
+	internal static int Capacity(int size, int limit)
 	{
-		if (size >= most || crew < size)
+		if (limit == 0)
 		{
 			return size;
 		}
-		return size + 1;
+		return (size == -1) ? limit : System.Math.Min(size, limit);
 	}
 
-	// What a new task starts with: the game's 8, or the maximum when that is lower.
-	internal static int StartSize(int most)
+	// What the task's marker shows after "x": the crew over the room in effect ("x 8/22"), or only the crew when
+	// there is no limit at all.
+	internal static string Marker(int crew, int size, int limit)
 	{
-		return most < GameValue ? most : GameValue;
+		int room = Capacity(size, limit);
+		return (room == -1) ? " x " + crew : " x " + crew + "/" + room;
 	}
 }

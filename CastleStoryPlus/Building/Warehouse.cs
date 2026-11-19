@@ -36,6 +36,7 @@ internal static class Warehouse
 
 	internal static readonly CustomBuilding Building = new CustomBuilding(Name, 9, 6, 6)
 	{
+		RoofCleanup = true,
 		BlueprintSource = "Pallet",
 		BuildingSource = "Palette",
 		KeepChildren = new string[2] { "Content", "OverheadTarget" },

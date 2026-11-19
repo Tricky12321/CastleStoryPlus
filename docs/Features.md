@@ -21,7 +21,7 @@ Workers find, share and finish their work on their own.
 | Workers start their next task right away, fetch materials from the stockpile that makes the shortest trip, and store a full bag straight after digging, felling or harvesting (after digging also when none of the area's blocks fits in the bag any more). | `TaskFlow` |
 | A task can be paused instead of deleted: no bricktron works on it until it is resumed. | `PauseTasks` |
 | Limit how many bricktrons work on a task at a time, e.g. a quarry with 4. | `WorkLimit` |
-| **New (#88):** more than 8 bricktrons per task. "Max bricktrons per task" (1 to 31, default 15; the game: 8) sets the most a task's crew holds; a task starts with 8 and putting more bricktrons on it grows its crew up to the maximum. Multiplayer: the host chooses it in the lobby and every player gets it; single player: Settings > Castle Story Plus, `[Workers] MaxBricktronsPerTask`. | `TaskCrewSize` |
+| **New (#88):** more than 8 bricktrons per task. "Max bricktrons per task" (1 to 31, default 15; the game: 8) sets the most a task's crew holds; every task has it as its crew size, so free workers fill a task up to it by themselves ("Workers at a time" can lower it per task). Multiplayer: the host chooses it in the lobby and every player gets it; single player: Settings > Castle Story Plus, `[Workers] MaxBricktronsPerTask`. | `TaskCrewSize` |
 | Give a single blueprint (e.g. a warehouse) top priority from the context wheel over it. | `BuildPriority` |
 | Cleanup and repair round the base are two fixed tasks with their own priority and crew, instead of chores for every idle worker. | `BaseJobs` |
 | Tasks and things workers cannot walk to (blueprints, dig voxels, harvest, repairs, loose items) are shown in red (blueprints always; the others get a red ring while their task is selected, `[UnreachableTasks] Rings`: SelectedTask, All or Off) and go 10 places down the list a worker picks tasks from (taken only when none before them can be done) until something changes within 3 blocks of them. | `UnreachableTasks` |
@@ -115,7 +115,7 @@ New blocks, new buildings and faster ways to build.
 | Idle workers consolidate small stockpiles into the fullest one. | `StockpileConsolidation` |
 | "Empty stockpile" on the context wheel of a stockpile, large stockpile or warehouse: it takes nothing new and idle workers carry its contents to other storages. It stays empty (overhead icon, "Emptying" in its tooltip) until switched off; saved, host decides in multiplayer. | `EmptyStockpile` |
 | A demolished or deconstructed stockpile (also the large one), warehouse, workshop or weapon stand drops what it holds instead of destroying it. | `StockpileSpill` |
-| Loose items (logs...) that come to rest on the roof of a mod building are moved to open ground beside it, where workers can reach them. | `RoofItems` |
+| Loose items (logs...) that come to rest on the roof of the market, research station, smithy, armoury or warehouse are moved to open ground beside it, where workers can reach them. | `RoofItems` |
 | Hovering a stockpile lists what it holds next to the mouse (icon, name, count); a warehouse also shows how full it is in percent. The game's own icon-and-count line above it is hidden. | `StockpileTooltip` |
 
 ## Workshops, market and research

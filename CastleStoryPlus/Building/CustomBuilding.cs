@@ -41,7 +41,11 @@ internal sealed class CustomBuilding
 	// placement check's own.
 	public int MaxMissingSupport = -1;
 
-	// Every mod building made (RoofItems looks at their roofs).
+	// Set for the large buildings with a roof (market, research station, smithy, armoury, warehouse): RoofItems moves
+	// loose items that lie on it to the ground. Not for the small ones (saplings).
+	public bool RoofCleanup;
+
+	// Every mod building made.
 	internal static readonly List<CustomBuilding> All = new List<CustomBuilding>();
 
 	public readonly string Name;
