@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Builds the guardians' sounds (CastleStoryPlus/Assets/Sounds/Guardians/*.wav) from real recordings only.
+"""Builds the guardians' sounds (CastleStoryPlus/Assets/Sounds/Guardians/*.wav) from real animal recordings only.
 
-Every sound in every clip is a part of a CC0 / public domain recording (tools/guardian_sources, listed with their
-licences in CastleStoryPlus/Assets/Sounds/Guardians/SOURCES.md): the animal voice, and the material of the guardian as
-short accents (a struck crystal bowl, a flame burst or torch pops, a rock hit or a crumble, an anvil or chain clank,
-footfalls and thuds). Nothing is synthesised. The script only cuts the parts, cleans them (spectral noise reduction of
-the animal recordings, a noise gate on the tails, a rumble filter), pitch-shifts them for the size of the beast,
-layers them (the roars get an octave lower copy of the voice under them), levels and fades. There are no noise beds,
-no reverb and no ambience: between the sounds the clips are silent. Run it from anywhere:
+Each clip is only the voice of the animal: a part of a CC0 / public domain recording (tools/guardian_sources, listed
+with their licences in CastleStoryPlus/Assets/Sounds/Guardians/SOURCES.md). The footsteps are one recording of heavy
+stomps. Nothing is synthesised and nothing else is layered on: the script cuts the parts, takes the background out
+(spectral noise reduction, a low pass above the voice, a noise gate on the tails), pitch-shifts them moderately for
+the size of the beast, levels and fades. Between the sounds the clips are silent. Run it from anywhere:
 
     python3 tools/make_guardian_sounds.py                 # writes the WAVs next to the plugin's assets
     python3 tools/make_guardian_sounds.py --out DIR       # writes them somewhere else
@@ -15,18 +13,18 @@ no reverb and no ambience: between the sounds the clips are silent. Run it from 
     python3 tools/make_guardian_sounds.py --only Ironhorn
 
 Needs numpy and scipy (and Pillow for --preview). Output is deterministic, 16-bit mono WAV at 32 kHz, levelled per
-event to the same active RMS (a static soft clip keeps the peaks of impacts under 0.89, no pumping). The source clips
-are read with the standard wave module; tools/cut_guardian_sources.py re-creates them from the original recordings.
+event to the same active RMS (a static soft clip keeps the peaks under 0.89, no pumping). The source clips are read
+with the standard wave module; tools/cut_guardian_sources.py re-creates them from the original recordings. Numbered
+clips of a guardian and event that are not made any more are deleted from the output folder.
 
 File names: <Guardian>_<event>_<n>.wav, with event one of idle, roar, step, attack, hit, death and n from 1. The game
 picks one at random per event (every numbered file in the folder is read), clips must be 0.15 - 6 s.
 
-The sound of each guardian (stand-ins are named in SOURCES.md):
-    Spirestalker  giraffe, blue crystal   dromedary moans and grunts, a horse snort and an alpaca moan (no CC0
-                                          giraffe exists); struck crystal bowls
-    Cindermane    lion, fire and embers   real lion roars, grunts and growls; flame bursts and torch pops
-    Boulderback   gorilla, stone          a real gorilla roar, chest beats; rock hits and crumbles
-    Ironhorn      rhino, iron             real Indian rhinoceros calls; anvil strikes, chains and clanks
+The voice of each guardian (stand-ins are named in SOURCES.md):
+    Spirestalker  giraffe   dromedary moans, a horse snort and an alpaca moan (no CC0 giraffe recording exists)
+    Cindermane    lion      real lion roars, grunts and growls
+    Boulderback   gorilla   one real gorilla roar, cut and pitched in several ways
+    Ironhorn      rhino     real Indian rhinoceros calls
 """
 import argparse
 import glob
@@ -49,9 +47,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 _SOURCES = {}
 _CLEAN = {}
 
-# the material recordings are clean (close, little noise), only the animals get the noise reduction
-MATERIAL = {150453, 150454, 150456, 166553, 111331, 675771, 179365, 369981, 521956, 386129, 103071, 270589, 545547,
-            401622, 342535, 640204, 334228}
+# the stomps are a clean close recording, only the animals get the noise reduction
+MATERIAL = {334228}
+# per recording: where the voice stops (a low pass takes birds, insects and hiss above it away) and how hard the
+# noise reduction works (a noisy recording gets more)
+LOWPASS = {69570: 3500, 69571: 2800, 223978: 5000, 405211: 3000, 693564: 3500, 535810: 4500, 397054: 6000}
+REDUCE = {693564: 3.0, 535810: 3.0}
 
 
 def sources():
@@ -83,7 +84,7 @@ def denoise(x, floor_pct=15.0, over=2.4, floor=0.04):
 def clean_source(fid):
     if fid not in _CLEAN:
         x, off = sources()[fid]
-        _CLEAN[fid] = (x if fid in MATERIAL else denoise(x), off)
+        _CLEAN[fid] = (x if fid in MATERIAL else denoise(x, over=REDUCE.get(fid, 2.4)), off)
     return _CLEAN[fid]
 
 
@@ -122,30 +123,24 @@ def fade(x, fin=0.006, fout=0.03):
     return x
 
 
-def cut(fid, t0, t1, st=0.0, sub=0.0):
-    """One part of a source recording (times in the original recording), cleaned, pitched by st semitones.
-    sub adds a copy an octave lower under it (a bigger chest). Every part has the same peak (0.8), so the gains
-    given when the parts are layered are relative to each other."""
+def cut(fid, t0, t1, st=0.0):
+    """One part of a source recording (times in the original recording), cleaned, pitched by st semitones."""
     x, off = clean_source(fid)
     i0 = max(0, int(round((t0 - off) * SR)))
     i1 = min(len(x), int(round((t1 - off) * SR)))
-    seg = fade(gate(x[i0:i1]), 0.008, 0.02)
-    out = pitch(seg, st)
-    if sub > 0.0:
-        low = pitch(seg, st - 12.0)
-        out = out.copy()
-        m = min(len(out), len(low))
-        out[:m] += sub * low[:m] * np.linspace(1.0, 0.0, m) ** 0.5
-    out = highpass(out, 30.0, 2)
+    seg = x[i0:i1]
+    if fid in LOWPASS:
+        seg = lowpass(seg, LOWPASS[fid], 4)
+    seg = fade(gate(seg), 0.008, 0.02)
+    out = highpass(pitch(seg, st), 30.0, 2)
     return out * (0.8 / (np.max(np.abs(out)) + 1e-9))
 
 
-def seq(fid, parts, st=0.0, sub=0.0, gap=0.14):
+def seq(fid, parts, st=0.0, gap=0.14):
     """Several parts of one recording one after the other (true silence of `gap` seconds between them)."""
     out = np.zeros(0)
     for t0, t1 in parts:
-        c = cut(fid, t0, t1, st, sub)
-        out = np.concatenate([out, np.zeros(int(gap * SR)) if len(out) else out, c])
+        out = np.concatenate([out, np.zeros(int(gap * SR)) if len(out) else out, cut(fid, t0, t1, st)])
     return out
 
 
@@ -161,219 +156,143 @@ def track(*items, tail=0.15):
 
 
 # ---------------------------------------------------------------- the clips
-# Freesound ids, see SOURCES.md. Times are in the original recording. Every layer is (samples, start seconds, gain),
-# the voice has gain 1 and the accents 0.2 - 0.5 of it.
+# Freesound ids, see SOURCES.md. Times are in the original recording. A clip is one voice (or a few parts of it in a
+# row); the layers are (samples, start seconds, gain).
 
 LION_A, LION_B, LION_R, LION_N = 69570, 69571, 223978, 405211
-GORILLA, CHEST, RHINO = 397054, 367821, 535810
+GORILLA, RHINO = 397054, 535810
 CAMEL, HORSE, ALPACA = 693564, 397236, 852641
-CRY_A, CRY_B, CRY_C = 150453, 150454, 150456
-FIRE_BURST, FIRE_LIGHTER, FIRE_TORCH = 166553, 111331, 675771
-STONE_HIT, STONE_DROP, STONE_CRUMBLE = 179365, 369981, 521956
-ANVIL_A, ANVIL_B, ANVIL_C, CLANK, CHAIN = 386129, 103071, 270589, 545547, 401622
-THUD_SOFT, THUD_IRON, STOMP = 342535, 640204, 334228
+STOMP = 334228
+STOMPS = [(1.6, 2.1), (3.8, 4.3), (6.0, 6.5)]
 
 
-# --- Spirestalker (giraffe, crystal): moans, grunts, snorts and bleats; a struck crystal bowl on top ---
+def one(x, tail=0.15):
+    return track((x, 0.0, 1.0), tail=tail)
+
+
+def step(semitones, v):
+    """A footfall: one of the heavy stomps, pitched for the size of the guardian."""
+    return one(cut(STOMP, STOMPS[v][0], STOMPS[v][1], semitones), 0.05)
+
+
+# --- Spirestalker (giraffe): moans, a snort and a bleat ---
 
 def spire_idle(v):
-    if v == 0:
-        return track((cut(CAMEL, 3.2, 5.6, -1.0), 0.0, 1.0), (cut(CRY_A, 0.0, 1.8, 7.0), 1.9, 0.25))
-    if v == 1:
-        return track((cut(CAMEL, 6.8, 8.8, 0.0), 0.0, 1.0), (cut(CRY_B, 0.0, 1.8, 5.0), 0.1, 0.22))
-    if v == 2:
-        return track((cut(CAMEL, 7.8, 9.2, -3.0), 0.0, 1.0), (cut(HORSE, 0.5, 0.9, -3.0), 1.5, 0.8), (cut(CRY_A, 0.0, 1.8, 10.0), 1.5, 0.2))
-    return track((cut(ALPACA, 0.0, 0.6, -2.0), 0.0, 0.9), (cut(CAMEL, 10.1, 11.1, -2.0), 0.8, 1.0), (cut(CRY_B, 0.0, 1.8, 9.0), 0.05, 0.2))
+    return one([cut(CAMEL, 3.2, 5.6, -1.0), cut(CAMEL, 6.8, 8.8, 0.0), cut(HORSE, 0.5, 0.9, 0.0), cut(ALPACA, 0.0, 0.6, -1.0)][v])
 
 
 def spire_roar(v):
-    if v == 0:
-        return track((cut(CAMEL, 3.2, 5.9, 1.0, 0.25), 0.0, 1.0), (cut(CRY_A, 0.0, 1.8, 5.0), 0.0, 0.28), (cut(CRY_B, 0.0, 1.8, 12.0), 0.7, 0.16))
-    if v == 1:
-        return track((seq(CAMEL, [(7.8, 9.9), (10.1, 11.1)], -1.0, 0.25, 0.12), 0.0, 1.0), (cut(CRY_B, 0.0, 1.8, 7.0), 0.0, 0.26))
-    return track((cut(CAMEL, 9.0, 11.2, 2.0, 0.2), 0.0, 1.0), (cut(CRY_A, 0.0, 1.8, 3.0), 0.0, 0.26), (cut(CRY_B, 0.0, 1.8, 10.0), 0.9, 0.16))
+    return one([cut(CAMEL, 3.2, 5.9, 1.0), cut(CAMEL, 9.0, 11.2, 2.0)][v])
 
 
 def spire_step(v):
-    # a light hoof (a stomp pitched up), a small stone tick and a tiny crystal glint
-    st = [(1.6, 2.1), (3.8, 4.3), (4.4, 4.9)][v]
-    hit = [(0.35, 0.75), (1.55, 1.95), (3.35, 3.8)][v]
-    return track((cut(STOMP, st[0], st[1], 7.0), 0.0, 1.0), (cut(STONE_HIT, hit[0], hit[1], 3.0), 0.0, 0.2), (cut(CRY_C, 0.0, 0.3, [6.0, 9.0, 12.0][v]), 0.01, 0.1), tail=0.05)
+    return step(5.0, v)
 
 
 def spire_attack(v):
-    if v == 0:
-        return track((cut(HORSE, 2.0, 2.4, 0.0), 0.0, 1.0), (cut(STONE_HIT, 3.35, 3.8, 0.0), 0.3, 0.5), (cut(CRY_A, 0.0, 1.8, 5.0), 0.3, 0.3))
-    return track((cut(ALPACA, 0.0, 0.6, 0.0), 0.0, 1.0), (cut(STONE_HIT, 1.55, 1.95, 0.0), 0.35, 0.5), (cut(CRY_B, 0.0, 1.8, 7.0), 0.35, 0.3))
+    return one([cut(HORSE, 2.0, 2.4, 0.0), cut(ALPACA, 0.0, 0.6, 0.0)][v])
 
 
 def spire_hit(v):
-    if v == 0:
-        return track((cut(ALPACA, 0.0, 0.6, -1.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 12.0), 0.0, 0.25))
-    if v == 1:
-        return track((cut(CAMEL, 11.4, 11.95, 1.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 9.0), 0.0, 0.25), (cut(CRY_C, 0.0, 0.3, 14.0), 0.08, 0.15))
-    return track((cut(CAMEL, 10.0, 10.8, 1.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 7.0), 0.02, 0.25))
+    return one([cut(ALPACA, 0.0, 0.6, -1.0), cut(CAMEL, 10.0, 10.8, 1.0)][v])
 
 
 def spire_death(v):
-    glints = [(cut(CRY_A if i % 2 == 0 else CRY_B, 0.0, 1.8, st), 0.9 + i * 0.3, 0.25 - 0.03 * i) for i, st in enumerate([9.0, 5.0, 2.0, -3.0])]
-    if v == 0:
-        return track((cut(CAMEL, 3.2, 5.9, -4.0, 0.25), 0.0, 1.0), *glints)
-    return track((seq(CAMEL, [(7.8, 9.9), (10.1, 11.1)], -5.0, 0.25, 0.15), 0.0, 1.0), *glints)
+    return one([cut(CAMEL, 3.2, 5.9, -4.0), cut(CAMEL, 6.8, 8.8, -4.0)][v])
 
 
-# --- Cindermane (lion, fire and embers): real lion voice; flame bursts and torch pops ---
+# --- Cindermane (lion) ---
 
 def cinder_idle(v):
     src = [(LION_B, 1.8, 2.5), (LION_B, 4.8, 5.7), (LION_B, 7.5, 8.6), (LION_R, 0.1, 1.9)][v]
-    return track((cut(src[0], src[1], src[2], -2.0), 0.0, 1.0))
+    return one(cut(src[0], src[1], src[2], -2.0))
 
 
 def cinder_roar(v):
-    if v == 0:
-        return track((cut(LION_N, 11.1, 14.2, -2.0, 0.3), 0.0, 1.0))
-    if v == 1:
-        return track((seq(LION_A, [(14.0, 15.4), (16.2, 17.5)], -2.0, 0.3, 0.1), 0.0, 1.0))
-    if v == 2:
-        return track((seq(LION_R, [(10.6, 12.2), (13.9, 15.2)], -2.5, 0.3, 0.1), 0.0, 1.0))
-    return track((seq(LION_A, [(20.0, 21.4), (21.9, 23.1), (23.6, 24.7)], -2.0, 0.3, 0.08), 0.0, 1.0))
+    return one([cut(LION_N, 11.1, 14.2, -2.0),
+                seq(LION_A, [(14.0, 15.4), (16.2, 17.5)], -2.0, 0.1),
+                seq(LION_R, [(10.6, 12.2), (13.9, 15.2)], -2.5, 0.1),
+                seq(LION_A, [(20.0, 21.4), (21.9, 23.1), (23.6, 24.7)], -2.0, 0.08)][v])
 
 
 def cinder_step(v):
-    # a big cat's padded paw: a soft low thud
-    if v == 0:
-        return track((cut(THUD_SOFT, 0.15, 0.45, -3.0), 0.0, 1.0), tail=0.05)
-    if v == 1:
-        return track((cut(STOMP, 4.4, 4.9, 3.0), 0.0, 1.0), tail=0.05)
-    return track((cut(STOMP, 3.8, 4.3, 4.0), 0.0, 1.0), tail=0.05)
+    return step(0.0, v)
 
 
 def cinder_attack(v):
-    src = [(LION_R, 7.2, 8.8), (LION_A, 18.2, 19.4), (LION_A, 11.95, 13.0)][v]
-    fire = [(FIRE_BURST, 0.9, 1.9), (FIRE_LIGHTER, 0.0, 0.9), (FIRE_BURST, 3.9, 4.8)][v]
-    return track((cut(src[0], src[1], src[2], -2.0, 0.2), 0.0, 1.0), (cut(fire[0], fire[1], fire[2]), 0.0, 0.35))
+    src = [(LION_R, 7.2, 8.8), (LION_A, 18.2, 19.4), (LION_R, 4.0, 5.5)][v]
+    return one(cut(src[0], src[1], src[2], -2.0))
 
 
 def cinder_hit(v):
-    src = [(LION_N, 14.7, 15.1), (LION_N, 15.7, 16.1), (LION_R, 4.0, 4.9)][v]
-    pop = [(0.2, 0.5), (0.9, 1.2), (1.4, 1.7)][v]
-    return track((cut(src[0], src[1], src[2], -2.0), 0.0, 1.0), (cut(FIRE_TORCH, pop[0], pop[1]), 0.0, 0.35))
+    src = [(LION_A, 20.0, 20.8), (LION_R, 13.9, 14.7), (LION_N, 16.9, 17.7)][v]
+    return one(cut(src[0], src[1], src[2], -2.0))
 
 
 def cinder_death(v):
-    if v == 0:
-        voice = seq(LION_A, [(21.9, 23.1), (23.6, 24.7), (25.1, 26.1)], -4.0, 0.3, 0.12)
-        return track((voice, 0.0, 1.0), (cut(FIRE_TORCH, 0.9, 1.2), 1.2, 0.3), (cut(FIRE_TORCH, 2.4, 2.7), 2.2, 0.25), (cut(FIRE_BURST, 6.0, 7.2), 2.6, 0.2))
-    return track((cut(LION_N, 16.9, 18.9, -5.0, 0.3), 0.0, 1.0), (cut(FIRE_TORCH, 1.4, 1.7), 1.0, 0.3), (cut(FIRE_TORCH, 3.0, 3.2), 1.9, 0.25), (cut(FIRE_BURST, 0.9, 1.9), 1.5, 0.2))
+    return one([seq(LION_A, [(21.9, 23.1), (23.6, 24.7), (25.1, 26.1)], -4.0, 0.12), cut(LION_N, 16.9, 18.9, -5.0)][v])
 
 
-# --- Boulderback (gorilla, stone): a real gorilla roar, real chest beats, rock hits and crumbles ---
+# --- Boulderback (gorilla): the one real roar (0.2 - 0.9 s of the recording), cut and pitched in several ways ---
 
 def boulder_idle(v):
-    if v == 0:
-        return track((cut(CHEST, 3.55, 4.5, -5.0), 0.0, 1.0), (cut(STONE_HIT, 0.35, 0.75, -4.0), 0.02, 0.3))
-    if v == 1:
-        return track((cut(GORILLA, 0.2, 0.9, -9.0, 0.3), 0.0, 0.8))
-    if v == 2:
-        return track((cut(GORILLA, 0.2, 0.6, -10.0, 0.3), 0.0, 0.8), (cut(CHEST, 3.55, 4.1, -5.0), 0.9, 0.9))
-    return track((cut(GORILLA, 0.2, 0.8, -7.0, 0.3), 0.0, 0.7), (cut(CHEST, 4.6, 5.1, -5.0), 1.2, 0.9))
+    return one([cut(GORILLA, 0.2, 0.9, -7.0), cut(GORILLA, 0.2, 0.6, -9.0)][v])
 
 
 def boulder_roar(v):
-    if v == 0:
-        return track((cut(CHEST, 3.55, 5.6, -4.0), 0.0, 0.9), (cut(GORILLA, 0.2, 0.9, -5.0, 0.35), 2.0, 1.0))
-    if v == 1:
-        return track((cut(GORILLA, 0.2, 0.9, -4.0, 0.4), 0.0, 1.0), (cut(CHEST, 4.6, 5.1, -4.0), 1.2, 0.9))
-    if v == 2:
-        return track((cut(GORILLA, 0.2, 0.9, -6.0, 0.3), 0.0, 1.0), (cut(GORILLA, 0.2, 0.9, -9.0, 0.4), 1.2, 0.9), (cut(CHEST, 4.6, 5.1, -5.0), 2.5, 0.8))
-    return track((cut(CHEST, 3.55, 4.5, -5.0), 0.0, 0.9), (cut(GORILLA, 0.2, 0.9, -7.0, 0.5), 1.1, 1.0), (cut(STONE_DROP, 9.4, 9.9, -2.0), 1.1, 0.3))
+    return one([cut(GORILLA, 0.2, 0.9, -4.0), cut(GORILLA, 0.2, 0.9, -6.0), seq(GORILLA, [(0.2, 0.6), (0.5, 0.9)], -5.0, 0.2)][v])
 
 
 def boulder_step(v):
-    # a heavy knuckle or foot: a deep thud and a rock knock
-    st = [(1.6, 2.1), (3.8, 4.3), (4.4, 4.9)][v]
-    src = STOMP
-    hit = [(0.35, 0.75), (1.55, 1.95), (3.35, 3.8)][v]
-    return track((cut(src, st[0], st[1], -2.0), 0.0, 1.0), (cut(STONE_HIT, hit[0], hit[1], -3.0), 0.005, 0.3), tail=0.05)
+    return step(-5.0, v)
 
 
 def boulder_attack(v):
-    if v == 0:
-        return track((cut(GORILLA, 0.2, 0.9, -5.0, 0.3), 0.0, 1.0), (cut(STONE_DROP, 9.4, 9.9, -2.0), 0.55, 0.8), (cut(STONE_CRUMBLE, 0.9, 2.0), 0.6, 0.3))
-    if v == 1:
-        return track((cut(CHEST, 4.6, 5.1, -4.0), 0.0, 0.9), (cut(GORILLA, 0.2, 0.8, -8.0, 0.3), 0.3, 1.0), (cut(STONE_DROP, 4.4, 4.9, -3.0), 0.85, 0.8), (cut(STONE_CRUMBLE, 0.9, 2.0), 0.9, 0.3))
-    return track((cut(GORILLA, 0.2, 0.7, -3.0, 0.2), 0.0, 1.0), (cut(STONE_DROP, 9.4, 9.9, -4.0), 0.45, 0.8), (cut(STONE_HIT, 4.2, 5.0, -2.0), 0.5, 0.4))
+    return one([cut(GORILLA, 0.2, 0.9, -3.0), cut(GORILLA, 0.2, 0.7, -5.0)][v])
 
 
 def boulder_hit(v):
-    src = [(0.2, 0.6, -6.0), (0.3, 0.8, -9.0), (0.3, 0.8, -4.0)][v]
-    hit = [(0.35, 0.75), (1.55, 1.95), (3.35, 3.8)][v]
-    return track((cut(GORILLA, src[0], src[1], src[2], 0.2), 0.0, 1.0), (cut(STONE_HIT, hit[0], hit[1], -2.0), 0.0, 0.5))
+    return one([cut(GORILLA, 0.2, 0.6, -4.0), cut(GORILLA, 0.3, 0.8, -6.0)][v])
 
 
 def boulder_death(v):
-    spots = [(4.4, 4.9), (9.4, 9.9), (4.4, 4.9)]
-    drops = [(cut(STONE_DROP, spots[i][0], spots[i][1], -4.0), at, 0.7 - 0.12 * i) for i, at in enumerate([1.6, 2.2, 2.9])]
-    st = -12.0 if v == 0 else -10.0
-    return track((cut(GORILLA, 0.2, 0.9 if v == 0 else 0.8, st, 0.3), 0.0, 1.0), *drops, (cut(STONE_CRUMBLE, 0.0, 2.3, -2.0), 1.7, 0.3))
+    return one([cut(GORILLA, 0.2, 0.9, -8.0), cut(GORILLA, 0.2, 0.8, -7.0)][v])
 
 
-# --- Ironhorn (rhino, iron): real rhinoceros calls; anvil strikes, chains and clanks ---
+# --- Ironhorn (rhino) ---
 
 def iron_idle(v):
-    if v == 0:
-        return track((cut(RHINO, 1.2, 1.9, -3.0), 0.0, 1.0))
-    if v == 1:
-        return track((cut(RHINO, 0.1, 0.7, -4.0), 0.0, 1.0))
-    if v == 2:
-        return track((seq(RHINO, [(2.1, 2.6), (2.8, 3.1)], -4.0, 0.0, 0.2), 0.0, 1.0))
-    return track((seq(RHINO, [(3.7, 3.9), (4.2, 4.8)], -3.0, 0.0, 0.2), 0.0, 1.0))
+    return one([cut(RHINO, 1.2, 1.9, -3.0), cut(RHINO, 0.1, 0.7, -4.0), seq(RHINO, [(2.1, 2.6), (2.8, 3.1)], -4.0, 0.2), seq(RHINO, [(3.7, 3.9), (4.2, 4.8)], -3.0, 0.2)][v])
 
 
 def iron_roar(v):
-    if v == 0:
-        return track((cut(RHINO, 7.9, 9.0, -6.0, 0.3), 0.0, 1.0), (cut(ANVIL_C, 0.1, 1.0, -2.0), 0.1, 0.3))
-    if v == 1:
-        return track((cut(RHINO, 4.2, 5.0, -6.0, 0.3), 0.0, 1.0), (cut(ANVIL_A, 0.0, 1.4, 0.0), 0.2, 0.3))
-    return track((seq(RHINO, [(1.2, 1.9), (2.1, 2.6)], -5.0, 0.3, 0.12), 0.0, 1.0), (cut(CLANK, 7.4, 8.0, -2.0), 0.4, 0.3))
+    return one([cut(RHINO, 7.9, 9.0, -5.0), cut(RHINO, 4.2, 5.0, -5.0), seq(RHINO, [(1.2, 1.9), (2.1, 2.6)], -4.0, 0.12)][v])
 
 
 def iron_step(v):
-    # a heavy trot: a deep thud and a short clank of plates
-    clank = [(7.4, 7.9), (8.0, 8.5), (11.2, 11.7)][v]
-    return track((cut(THUD_IRON, 0.1, 0.6, [-2.0, 0.0, 2.0][v]), 0.0, 1.0), (cut(CLANK, clank[0], clank[1], 0.0), 0.012, 0.3), tail=0.05)
+    return step(-2.0, v)
 
 
 def iron_attack(v):
-    if v == 0:
-        return track((cut(RHINO, 0.1, 0.7, -4.0), 0.0, 1.0), (cut(THUD_IRON, 0.1, 0.6, -2.0), 0.6, 0.7), (cut(ANVIL_A, 0.0, 1.4, 0.0), 0.6, 0.5))
-    if v == 1:
-        return track((cut(RHINO, 1.2, 1.9, -4.0), 0.0, 1.0), (cut(THUD_IRON, 0.1, 0.6, -2.0), 0.8, 0.7), (cut(ANVIL_B, 3.1, 4.4, -2.0), 0.8, 0.5))
-    return track((cut(RHINO, 3.7, 3.9, -4.0), 0.0, 1.0), (cut(RHINO, 4.2, 4.7, -4.0), 0.3, 0.9), (cut(THUD_IRON, 0.1, 0.6, 0.0), 0.65, 0.7), (cut(ANVIL_B, 5.9, 7.0, 0.0), 0.65, 0.5))
+    return one([cut(RHINO, 0.1, 0.7, -3.0), cut(RHINO, 1.2, 1.9, -4.0), seq(RHINO, [(3.7, 3.9), (4.2, 4.7)], -4.0, 0.1)][v])
 
 
 def iron_hit(v):
-    src = [(7.9, 8.5, -5.0), (2.8, 3.1, -4.0), (4.2, 4.7, -5.0)][v]
-    clank = [(0.1, 0.9), (7.4, 8.0), (5.9, 6.7)][v]
-    fid = [ANVIL_C, CLANK, ANVIL_B][v]
-    return track((cut(RHINO, src[0], src[1], src[2], 0.2), 0.0, 1.0), (cut(fid, clank[0], clank[1], 0.0), 0.0, 0.4))
+    src = [(7.9, 8.5, -4.0), (2.8, 3.1, -4.0), (4.2, 4.7, -4.0)][v]
+    return one(cut(RHINO, src[0], src[1], src[2]))
 
 
 def iron_death(v):
-    plan = [(7.4, 7.9, 0.0, 0.9), (8.0, 8.5, -2.0, 1.25), (8.7, 9.3, 2.0, 1.55), (9.6, 10.2, -4.0, 1.8), (11.2, 11.7, 0.0, 2.1)]
-    clanks = [(cut(CLANK, a, b, st), at, 0.4 - 0.05 * i) for i, (a, b, st, at) in enumerate(plan)]
-    rattle = (cut(CHAIN, 5.2, 6.7, 0.0), 2.2, 0.3)
-    voice = cut(RHINO, 7.9, 9.0, -9.0, 0.3) if v == 0 else seq(RHINO, [(1.2, 1.9), (2.1, 2.6)], -8.0, 0.3, 0.12)
-    return track((voice, 0.0, 1.0), *clanks, rattle)
+    return one([cut(RHINO, 7.9, 9.0, -7.0), seq(RHINO, [(1.2, 1.9), (2.1, 2.6)], -6.0, 0.12)][v])
 
 
 # ---------------------------------------------------------------- the set
 
 # name -> {event: (function, variants)}
 SOUNDS = {
-    "Spirestalker": {"idle": (spire_idle, 4), "roar": (spire_roar, 3), "step": (spire_step, 3), "attack": (spire_attack, 2), "hit": (spire_hit, 3), "death": (spire_death, 2)},
+    "Spirestalker": {"idle": (spire_idle, 4), "roar": (spire_roar, 2), "step": (spire_step, 3), "attack": (spire_attack, 2), "hit": (spire_hit, 2), "death": (spire_death, 2)},
     "Cindermane": {"idle": (cinder_idle, 4), "roar": (cinder_roar, 4), "step": (cinder_step, 3), "attack": (cinder_attack, 3), "hit": (cinder_hit, 3), "death": (cinder_death, 2)},
-    "Boulderback": {"idle": (boulder_idle, 4), "roar": (boulder_roar, 4), "step": (boulder_step, 3), "attack": (boulder_attack, 3), "hit": (boulder_hit, 3), "death": (boulder_death, 2)},
+    "Boulderback": {"idle": (boulder_idle, 2), "roar": (boulder_roar, 3), "step": (boulder_step, 3), "attack": (boulder_attack, 2), "hit": (boulder_hit, 2), "death": (boulder_death, 2)},
     "Ironhorn": {"idle": (iron_idle, 4), "roar": (iron_roar, 3), "step": (iron_step, 3), "attack": (iron_attack, 3), "hit": (iron_hit, 3), "death": (iron_death, 2)},
 }
 
@@ -470,6 +389,9 @@ def main():
                 if args.preview:
                     spectrogram_png(os.path.join(args.preview, base + ".png"), x, base)
                 total += 1
+            for old in glob.glob(os.path.join(args.out, "%s_%s_*.wav" % (name, event))):
+                if int(re.search(r"_(\d+)\.wav$", old).group(1)) > variants:
+                    os.remove(old)
     print("wrote %d clips to %s" % (total, os.path.abspath(args.out)))
 
 
