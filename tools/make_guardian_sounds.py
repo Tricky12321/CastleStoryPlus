@@ -1,52 +1,85 @@
 #!/usr/bin/env python3
-"""Synthesises the guardians' sounds (CastleStoryPlus/Assets/Sounds/Guardians/*.wav).
+"""Builds the guardians' sounds (CastleStoryPlus/Assets/Sounds/Guardians/*.wav).
 
-Everything is made from noise, oscillators, filters, envelopes and damped resonances (modal synthesis): no recordings,
-no samples, no files of the game. Run it from anywhere:
+The animal voice is real: short parts of CC0 / public domain recordings (tools/guardian_sources, listed with their
+licences in CastleStoryPlus/Assets/Sounds/Guardians/SOURCES.md). Each part is cleaned (spectral noise reduction, a
+noise gate on the tails, rumble filter), pitched down for the size of the beast and layered (a sub octave copy under
+the roars). On top of the voice sit the guardian's material as a few short, clean transients only (one crystal chime,
+one stone thud, one iron clank, a few ember pops), made here with damped resonances. There are no noise beds, no reverb
+and no ambience: between the sounds the clips are silent. Run it from anywhere:
 
     python3 tools/make_guardian_sounds.py                 # writes the WAVs next to the plugin's assets
     python3 tools/make_guardian_sounds.py --out DIR       # writes them somewhere else
     python3 tools/make_guardian_sounds.py --preview DIR   # also a spectrogram PNG per clip in DIR
+    python3 tools/make_guardian_sounds.py --only Ironhorn
 
-Needs numpy and scipy (and Pillow for --preview). Output is deterministic (fixed seeds), 16-bit mono WAV at 32 kHz.
+Needs numpy and scipy (and Pillow for --preview). Output is deterministic (fixed seeds), 16-bit mono WAV at 32 kHz,
+levelled per event to the same active RMS (peak at most 0.89). The source clips are read with the standard wave
+module; tools/cut_guardian_sources.py re-creates them from the original recordings.
 
 File names: <Guardian>_<event>_<n>.wav, with event one of idle, roar, step, attack, hit, death and n from 1. The game
-picks one at random per event. To use other sounds (for example from a CC0 library) replace the files with the same
-names, or add more numbered files: the game reads every <Guardian>_<event>_<n>.wav in the folder.
+picks one at random per event (every numbered file in the folder is read), clips must be 0.15 - 6 s.
 
-The sound of each guardian (the material is heard in every event):
-    Spirestalker  giraffe, blue crystal  a high airy hum with glassy chimes (inharmonic bell partials)
-    Cindermane    lion, fire and embers  a rough throaty roar with a bed of crackling embers and a fire whoosh
-    Boulderback   gorilla, stone         deep chesty grunts, heavy thuds and grinding, crumbling stone
-    Ironhorn      rhino, iron            snorts and bellows with clanking, ringing iron plates
+The sound of each guardian:
+    Spirestalker  giraffe, blue crystal   dromedary moans and horse / alpaca snorts and bleats (giraffes are almost
+                                          silent and there is no CC0 giraffe recording), a crystal chime on top
+    Cindermane    lion, fire and embers   real lion roars, grunts and growls, pitched down, a few ember pops
+    Boulderback   gorilla, stone          a real gorilla roar at several depths, real chest beats, stone thuds
+    Ironhorn      rhino, iron             real Indian rhinoceros calls and horse snorts pitched down, iron clanks
 """
 import argparse
+import glob
 import os
+import re
 import sys
 import wave
+from fractions import Fraction
 
 import numpy as np
 from scipy import signal
 
 SR = 32000
 NYQ = SR / 2.0
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-# ---------------------------------------------------------------- building blocks
+# ---------------------------------------------------------------- source recordings
 
-def tt(d):
-    return np.arange(int(d * SR)) / SR
-
-
-def white(n, rng):
-    return rng.uniform(-1.0, 1.0, n)
+_SOURCES = {}
+_CLEAN = {}
 
 
-def pink(n, rng):
-    """Noise with a -3 dB per octave slope (filtered white noise)."""
-    b = [0.049922035, -0.095993537, 0.050612699, -0.004408786]
-    a = [1, -2.494956002, 2.017265875, -0.522189400]
-    return signal.lfilter(b, a, white(n, rng))
+def sources():
+    """id -> (samples, offset): every WAV in tools/guardian_sources named <name>_<freesound id>_t<start>.wav."""
+    if not _SOURCES:
+        for path in sorted(glob.glob(os.path.join(HERE, "guardian_sources", "*.wav"))):
+            m = re.search(r"_(\d+)_t([\d.]+)\.wav$", path)
+            with wave.open(path, "rb") as w:
+                if w.getframerate() != SR or w.getnchannels() != 1 or w.getsampwidth() != 2:
+                    raise ValueError(path + " must be mono 16-bit 32 kHz")
+                x = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float64) / 32768.0
+            _SOURCES[int(m.group(1))] = (x, float(m.group(2)))
+    return _SOURCES
+
+
+def denoise(x, floor_pct=12.0, over=1.7, floor=0.06):
+    """Spectral noise reduction: the noise spectrum is the quiet part of each frequency bin over the whole recording,
+    subtracted from every frame (a Wiener-like gain that never goes below `floor`)."""
+    f, t, z = signal.stft(x, SR, nperseg=1024, noverlap=768)
+    mag = np.abs(z)
+    noise = np.percentile(mag, floor_pct, axis=1, keepdims=True)
+    noise = signal.medfilt(noise[:, 0], 5)[:, None]
+    gain = np.clip(1.0 - over * noise / (mag + 1e-9), floor, 1.0)
+    gain = signal.convolve2d(gain, np.ones((1, 3)) / 3.0, mode="same", boundary="symm")
+    _, y = signal.istft(z * gain, SR, nperseg=1024, noverlap=768)
+    return y[: len(x)]
+
+
+def clean_source(fid):
+    if fid not in _CLEAN:
+        x, off = sources()[fid]
+        _CLEAN[fid] = (denoise(x), off)
+    return _CLEAN[fid]
 
 
 def lowpass(x, f, order=2):
@@ -61,71 +94,77 @@ def bandpass(x, lo, hi, order=2):
     return signal.sosfilt(signal.butter(order, [max(lo, 20.0) / NYQ, min(hi, NYQ * 0.98) / NYQ], "band", output="sos"), x)
 
 
-def peak_filter(x, f, q):
-    """A narrow resonance (a formant) at f."""
-    b, a = signal.iirpeak(min(f, NYQ * 0.98) / NYQ, q)
-    return signal.lfilter(b, a, x)
+def pitch(x, semitones):
+    """Pitch (and speed) shift by resampling: -12 is an octave down and twice as long."""
+    if abs(semitones) < 1e-6:
+        return x.copy()
+    r = Fraction(2.0 ** (semitones / 12.0)).limit_denominator(500)
+    return signal.resample_poly(x, r.denominator, r.numerator)
 
 
-def sweep_filter(x, curve, q=2.0, kind="low"):
-    """A state variable filter whose cutoff follows curve (Hz per sample)."""
-    out = np.zeros_like(x)
-    low = band = 0.0
-    damp = 1.0 / q
-    f = 2.0 * np.sin(np.pi * np.clip(curve, 30.0, NYQ * 0.45) / SR)
-    for i in range(len(x)):
-        low += f[i] * band
-        high = x[i] - low - damp * band
-        band += f[i] * high
-        out[i] = low if kind == "low" else (band if kind == "band" else high)
+def gate(x, lo_db=-52.0, hi_db=-40.0):
+    """Noise gate for the tails: the envelope below lo_db (relative to the peak) is silent, above hi_db untouched."""
+    env = np.sqrt(np.maximum(lowpass(x * x, 40.0, 1), 0.0)) + 1e-9
+    db = 20.0 * np.log10(env / (env.max() + 1e-9))
+    g = np.clip((db - lo_db) / (hi_db - lo_db), 0.0, 1.0)
+    return x * lowpass(g, 60.0, 1)
+
+
+def fade(x, fin=0.006, fout=0.03):
+    x = x.copy()
+    a = min(int(fin * SR), len(x) // 2)
+    b = min(int(fout * SR), len(x) // 2)
+    if a:
+        x[:a] *= np.linspace(0.0, 1.0, a)
+    if b:
+        x[-b:] *= np.linspace(1.0, 0.0, b)
+    return x
+
+
+def cut(fid, t0, t1, st=0.0, sub=0.0):
+    """One part of a source recording (times in the original recording), cleaned, pitched down by st semitones.
+    sub adds a copy an octave lower under it (a bigger chest)."""
+    x, off = clean_source(fid)
+    i0 = max(0, int(round((t0 - off) * SR)))
+    i1 = min(len(x), int(round((t1 - off) * SR)))
+    seg = fade(x[i0:i1], 0.008, 0.02)
+    out = pitch(seg, st)
+    if sub > 0.0:
+        low = pitch(seg, st - 12.0)
+        out = out.copy()
+        m = min(len(out), len(low))
+        out[:m] += sub * low[:m] * np.linspace(1.0, 0.0, m) ** 0.5
+    out = highpass(out, 30.0, 2)
+    return out * (0.8 / (np.max(np.abs(out)) + 1e-9))  # every part has the same peak: the gains below are relative
+
+
+def seq(fid, parts, st=0.0, sub=0.0, gap=0.14, gains=None):
+    """Several parts of one recording one after the other (true silence of `gap` seconds between them)."""
+    out = np.zeros(0)
+    for k, (t0, t1) in enumerate(parts):
+        c = cut(fid, t0, t1, st, sub) * (1.0 if gains is None else gains[k])
+        out = np.concatenate([out, np.zeros(int(gap * SR)) if len(out) else out, c])
     return out
 
 
-def exp_env(n, attack=0.005, decay=0.2, curve=1.0):
-    """Quick attack, exponential decay (decay: seconds to fall by 60 dB / 6.9)."""
-    t = np.arange(n) / SR
-    env = np.exp(-t / max(decay, 1e-4)) ** curve
-    a = max(1, int(attack * SR))
-    env[:a] *= np.linspace(0.0, 1.0, a) ** 1.5 if a <= n else 1.0
-    return env
+def place(buf, snippet, at, gain=1.0):
+    i = int(at * SR)
+    if i < 0 or i >= len(buf):
+        return
+    j = min(len(buf), i + len(snippet))
+    buf[i:j] += snippet[: j - i] * gain
 
 
-def shaped(n, points):
-    """Piecewise linear envelope through (time fraction, level) points."""
-    xs = [p[0] * (n - 1) for p in points]
-    ys = [p[1] for p in points]
-    return np.interp(np.arange(n), xs, ys)
+def track(*items, tail=0.15):
+    """items: (samples, start seconds, gain)."""
+    n = max(int((a + len(x) / SR) * SR) for x, a, g in items) + int(tail * SR)
+    out = np.zeros(n)
+    for x, a, g in items:
+        place(out, x, a, g)
+    return out
 
 
-def curve(n, points):
-    """A smooth curve through (time fraction, value) points (pitch or filter contours)."""
-    xs = np.array([p[0] * (n - 1) for p in points])
-    ys = np.array([p[1] for p in points])
-    c = np.interp(np.arange(n), xs, ys)
-    return lowpass(c, 40.0, 1) if len(c) > 200 else c
-
-
-def osc(freq, shape="sine", rng=None, jitter=0.0):
-    """An oscillator following freq (Hz per sample). Band-limited saw/pulse via harmonics up to Nyquist."""
-    f = freq.copy()
-    if jitter and rng is not None:
-        f = f * (1.0 + jitter * lowpass(white(len(f), rng), 60.0, 1) * 6.0)
-    phase = np.cumsum(f) / SR
-    if shape == "sine":
-        return np.sin(2 * np.pi * phase)
-    top = max(float(np.max(f)), 20.0)
-    count = int(min(60, (NYQ * 0.9) // top))
-    out = np.zeros(len(f))
-    for k in range(1, count + 1):
-        if shape == "saw":
-            out += np.sin(2 * np.pi * k * phase) / k
-        elif shape == "odd":
-            if k % 2 == 1:
-                out += np.sin(2 * np.pi * k * phase) / k
-        elif shape == "buzz":
-            out += np.sin(2 * np.pi * k * phase) / (k ** 0.6)
-    return out * (2.0 / np.pi if shape == "saw" else 1.0)
-
+# ---------------------------------------------------------------- material: short clean transients
 
 def modal(duration, partials, rng, strike=0.002):
     """Damped resonances: (frequency, amplitude, decay seconds). A struck bell, plate or stone."""
@@ -135,172 +174,41 @@ def modal(duration, partials, rng, strike=0.002):
     for freq, amp, decay in partials:
         if freq >= NYQ * 0.95:
             continue
-        ph = rng.uniform(0, 2 * np.pi)
-        out += amp * np.sin(2 * np.pi * freq * t + ph) * np.exp(-t / decay)
+        out += amp * np.sin(2 * np.pi * freq * t + rng.uniform(0, 2 * np.pi)) * np.exp(-t / decay)
     if strike > 0:
         k = int(strike * SR * 4)
-        click = white(n, rng) * np.exp(-t / strike)
+        click = rng.uniform(-1, 1, n) * np.exp(-t / strike)
         out += 0.5 * click * (np.arange(n) < k)
-    return out
-
-
-def place(buf, snippet, at, gain=1.0):
-    i = int(at * SR)
-    if i >= len(buf) or i < 0:
-        return
-    j = min(len(buf), i + len(snippet))
-    buf[i:j] += snippet[: j - i] * gain
-
-
-def crackle(duration, rng, rate, band=(900, 5200), power=2.2, decay=0.004, rate_curve=None):
-    """Sparse random pops (embers, fire): Poisson times, power law loudness, each a short bandpassed burst."""
-    n = int(duration * SR)
-    out = np.zeros(n)
-    t = 0.0
-    while t < duration:
-        r = rate if rate_curve is None else rate * float(np.interp(t / duration, rate_curve[0], rate_curve[1]))
-        t += rng.exponential(1.0 / max(r, 0.01))
-        if t >= duration:
-            break
-        amp = rng.uniform(0.05, 1.0) ** power
-        d = decay * rng.uniform(0.5, 2.5)
-        m = int(d * SR * 6)
-        burst = white(m, rng) * np.exp(-np.arange(m) / SR / d)
-        centre = rng.uniform(*band)
-        burst = bandpass(burst, centre * 0.6, min(centre * 1.6, NYQ * 0.95), 1)
-        place(out, burst, t, amp)
-    return out
-
-
-def grains(duration, rng, rate, freq_range, decay_range, rate_curve=None, noise=0.4):
-    """Falling stones: many short damped resonances at random pitches."""
-    n = int(duration * SR)
-    out = np.zeros(n)
-    t = 0.0
-    while t < duration:
-        r = rate if rate_curve is None else rate * float(np.interp(t / duration, rate_curve[0], rate_curve[1]))
-        t += rng.exponential(1.0 / max(r, 0.01))
-        if t >= duration:
-            break
-        f = np.exp(rng.uniform(np.log(freq_range[0]), np.log(freq_range[1])))
-        d = rng.uniform(*decay_range)
-        m = int(d * SR * 5)
-        tm = np.arange(m) / SR
-        g = np.sin(2 * np.pi * f * tm * (1 + 0.1 * np.exp(-tm / 0.01))) * np.exp(-tm / d)
-        g += noise * white(m, rng) * np.exp(-tm / (d * 0.3))
-        place(out, g, t, rng.uniform(0.15, 1.0) ** 2)
-    return out
-
-
-def room(x, rng, length=0.35, wet=0.12, damp=2500.0):
-    """A little air round the sound: convolution with a decaying, darkened noise tail."""
-    n = int(length * SR)
-    ir = white(n, rng) * np.exp(-np.arange(n) / SR / (length / 5.0))
-    ir = lowpass(ir, damp, 1)
-    ir /= np.sqrt(np.sum(ir ** 2)) + 1e-9
-    wetsig = signal.fftconvolve(x, ir)[: len(x)]
-    return x * (1.0 - wet) + wetsig * wet * 1.5
-
-
-def mix(*layers, length=None):
-    n = length or max(len(l) for l in layers)
-    out = np.zeros(n)
-    for l in layers:
-        m = min(n, len(l))
-        out[:m] += l[:m]
-    return out
-
-
-def pad(x, n):
-    return np.concatenate([x, np.zeros(max(0, n - len(x)))])[:n]
-
-
-def vowel(source, a, b, mix_curve, q=6.0):
-    """Formant filter (parallel resonances) that moves from vowel a to vowel b: a, b are lists of (freq, gain)."""
-    out_a = sum(g * peak_filter(source, f, q) for f, g in a)
-    out_b = sum(g * peak_filter(source, f, q) for f, g in b)
-    return out_a * (1.0 - mix_curve) + out_b * mix_curve
-
-
-def drive(x, amount):
-    return np.tanh(x * amount) / np.tanh(amount)
-
-
-def finish(x, level=0.89):
-    """Remove DC and rumble, fade the ends, normalise to the level."""
-    x = highpass(x, 25.0, 2)
-    f = int(0.003 * SR)
-    x[:f] *= np.linspace(0, 1, f)
-    e = int(min(0.04, len(x) / SR * 0.3) * SR)
-    x[-e:] *= np.linspace(1, 0, e) ** 1.5
-    return x / (np.max(np.abs(x)) + 1e-9) * level
-
-
-# vowel formants (Hz, gain): a rough "ah", "oh", "oo", "eh"
-AH = [(700, 1.0), (1150, 0.7), (2600, 0.35)]
-OH = [(450, 1.0), (800, 0.6), (2500, 0.2)]
-OO = [(300, 1.0), (700, 0.35), (2400, 0.1)]
-EH = [(530, 1.0), (1840, 0.5), (2480, 0.3)]
-UH = [(520, 1.0), (1190, 0.5), (2390, 0.25)]
-
-
-# ---------------------------------------------------------------- shared voices
-
-def growl(dur, f0, rng, vowels=(UH, AH), rough=30.0, rough_depth=0.6, jitter=0.5, breath=0.25, saw="buzz", amp=None, pitch_noise=1.0):
-    """A throaty animal voice: a harmonic source (pitch contour f0, a fraction-of-duration curve), amplitude roughness
-    (the vocal folds flapping), pitch jitter, formants moving between two vowels and some breath."""
-    n = int(dur * SR)
-    f = f0 if isinstance(f0, np.ndarray) else curve(n, f0)
-    src = osc(f, saw, rng, jitter * pitch_noise * 0.02)
-    flutter = 1.0 - rough_depth * (0.5 + 0.5 * np.sin(2 * np.pi * np.cumsum(rough * (1 + 0.1 * lowpass(white(n, rng), 20, 1) * 4)) / SR))
-    src = src * flutter
-    src += breath * lowpass(white(n, rng), 3000, 1) * 0.6
-    morph = np.linspace(0, 1, n) ** 1.3
-    v = vowel(src, vowels[0], vowels[1], morph)
-    if amp is not None:
-        v = v * (amp if isinstance(amp, np.ndarray) else shaped(n, amp))
-    return v
+    return fade(out, 0.0005, 0.06)
 
 
 def thump(dur, f_start, f_end, decay, rng, click=0.2, click_hz=900):
-    """A body hitting the ground: a falling sine, with a short dull click on top."""
+    """A body hitting the ground: a falling sine with a short dull click on top."""
     n = int(dur * SR)
     t = np.arange(n) / SR
     f = f_end + (f_start - f_end) * np.exp(-t / (decay * 0.35))
     body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / decay)
-    knock = lowpass(white(n, rng), click_hz, 2) * np.exp(-t / 0.012) * click
-    return body + knock
-
-
-def whoosh(dur, rng, f_from, f_to, q=1.5, peak=0.5):
-    n = int(dur * SR)
-    c = curve(n, [(0, f_from), (peak, f_to), (1, f_from * 0.8)])
-    x = sweep_filter(white(n, rng), c, q, "band")
-    return x * shaped(n, [(0, 0), (peak, 1), (1, 0)]) * 2.0
-
-
-def chime_partials(f0, decay, bright=1.0):
-    """Glass or crystal: strongly inharmonic partials (a struck bell / tube) which decay faster the higher they are."""
-    ratios = [1.0, 2.76, 5.40, 8.93, 13.34]
-    amps = [1.0, 0.55 * bright, 0.32 * bright, 0.2 * bright, 0.1 * bright]
-    return [(f0 * r, a, decay / (1.0 + 0.9 * i)) for i, (r, a) in enumerate(zip(ratios, amps))]
+    knock = lowpass(rng.uniform(-1, 1, n), click_hz, 2) * np.exp(-t / 0.012) * click
+    return fade(body + knock, 0.0005, 0.05)
 
 
 def chime(f0, decay, rng, dur=None, bright=1.0):
+    """Glass or crystal: strongly inharmonic partials which decay faster the higher they are."""
     dur = dur or decay * 3
-    x = modal(dur, chime_partials(f0, decay, bright), rng, strike=0.0015)
-    # slight beating: a detuned twin
-    y = modal(dur, chime_partials(f0 * 1.004, decay * 0.9, bright), rng, strike=0.0)
-    return (x + 0.5 * y) * 0.6
+    ratios = [1.0, 2.76, 5.40, 8.93, 13.34]
+    amps = [1.0, 0.55 * bright, 0.32 * bright, 0.2 * bright, 0.1 * bright]
+    parts = [(f0 * r, a, decay / (1.0 + 0.9 * i)) for i, (r, a) in enumerate(zip(ratios, amps))]
+    parts2 = [(f * 1.004, a, d * 0.9) for f, a, d in parts]
+    return (modal(dur, parts, rng, 0.0015) + 0.5 * modal(dur, parts2, rng, 0.0)) * 0.6
 
 
-def iron_ring(f0, decay, rng, dur=None):
-    """Struck iron plate: dense inharmonic partials with a metallic clank on top."""
+def iron_clank(f0, decay, rng, dur=None):
+    """Struck iron plate: dense inharmonic partials."""
     dur = dur or decay * 3
     ratios = [1.0, 1.59, 2.14, 2.65, 3.33, 4.1, 5.3, 6.7]
     amps = [1.0, 0.8, 0.7, 0.55, 0.45, 0.3, 0.22, 0.15]
     parts = [(f0 * r * rng.uniform(0.985, 1.015), a, decay / (1.0 + 0.45 * i)) for i, (r, a) in enumerate(zip(ratios, amps))]
-    return modal(dur, parts, rng, strike=0.003)
+    return modal(dur, parts, rng, 0.003)
 
 
 def stone_knock(f0, decay, rng, dur=None):
@@ -309,353 +217,240 @@ def stone_knock(f0, decay, rng, dur=None):
     ratios = [1.0, 1.7, 2.6, 3.9, 5.6]
     amps = [1.0, 0.7, 0.45, 0.3, 0.18]
     parts = [(f0 * r * rng.uniform(0.97, 1.03), a, decay / (1.0 + 0.8 * i)) for i, (r, a) in enumerate(zip(ratios, amps))]
-    return modal(dur, parts, rng, strike=0.004)
+    return modal(dur, parts, rng, 0.004)
 
 
-# ---------------------------------------------------------------- Spirestalker (giraffe, crystal)
+def ember_pop(rng, centre=2500.0):
+    """One ember cracking: a very short band-limited burst."""
+    m = int(0.012 * SR)
+    b = rng.uniform(-1, 1, m) * np.exp(-np.arange(m) / SR / 0.003)
+    return fade(bandpass(b, centre * 0.6, centre * 1.6, 1), 0.0003, 0.003)
+
+
+# ---------------------------------------------------------------- the clips
+# Source ids (Freesound): 69570 69571 69572 559600 270383 516829 lion; 397054 gorilla roar; 367821 chest beats;
+# 535810 Indian rhinoceros; 693564 dromedary; 397236 horse snort; 852641 alpaca. Times are in the original recording.
+
+LION_A, LION_B, LION_C, LION_D, LION_E, LION_F = 69570, 69571, 69572, 559600, 270383, 516829
+GORILLA, CHEST, RHINO, CAMEL, HORSE, ALPACA = 397054, 367821, 535810, 693564, 397236, 852641
+
+
+# --- Spirestalker (giraffe, crystal): moans, snorts and bleats; a chime on top ---
 
 def spire_idle(rng, v):
-    # A soft, high hum rising and falling (a giraffe's low calls are almost infrasound; this is a singing crystal hum),
-    # with a bell glint that sings on the pitch.
-    d = 1.6 + 0.2 * v
-    base = 300 + 40 * v
-    f0 = [(0, base * 0.9), (0.3, base * 1.05), (0.7, base * 1.12), (1, base * 0.8)]
-    h = growl(d, f0, rng, vowels=(OO, OH), rough=9, rough_depth=0.15, jitter=0.25, breath=0.35, saw="odd", amp=[(0, 0), (0.2, 1), (0.7, 0.8), (1, 0)])
-    n = len(h)
-    sparkle = highpass(chime(base * 4.0, 0.5, rng, d), 1200, 1) * 0.12
-    c = np.zeros(n)
-    place(c, chime(base * 2.0, 0.6, rng, 1.2), 0.35, 0.28)
-    place(c, chime(base * 3.0, 0.5, rng, 1.0), 0.75, 0.2)
-    return mix(h * 0.9, pad(sparkle, n), c)
+    if v == 0:
+        return track((cut(CAMEL, 3.2, 5.6, -1.0), 0.0, 1.0), (chime(1320, 0.5, rng, 1.0), 1.9, 0.12))
+    if v == 1:
+        return track((cut(CAMEL, 6.8, 8.8, 0.0), 0.0, 1.0), (chime(1760, 0.45, rng, 0.9), 0.1, 0.1))
+    if v == 2:
+        return track((cut(HORSE, 0.5, 0.9, -3.0), 0.0, 1.0), (cut(CAMEL, 10.0, 11.2, -1.0), 0.6, 0.9), (chime(990, 0.5, rng, 1.0), 1.5, 0.1))
+    return track((cut(ALPACA, 0.0, 0.6, -2.0), 0.0, 1.0), (cut(CAMEL, 14.2, 15.4, 0.0), 0.8, 0.8), (chime(1480, 0.4, rng, 0.8), 0.05, 0.1))
 
 
 def spire_roar(rng, v):
-    # A long, rising keening cry, glass-like and harsh, over a chime cascade that rings out.
-    d = 2.0
-    n = int(d * SR)
-    base = 330 + 30 * v
-    f0 = [(0, base * 0.8), (0.18, base * 1.35), (0.55, base * 1.5), (1, base * 1.05)]
-    cry = growl(d, f0, rng, vowels=(AH, EH), rough=45, rough_depth=0.35, jitter=1.0, breath=0.3, saw="buzz", amp=[(0, 0), (0.08, 1), (0.6, 0.9), (1, 0)])
-    cry = drive(cry, 1.8) * 0.8
-    cas = np.zeros(n)
-    for i in range(9):
-        place(cas, chime(rng.choice([660, 880, 990, 1320, 1760]) * rng.uniform(0.97, 1.03), rng.uniform(0.3, 0.7), rng, 1.2), 0.06 + i * 0.16 + rng.uniform(0, 0.05), 0.22 * (1 - i / 14))
-    return mix(cry, cas, whoosh(d, rng, 1500, 4500, 1.0, 0.2) * 0.12)
+    if v == 0:
+        return track((cut(CAMEL, 17.0, 19.4, 1.0, 0.25), 0.0, 1.0), (chime(1320, 0.7, rng, 1.4), 0.0, 0.16), (chime(1980, 0.6, rng, 1.2), 0.5, 0.1))
+    if v == 1:
+        return track((seq(CAMEL, [(14.0, 15.5), (16.4, 17.6)], 0.0, 0.2), 0.0, 1.0), (chime(1760, 0.7, rng, 1.4), 0.0, 0.14))
+    return track((cut(CAMEL, 9.0, 11.2, 2.0, 0.2), 0.0, 1.0), (chime(990, 0.8, rng, 1.5), 0.0, 0.14), (chime(1480, 0.6, rng, 1.2), 0.9, 0.1))
 
 
 def spire_step(rng, v):
-    # Long legs: a light, dry hoof tick and a tiny crystal glint (a pace, so little weight).
-    d = 0.5
-    n = int(d * SR)
-    hoof = thump(0.18, 150 + 15 * v, 75, 0.05, rng, click=0.5, click_hz=1800)
-    out = np.zeros(n)
-    place(out, hoof, 0.0, 0.8)
-    place(out, chime(rng.choice([1980, 2480, 2960]) * rng.uniform(0.96, 1.04), 0.12, rng, 0.4), 0.012, 0.18)
-    return out
+    # a light hoof tick and a tiny crystal glint
+    return track((thump(0.18, 150 + 15 * v, 75, 0.05, rng, 0.5, 1800), 0.0, 0.8),
+                 (chime([1980, 2480, 2960][v], 0.12, rng, 0.4), 0.012, 0.16), tail=0.05)
 
 
 def spire_attack(rng, v):
-    # The neck whips down: a rising whoosh, a crack at the end and a bright chord.
-    d = 0.9
-    n = int(d * SR)
-    sw = whoosh(0.4, rng, 600, 5200, 2.0, 0.85)
-    out = np.zeros(n)
-    place(out, sw, 0.0, 0.9)
-    place(out, thump(0.3, 220, 80, 0.07, rng, 0.8, 2500), 0.36, 0.7)
-    for i, f in enumerate([880, 1318, 1760]):
-        place(out, chime(f * rng.uniform(0.98, 1.02), 0.4, rng, 0.9), 0.34 + i * 0.015, 0.3)
-    voice = growl(0.5, [(0, 380), (0.3, 520), (1, 330)], rng, vowels=(AH, EH), rough=40, rough_depth=0.3, breath=0.3, amp=[(0, 0), (0.1, 1), (1, 0)])
-    place(out, voice * 0.5, 0.05)
-    return out
+    if v == 0:
+        return track((cut(HORSE, 2.0, 2.4, 0.0), 0.0, 1.0), (thump(0.3, 220, 80, 0.07, rng, 0.8, 2500), 0.3, 0.5), (chime(1318, 0.4, rng, 0.9), 0.3, 0.22))
+    return track((cut(ALPACA, 0.0, 0.6, 0.0), 0.0, 1.0), (thump(0.3, 220, 80, 0.07, rng, 0.8, 2500), 0.35, 0.5), (chime(1760, 0.4, rng, 0.9), 0.35, 0.22))
 
 
 def spire_hit(rng, v):
-    # Glass cracking: a handful of tinkles and a short pained cry.
-    d = 0.7
-    n = int(d * SR)
-    out = np.zeros(n)
-    for i in range(7):
-        place(out, chime(rng.uniform(1500, 4200), rng.uniform(0.06, 0.2), rng, 0.4), rng.uniform(0, 0.18), rng.uniform(0.15, 0.4))
-    place(out, thump(0.2, 260, 110, 0.04, rng, 0.8, 3000), 0, 0.5)
-    cry = growl(0.45, [(0, 520), (0.2, 620 + 30 * v), (1, 380)], rng, vowels=(EH, AH), rough=55, rough_depth=0.3, jitter=0.8, breath=0.3, amp=[(0, 0), (0.06, 1), (1, 0)])
-    place(out, drive(cry, 2) * 0.55, 0.0)
-    return out
+    if v == 0:
+        return track((cut(ALPACA, 0.0, 0.6, -1.0), 0.0, 1.0), (chime(2400, 0.15, rng, 0.5), 0.0, 0.2), (chime(3300, 0.12, rng, 0.4), 0.05, 0.14))
+    if v == 1:
+        return track((cut(CAMEL, 10.0, 10.8, 1.0), 0.0, 1.0), (chime(2900, 0.15, rng, 0.5), 0.0, 0.2))
+    return track((cut(CAMEL, 14.3, 15.1, 1.0), 0.0, 1.0), (chime(2100, 0.15, rng, 0.5), 0.02, 0.2), (chime(3700, 0.1, rng, 0.4), 0.08, 0.12))
 
 
 def spire_death(rng, v):
-    # A falling cry that dies to a breath, crystals shattering and ringing out, a last descending chime run.
-    d = 3.2
-    n = int(d * SR)
-    cry = growl(1.8, [(0, 560), (0.25, 600), (1, 160)], rng, vowels=(AH, OO), rough=25, rough_depth=0.4, jitter=0.9, breath=0.4, amp=[(0, 0), (0.05, 1), (0.6, 0.7), (1, 0)])
-    out = np.zeros(n)
-    place(out, drive(cry, 1.6) * 0.7, 0.0)
-    for i in range(24):
-        place(out, chime(rng.uniform(1100, 5200), rng.uniform(0.08, 0.35), rng, 0.8), 0.3 + rng.exponential(0.5) * (1 + i * 0.03) , rng.uniform(0.08, 0.3))
-    for i, f in enumerate([1980, 1760, 1480, 1318, 990, 880, 660]):
-        place(out, chime(f, 0.9, rng, 1.8), 0.9 + i * 0.28, 0.24)
-    place(out, thump(0.5, 110, 40, 0.15, rng, 0.2, 700), 1.7, 0.5)
-    return out
+    chimes = [(chime(f, 0.9, rng, 1.8), 0.9 + i * 0.3, 0.16) for i, f in enumerate([1980, 1480, 990, 660])]
+    if v == 0:
+        return track((cut(CAMEL, 17.0, 19.4, -4.0, 0.25), 0.0, 1.0), *chimes)
+    return track((seq(CAMEL, [(6.8, 8.8)], -5.0, 0.25), 0.0, 1.0), *chimes)
 
 
-# ---------------------------------------------------------------- Cindermane (lion, fire and embers)
+# --- Cindermane (lion, fire and embers): real lion voice; a few ember pops ---
+
+def pops(rng, times, gain=0.3):
+    return [(ember_pop(rng, rng.uniform(1800, 4200)), t, gain * rng.uniform(0.5, 1.0)) for t in times]
+
 
 def cinder_idle(rng, v):
-    # A low, throaty rumble that wobbles like a big cat's purr-growl, with embers crackling under it.
-    d = 1.8
-    n = int(d * SR)
-    f0 = [(0, 78 + 6 * v), (0.4, 92), (1, 70)]
-    g = growl(d, f0, rng, vowels=(UH, OH), rough=26, rough_depth=0.75, jitter=0.9, breath=0.5, amp=[(0, 0), (0.15, 0.9), (0.75, 0.8), (1, 0)])
-    emb = crackle(d, rng, 55, rate_curve=([0, 0.5, 1], [0.6, 1.0, 0.4])) * 0.4
-    return mix(drive(g, 1.5) * 0.85, emb)
+    parts = [(LION_B, 1.8, 2.5), (LION_B, 4.8, 5.7), (LION_B, 7.5, 8.6)]
+    if v < 3:
+        return track((cut(parts[v][0], parts[v][1], parts[v][2], -2.0), 0.0, 1.0))
+    return track((seq(LION_C, [(5.2, 5.8), (5.9, 6.4)], -2.0, 0.0, 0.05), 0.0, 1.0))
 
 
 def cinder_roar(rng, v):
-    # The lion's roar: a few rising grunts that open into a long, rough, roaring bellow that tails off in huffs,
-    # with a bed of crackle and a fire rush.
-    d = 2.6
-    n = int(d * SR)
-    f0 = [(0, 90), (0.1, 150), (0.25, 190 + 15 * v), (0.55, 170), (0.8, 120), (1, 70)]
-    r = growl(d, f0, rng, vowels=(UH, AH), rough=34, rough_depth=0.8, jitter=1.4, breath=0.45, saw="buzz", amp=[(0, 0), (0.06, 1), (0.55, 1.0), (0.85, 0.5), (1, 0)])
-    r = drive(r, 2.6) * 0.75
-    rush = bandpass(white(n, rng), 600, 4000, 1) * shaped(n, [(0, 0), (0.1, 0.5), (0.5, 0.6), (1, 0)]) * 0.35
-    emb = crackle(d, rng, 90, band=(700, 6000), rate_curve=([0, 0.2, 1], [0.3, 1.0, 0.6])) * 0.55
-    return mix(r, rush, emb)
+    if v == 0:
+        return track((seq(LION_A, [(14.0, 15.4), (16.2, 17.5)], -2.0, 0.3, 0.1), 0.0, 1.0))
+    if v == 1:
+        return track((seq(LION_A, [(20.0, 21.4), (21.9, 23.1), (23.6, 24.7)], -2.0, 0.3, 0.08), 0.0, 1.0))
+    if v == 2:
+        return track((cut(LION_A, 11.4, 12.9, -2.5, 0.35), 0.0, 1.0))
+    return track((seq(LION_D, [(0.4, 1.7), (5.0, 6.2)], -2.5, 0.3, 0.2), 0.0, 1.0))
 
 
 def cinder_step(rng, v):
-    # A big cat's padded paw: a soft low thud and a rustle of embers, quick and light.
-    d = 0.4
-    n = int(d * SR)
-    paw = thump(0.25, 130 + 10 * v, 55, 0.06, rng, click=0.35, click_hz=700) * 0.8
-    emb = crackle(0.3, rng, 120, band=(1000, 5000), decay=0.003) * 0.35
-    out = np.zeros(n)
-    place(out, paw, 0)
-    place(out, emb, 0.01)
-    return out
+    # a big cat's padded paw: a soft low thud
+    return track((thump(0.25, 130 + 10 * v, 55, 0.06, rng, 0.35, 700), 0.0, 0.8), tail=0.05)
 
 
 def cinder_attack(rng, v):
-    # The pounce: a rush of flame, a short snarling roar at the moment of the bite.
-    d = 1.0
-    n = int(d * SR)
-    fire = whoosh(0.5, rng, 400, 3500, 0.9, 0.7)
-    snarl = growl(0.55, [(0, 140), (0.3, 230), (1, 120)], rng, vowels=(AH, UH), rough=40, rough_depth=0.8, jitter=1.4, breath=0.5, amp=[(0, 0), (0.08, 1), (0.6, 0.8), (1, 0)])
-    out = np.zeros(n)
-    place(out, fire, 0, 0.7)
-    place(out, drive(snarl, 2.4) * 0.8, 0.2)
-    place(out, thump(0.3, 120, 50, 0.08, rng, 0.5, 900), 0.28, 0.6)
-    place(out, crackle(0.6, rng, 160) * 0.5, 0.25)
-    return out
+    src = [(LION_D, 8.5, 9.7), (LION_D, 11.4, 12.9), (LION_E, 3.5, 4.5)][v]
+    return track((cut(src[0], src[1], src[2], -2.0, 0.2), 0.0, 1.0), *pops(rng, [0.05, 0.16, 0.3], 0.25))
 
 
 def cinder_hit(rng, v):
-    # A yelp with a burst of sparks.
-    d = 0.7
-    n = int(d * SR)
-    y = growl(0.45, [(0, 220), (0.15, 380 + 25 * v), (1, 180)], rng, vowels=(EH, AH), rough=50, rough_depth=0.6, jitter=1.2, breath=0.4, amp=[(0, 0), (0.05, 1), (1, 0)])
-    out = np.zeros(n)
-    place(out, drive(y, 2.2) * 0.75, 0)
-    place(out, crackle(0.5, rng, 260, band=(1500, 7000), decay=0.002) * 0.8, 0)
-    return out
+    src = [(LION_F, 1.1, 1.9, -2.0), (LION_E, 0.5, 1.2, -2.0), (LION_E, 1.3, 2.1, -2.0)][v]
+    return track((cut(src[0], src[1], src[2], src[3]), 0.0, 1.0), *pops(rng, [0.0, 0.07], 0.3))
 
 
 def cinder_death(rng, v):
-    # A long bellow that sinks to a rattle, the fire dying away to a few last pops.
-    d = 3.4
-    n = int(d * SR)
-    f0 = [(0, 170), (0.2, 160), (0.6, 100), (1, 45)]
-    r = growl(2.2, f0, rng, vowels=(AH, OO), rough=28, rough_depth=0.8, jitter=1.4, breath=0.5, amp=[(0, 0), (0.05, 1), (0.5, 0.8), (1, 0)])
-    out = np.zeros(n)
-    place(out, drive(r, 2.2) * 0.75, 0)
-    place(out, crackle(d, rng, 110, rate_curve=([0, 0.4, 1], [1.2, 0.8, 0.05])) * 0.6, 0)
-    place(out, thump(0.5, 100, 38, 0.16, rng, 0.2, 500), 1.9, 0.6)
-    place(out, lowpass(white(int(1.2 * SR), rng), 900, 1) * shaped(int(1.2 * SR), [(0, 0), (0.1, 1), (1, 0)]) * 0.25, 1.9)
-    return out
+    if v == 0:
+        voice = seq(LION_A, [(21.9, 23.1), (23.6, 24.7), (25.1, 26.1)], -4.0, 0.3, 0.12)
+    else:
+        voice = seq(LION_C, [(8.5, 9.7), (11.2, 12.8)], -4.0, 0.3, 0.15)
+    return track((voice, 0.0, 1.0), *pops(rng, [1.2, 1.9, 2.4], 0.2))
 
 
-# ---------------------------------------------------------------- Boulderback (gorilla, stone)
+# --- Boulderback (gorilla, stone): a real gorilla roar at several depths, real chest beats, stone thuds ---
 
 def boulder_idle(rng, v):
-    # Deep chesty "hoo-hoo" grunts, each with a dull stone scrape.
-    d = 1.7
-    n = int(d * SR)
-    out = np.zeros(n)
-    for i, at in enumerate([0.0, 0.5, 0.98]):
-        g = growl(0.42, [(0, 85 + 5 * v), (0.4, 100), (1, 62)], rng, vowels=(OO, UH), rough=18, rough_depth=0.35, jitter=0.6, breath=0.35, amp=[(0, 0), (0.15, 1), (1, 0)])
-        place(out, g, at, 0.9 - i * 0.12)
-    grind = lowpass(pink(n, rng), 600, 2) * shaped(n, [(0, 0), (0.2, 1), (0.7, 0.6), (1, 0)])
-    grind *= 0.5 + 0.5 * np.sin(2 * np.pi * np.cumsum(np.full(n, 9.0)) / SR) ** 2
-    return mix(out, grind * 0.3)
+    if v == 0:
+        return track((cut(CHEST, 3.55, 4.5, -5.0), 0.0, 1.0), (stone_knock(160, 0.08, rng, 0.4), 0.02, 0.15))
+    if v == 1:
+        return track((cut(GORILLA, 0.2, 0.9, -9.0, 0.3), 0.0, 0.7))
+    if v == 2:
+        return track((cut(CHEST, 8.5, 9.4, -4.0), 0.0, 1.0))
+    return track((cut(GORILLA, 0.2, 0.8, -7.0, 0.3), 0.0, 0.6), (cut(CHEST, 4.6, 5.1, -5.0), 1.2, 0.9))
 
 
 def boulder_roar(rng, v):
-    # Chest drumming (hollow thumps, quick) into a deep, rough roar with rocks grinding underneath.
-    d = 2.8
-    n = int(d * SR)
-    out = np.zeros(n)
-    for i in range(6):
-        place(out, thump(0.22, 120 - 8 * (i % 2), 55, 0.06, rng, 0.35, 500), 0.05 + i * 0.13, 0.65)
-    f0 = [(0, 80), (0.15, 130), (0.35, 150 + 10 * v), (0.7, 120), (1, 60)]
-    r = growl(2.0, f0, rng, vowels=(UH, AH), rough=22, rough_depth=0.7, jitter=1.0, breath=0.45, amp=[(0, 0), (0.1, 0.7), (0.5, 1), (1, 0)])
-    place(out, drive(r, 2.4) * 0.8, 0.75)
-    gr = lowpass(pink(n, rng), 800, 2) * shaped(n, [(0, 0), (0.3, 0.7), (0.8, 0.6), (1, 0)]) * (0.6 + 0.4 * np.sin(2 * np.pi * np.cumsum(np.full(n, 6.5)) / SR))
-    return mix(out, gr * 0.4, grains(d, rng, 22, (120, 700), (0.03, 0.09)) * 0.3)
+    if v == 0:
+        return track((cut(CHEST, 3.55, 5.6, -4.0), 0.0, 1.0), (cut(GORILLA, 0.2, 0.9, -5.0, 0.35), 2.0, 1.0))
+    if v == 1:
+        return track((cut(GORILLA, 0.2, 0.9, -4.0, 0.4), 0.0, 1.0), (cut(CHEST, 8.5, 9.4, -4.0), 1.2, 0.9))
+    if v == 2:
+        return track((cut(GORILLA, 0.2, 0.9, -6.0, 0.3), 0.0, 1.0), (cut(GORILLA, 0.2, 0.9, -8.0, 0.4), 1.5, 0.9))
+    return track((cut(CHEST, 3.55, 4.5, -5.0), 0.0, 1.0), (cut(GORILLA, 0.2, 0.9, -7.0, 0.5), 1.1, 1.0), (stone_knock(140, 0.1, rng, 0.5), 1.1, 0.2))
 
 
 def boulder_step(rng, v):
-    # A heavy knuckle or foot: a deep thud that lingers, a crunch of stone on stone.
-    d = 0.6
-    n = int(d * SR)
-    out = np.zeros(n)
-    place(out, thump(0.5, 95 + 8 * v, 38, 0.13, rng, 0.25, 500), 0, 1.0)
-    place(out, stone_knock(210 * rng.uniform(0.9, 1.1), 0.06, rng, 0.4), 0.005, 0.28)
-    place(out, grains(0.25, rng, 60, (200, 1400), (0.01, 0.03)), 0.02, 0.3)
-    return out
+    # a heavy knuckle or foot: a deep thud and a stone knock
+    return track((thump(0.5, 95 + 8 * v, 38, 0.13, rng, 0.25, 500), 0.0, 1.0), (stone_knock(210 * [0.9, 1.0, 1.1][v], 0.06, rng, 0.4), 0.005, 0.25), tail=0.05)
 
 
 def boulder_attack(rng, v):
-    # Both fists up, a grunt, then the slam: a huge thud, a crack and falling rubble.
-    d = 1.4
-    n = int(d * SR)
-    out = np.zeros(n)
-    g = growl(0.5, [(0, 100), (0.4, 140), (1, 90)], rng, vowels=(UH, AH), rough=24, rough_depth=0.5, jitter=0.8, breath=0.45, amp=[(0, 0), (0.2, 1), (1, 0.2)])
-    place(out, drive(g, 2) * 0.6, 0)
-    place(out, thump(0.9, 90, 32, 0.22, rng, 0.45, 600), 0.4, 1.0)
-    place(out, stone_knock(180, 0.14, rng, 0.8), 0.4, 0.5)
-    place(out, grains(0.8, rng, 70, (150, 2200), (0.02, 0.07), rate_curve=([0, 1], [1.0, 0.1])), 0.42, 0.45)
-    return out
+    if v == 0:
+        return track((cut(GORILLA, 0.2, 0.9, -5.0, 0.3), 0.0, 1.0), (thump(0.9, 90, 32, 0.22, rng, 0.45, 600), 0.55, 0.9), (stone_knock(180, 0.14, rng, 0.8), 0.55, 0.5))
+    if v == 1:
+        return track((cut(CHEST, 4.6, 5.1, -4.0), 0.0, 0.9), (cut(GORILLA, 0.2, 0.8, -8.0, 0.3), 0.3, 1.0), (thump(0.9, 90, 32, 0.22, rng, 0.45, 600), 0.85, 0.9), (stone_knock(170, 0.14, rng, 0.8), 0.85, 0.5))
+    return track((cut(GORILLA, 0.2, 0.7, -3.0, 0.2), 0.0, 1.0), (thump(0.9, 100, 34, 0.2, rng, 0.45, 600), 0.45, 0.9), (stone_knock(200, 0.12, rng, 0.8), 0.45, 0.5))
 
 
 def boulder_hit(rng, v):
-    # Stone cracking and chipping, and a short pained grunt.
-    d = 0.8
-    n = int(d * SR)
-    out = np.zeros(n)
-    place(out, stone_knock(260 * rng.uniform(0.9, 1.1), 0.09, rng, 0.5), 0, 0.8)
-    place(out, grains(0.5, rng, 90, (300, 3000), (0.008, 0.03)), 0.0, 0.45)
-    g = growl(0.4, [(0, 130), (0.2, 160 + 10 * v), (1, 95)], rng, vowels=(AH, UH), rough=30, rough_depth=0.5, breath=0.4, amp=[(0, 0), (0.08, 1), (1, 0)])
-    place(out, drive(g, 2) * 0.6, 0.02)
-    return out
+    src = [(0.2, 0.6, -6.0), (0.3, 0.8, -9.0), (0.3, 0.8, -4.0)][v]
+    return track((cut(GORILLA, src[0], src[1], src[2], 0.2), 0.0, 1.0), (stone_knock([260, 220, 300][v], 0.09, rng, 0.5), 0.0, 0.5))
 
 
 def boulder_death(rng, v):
-    # A long groan, then the body comes apart: a rockslide of tumbling stones fading away with a final slump.
-    d = 3.8
-    n = int(d * SR)
-    out = np.zeros(n)
-    g = growl(1.9, [(0, 110), (0.3, 120), (1, 40)], rng, vowels=(UH, OO), rough=17, rough_depth=0.6, jitter=0.9, breath=0.5, amp=[(0, 0), (0.08, 1), (0.6, 0.8), (1, 0)])
-    place(out, drive(g, 2) * 0.75, 0)
-    place(out, grains(3.0, rng, 55, (90, 2400), (0.02, 0.1), rate_curve=([0, 0.3, 1], [0.3, 1.0, 0.05])), 0.8, 0.55)
-    for i, at in enumerate([0.9, 1.4, 1.9, 2.5]):
-        place(out, thump(0.6, 80, 32, 0.18, rng, 0.2, 400), at, 0.8 - i * 0.12)
-        place(out, stone_knock(rng.uniform(120, 260), 0.1, rng, 0.6), at, 0.35)
-    gr = lowpass(pink(int(2.0 * SR), rng), 500, 2) * shaped(int(2.0 * SR), [(0, 0), (0.2, 1), (1, 0)])
-    place(out, gr, 0.8, 0.35)
-    return out
+    thumps = [(thump(0.6, 80, 32, 0.18, rng, 0.2, 400), at, 0.8 - i * 0.15) for i, at in enumerate([1.6, 2.2, 2.9])]
+    knocks = [(stone_knock(rng.uniform(120, 260), 0.1, rng, 0.6), at, 0.3) for at in [1.6, 2.2, 2.9]]
+    st = -12.0 if v == 0 else -10.0
+    return track((cut(GORILLA, 0.2, 0.9 if v == 0 else 0.8, st, 0.3), 0.0, 1.0), *thumps, *knocks)
 
 
-# ---------------------------------------------------------------- Ironhorn (rhino, iron)
+# --- Ironhorn (rhino, iron): real rhinoceros calls and snorts, pitched down; iron clanks ---
 
 def iron_idle(rng, v):
-    # A heavy snort and huff with a deep grunt, a faint ring of plates shifting.
-    d = 1.5
-    n = int(d * SR)
-    out = np.zeros(n)
-    for at, ln in [(0.0, 0.38), (0.55, 0.3)]:
-        m = int(ln * SR)
-        breath = bandpass(white(m, rng), 300, 2400, 2) * shaped(m, [(0, 0), (0.12, 1), (0.6, 0.5), (1, 0)])
-        breath = sweep_filter(breath * 2, curve(m, [(0, 900), (0.4, 1800), (1, 700)]), 1.5, "band")
-        place(out, breath, at, 0.8)
-    g = growl(0.9, [(0, 70 + 4 * v), (0.4, 85), (1, 60)], rng, vowels=(UH, OH), rough=20, rough_depth=0.5, breath=0.3, amp=[(0, 0), (0.2, 1), (1, 0)])
-    place(out, drive(g, 1.8) * 0.6, 0.25)
-    place(out, iron_ring(520 * rng.uniform(0.95, 1.05), 0.25, rng, 0.8), 0.7, 0.12)
-    return out
+    if v == 0:
+        return track((cut(HORSE, 0.5, 0.9, -5.0), 0.0, 1.0), (cut(RHINO, 1.2, 1.9, -3.0), 0.8, 1.0), (iron_clank(520, 0.25, rng, 0.6), 1.6, 0.1))
+    if v == 1:
+        return track((cut(RHINO, 0.1, 0.7, -4.0), 0.0, 1.0))
+    if v == 2:
+        return track((cut(HORSE, 2.0, 2.4, -5.0), 0.0, 1.0), (cut(RHINO, 2.1, 2.6, -4.0), 0.7, 0.9))
+    return track((seq(RHINO, [(2.8, 3.1), (3.7, 3.9)], -3.0, 0.0, 0.2), 0.0, 1.0))
 
 
 def iron_roar(rng, v):
-    # A bellowing, brassy roar (rough, low, with harmonic bite) over a ringing of iron plates and clanks.
-    d = 2.4
-    n = int(d * SR)
-    f0 = [(0, 75), (0.12, 110), (0.35, 135 + 8 * v), (0.7, 110), (1, 60)]
-    r = growl(d, f0, rng, vowels=(AH, UH), rough=15, rough_depth=0.55, jitter=0.7, breath=0.3, saw="saw", amp=[(0, 0), (0.08, 1), (0.6, 1), (1, 0)])
-    r = drive(r, 3.0) * 0.7
-    out = np.zeros(n)
-    place(out, r, 0)
-    for i in range(7):
-        place(out, iron_ring(rng.uniform(380, 900), rng.uniform(0.15, 0.4), rng, 1.0), 0.15 + i * 0.25 + rng.uniform(0, 0.08), 0.16)
-    # the horn shrieking on the plates
-    place(out, sweep_filter(white(int(0.9 * SR), rng) * 1.0, curve(int(0.9 * SR), [(0, 1800), (1, 2600)]), 8.0, "band") * shaped(int(0.9 * SR), [(0, 0), (0.3, 1), (1, 0)]) * 0.25, 0.4)
-    return out
+    if v == 0:
+        return track((cut(RHINO, 7.9, 9.0, -6.0, 0.3), 0.0, 1.0), (iron_clank(520, 0.3, rng, 0.9), 0.1, 0.12))
+    if v == 1:
+        return track((cut(RHINO, 4.2, 5.0, -6.0, 0.3), 0.0, 1.0), (iron_clank(640, 0.3, rng, 0.9), 0.2, 0.12))
+    return track((seq(RHINO, [(1.2, 1.9), (2.1, 2.6)], -5.0, 0.3, 0.12), 0.0, 1.0), (iron_clank(430, 0.3, rng, 0.9), 0.4, 0.1))
 
 
 def iron_step(rng, v):
-    # A heavy trot: a deep thump and a clank of plates settling (ringing metal, quick to die).
-    d = 0.6
-    n = int(d * SR)
-    out = np.zeros(n)
-    place(out, thump(0.4, 100 + 8 * v, 45, 0.09, rng, 0.3, 700), 0, 0.95)
-    place(out, iron_ring(rng.choice([430, 560, 690]) * rng.uniform(0.95, 1.05), 0.09, rng, 0.45), 0.012, 0.28)
-    place(out, highpass(white(int(0.1 * SR), rng), 2500, 1) * exp_env(int(0.1 * SR), 0.001, 0.015), 0.02, 0.15)
-    return out
+    # a heavy trot: a deep thump and a short clank of plates
+    return track((thump(0.4, 100 + 8 * v, 45, 0.09, rng, 0.3, 700), 0.0, 0.95), (iron_clank([430, 560, 690][v], 0.09, rng, 0.45), 0.012, 0.25), tail=0.05)
 
 
 def iron_attack(rng, v):
-    # The charge: a snort, thundering steps and the horn striking with a loud clang.
-    d = 1.2
-    n = int(d * SR)
-    out = np.zeros(n)
-    sn = bandpass(white(int(0.35 * SR), rng), 250, 2500, 2) * shaped(int(0.35 * SR), [(0, 0), (0.15, 1), (1, 0)])
-    place(out, sn, 0, 0.7)
-    for i, at in enumerate([0.1, 0.27, 0.43]):
-        place(out, thump(0.3, 95, 42, 0.07, rng, 0.3, 700), at, 0.75)
-        place(out, iron_ring(rng.uniform(400, 600), 0.06, rng, 0.3), at, 0.2)
-    place(out, iron_ring(rng.choice([700, 820, 940]), 0.55, rng, 1.2), 0.5, 0.65)
-    place(out, thump(0.4, 110, 45, 0.1, rng, 0.8, 1200), 0.5, 0.8)
-    g = growl(0.5, [(0, 90), (0.4, 130), (1, 85)], rng, vowels=(AH, UH), rough=18, rough_depth=0.5, saw="saw", amp=[(0, 0), (0.15, 1), (1, 0)])
-    place(out, drive(g, 2.5) * 0.55, 0.28)
-    return out
+    if v == 0:
+        return track((cut(HORSE, 0.5, 0.9, -5.0), 0.0, 1.0), (thump(0.4, 110, 45, 0.1, rng, 0.8, 1200), 0.5, 0.8), (iron_clank(820, 0.55, rng, 1.2), 0.5, 0.35))
+    if v == 1:
+        return track((cut(RHINO, 0.1, 0.7, -4.0), 0.0, 1.0), (thump(0.4, 110, 45, 0.1, rng, 0.8, 1200), 0.7, 0.8), (iron_clank(700, 0.5, rng, 1.2), 0.7, 0.35))
+    return track((cut(HORSE, 2.0, 2.4, -5.0), 0.0, 0.9), (cut(RHINO, 3.7, 3.9, -4.0), 0.4, 1.0), (thump(0.4, 110, 45, 0.1, rng, 0.8, 1200), 0.55, 0.8), (iron_clank(940, 0.5, rng, 1.2), 0.55, 0.35))
 
 
 def iron_hit(rng, v):
-    # A clang: iron struck, ringing out, with a short bellow of pain.
-    d = 0.9
-    n = int(d * SR)
-    out = np.zeros(n)
-    place(out, iron_ring(rng.choice([500, 640, 780]) * rng.uniform(0.95, 1.05), 0.35, rng, 0.85), 0, 0.8)
-    place(out, thump(0.2, 150, 60, 0.05, rng, 0.9, 2000), 0, 0.6)
-    g = growl(0.45, [(0, 110), (0.2, 150 + 8 * v), (1, 90)], rng, vowels=(AH, UH), rough=20, rough_depth=0.5, saw="saw", amp=[(0, 0), (0.06, 1), (1, 0)])
-    place(out, drive(g, 2.5) * 0.6, 0.02)
-    return out
+    src = [(7.9, 8.5, -5.0), (2.8, 3.1, -4.0), (4.2, 4.7, -5.0)][v]
+    return track((cut(RHINO, src[0], src[1], src[2], 0.2), 0.0, 1.0), (iron_clank([500, 640, 780][v], 0.35, rng, 0.85), 0.0, 0.3), (thump(0.2, 150, 60, 0.05, rng, 0.9, 2000), 0.0, 0.4))
 
 
 def iron_death(rng, v):
-    # A long falling bellow, then the plates clatter to the ground one after another, ringing and settling.
-    d = 3.6
-    n = int(d * SR)
-    out = np.zeros(n)
-    g = growl(1.8, [(0, 120), (0.3, 125), (1, 42)], rng, vowels=(AH, OO), rough=16, rough_depth=0.55, jitter=0.8, saw="saw", breath=0.3, amp=[(0, 0), (0.06, 1), (0.6, 0.8), (1, 0)])
-    place(out, drive(g, 2.4) * 0.7, 0)
-    at = 0.7
-    gap = 0.3
-    for i in range(14):
-        place(out, iron_ring(rng.uniform(300, 1100), rng.uniform(0.1, 0.45), rng, 1.0), at, 0.5 * (1 - i / 18))
-        place(out, thump(0.25, 90, 45, 0.06, rng, 0.5, 1500), at, 0.4 * (1 - i / 18))
-        gap *= 0.86
-        at += gap * rng.uniform(0.7, 1.3)
-    place(out, thump(0.7, 80, 30, 0.2, rng, 0.2, 400), 1.9, 0.9)
-    place(out, iron_ring(210, 0.9, rng, 1.5), 1.9, 0.4)
-    return out
+    clanks = []
+    at, gap = 0.9, 0.3
+    for i in range(5):
+        clanks.append((iron_clank(rng.uniform(300, 1100), rng.uniform(0.1, 0.4), rng, 0.9), at, 0.4 * (1 - i / 7)))
+        clanks.append((thump(0.25, 90, 45, 0.06, rng, 0.5, 1500), at, 0.35 * (1 - i / 7)))
+        gap *= 0.84
+        at += gap * rng.uniform(0.8, 1.3)
+    voice = cut(RHINO, 7.9, 9.0, -9.0, 0.3) if v == 0 else seq(RHINO, [(1.2, 1.9), (2.1, 2.6)], -8.0, 0.3, 0.12)
+    return track((voice, 0.0, 1.0), *clanks)
 
 
 # ---------------------------------------------------------------- the set
 
-# name -> {event: (function, variants)}; the level is how loud the clip is before the game's per-event volume.
+# name -> {event: (function, variants)}
 SOUNDS = {
-    "Spirestalker": {"idle": (spire_idle, 2), "roar": (spire_roar, 2), "step": (spire_step, 3), "attack": (spire_attack, 2), "hit": (spire_hit, 2), "death": (spire_death, 1)},
-    "Cindermane": {"idle": (cinder_idle, 2), "roar": (cinder_roar, 2), "step": (cinder_step, 3), "attack": (cinder_attack, 2), "hit": (cinder_hit, 2), "death": (cinder_death, 1)},
-    "Boulderback": {"idle": (boulder_idle, 2), "roar": (boulder_roar, 2), "step": (boulder_step, 3), "attack": (boulder_attack, 2), "hit": (boulder_hit, 2), "death": (boulder_death, 1)},
-    "Ironhorn": {"idle": (iron_idle, 2), "roar": (iron_roar, 2), "step": (iron_step, 3), "attack": (iron_attack, 2), "hit": (iron_hit, 2), "death": (iron_death, 1)},
+    "Spirestalker": {"idle": (spire_idle, 4), "roar": (spire_roar, 3), "step": (spire_step, 3), "attack": (spire_attack, 2), "hit": (spire_hit, 3), "death": (spire_death, 2)},
+    "Cindermane": {"idle": (cinder_idle, 4), "roar": (cinder_roar, 4), "step": (cinder_step, 3), "attack": (cinder_attack, 3), "hit": (cinder_hit, 3), "death": (cinder_death, 2)},
+    "Boulderback": {"idle": (boulder_idle, 4), "roar": (boulder_roar, 4), "step": (boulder_step, 3), "attack": (boulder_attack, 3), "hit": (boulder_hit, 3), "death": (boulder_death, 2)},
+    "Ironhorn": {"idle": (iron_idle, 4), "roar": (iron_roar, 3), "step": (iron_step, 3), "attack": (iron_attack, 3), "hit": (iron_hit, 3), "death": (iron_death, 2)},
 }
+
+# the active RMS each event is levelled to (the level of the earlier sound set); steps are short, so only the peak counts
+TARGET_RMS = {"idle": 0.18, "roar": 0.18, "attack": 0.15, "hit": 0.17, "death": 0.15, "step": 0.20}
+PEAK = 0.89
+
+
+def level(x, event):
+    """Highpass, fade and level to the event's RMS over the active part (frames within 20 dB of the loudest)."""
+    x = highpass(x, 30.0, 2)
+    h = int(0.02 * SR)
+    n = len(x) // h
+    rms = np.sqrt(np.mean(x[: n * h].reshape(n, h) ** 2, axis=1)) + 1e-12
+    act = rms > rms.max() * 0.1
+    cur = np.sqrt(np.mean(rms[act] ** 2))
+    g = TARGET_RMS[event] / cur
+    g = min(g, (PEAK if event != "step" else 0.85) / (np.max(np.abs(x)) + 1e-9))
+    return fade(x * g, 0.002, 0.04)
 
 
 def write_wav(path, x):
@@ -674,7 +469,6 @@ def spectrogram_png(path, x, title):
     db = np.clip((db - (db.max() - 80)) / 80.0, 0, 1)
     w, h = 720, 256
     img = np.array(Image.fromarray((db[::-1] * 255).astype(np.uint8)).resize((w, h), Image.BILINEAR))
-    # a simple heat colour map
     r = np.clip(img * 2.0, 0, 255)
     g = np.clip((img.astype(float) - 90) * 2.0, 0, 255)
     b = np.clip(np.where(img < 128, img * 1.6 + 40, 255 - (img - 128) * 2), 0, 255)
@@ -695,9 +489,8 @@ def spectrogram_png(path, x, title):
 
 
 def main():
-    here = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--out", default=os.path.join(here, "..", "CastleStoryPlus", "Assets", "Sounds", "Guardians"))
+    parser.add_argument("--out", default=os.path.join(HERE, "..", "CastleStoryPlus", "Assets", "Sounds", "Guardians"))
     parser.add_argument("--preview", default="", help="folder for a spectrogram + waveform PNG per clip")
     parser.add_argument("--only", default="", help="only this guardian")
     args = parser.parse_args()
@@ -712,9 +505,9 @@ def main():
             for v in range(variants):
                 seed = (sum(ord(c) for c in name) * 131 + sum(ord(c) for c in event) * 17 + v * 7919) & 0x7FFFFFFF
                 rng = np.random.default_rng(seed)
-                x = fn(rng, v)
-                x = room(x, rng, 0.3, 0.1 if event == "step" else 0.16)
-                x = finish(x, 0.89 if event != "step" else 0.85)
+                x = level(fn(rng, v), event)
+                if not 0.15 < len(x) / SR < 6.0:
+                    raise ValueError("%s_%s_%d is %.2f s (must be 0.15 - 6 s)" % (name, event, v + 1, len(x) / SR))
                 base = "%s_%s_%d" % (name, event, v + 1)
                 write_wav(os.path.join(args.out, base + ".wav"), x)
                 if args.preview:
