@@ -20,13 +20,12 @@ internal enum GuardianSound
 }
 
 // The guardians' sounds (Features.GuardianSounds): a call now and then, a roar when it spots players' units or is
-// provoked, footsteps that fit its size and gait, an attack, a hit and a death sound, each guardian with its own
-// material in them (crystal chimes, crackling embers, grinding stone, clanking iron).
+// provoked, footsteps that fit its size and gait, an attack, a hit and a death sound.
 //
-// The sounds are made for the mod by tools/make_guardian_sounds.py (synthesised, no recordings and nothing from the
-// game) and read from Assets/Sounds/Guardians/<Guardian>_<event>_<n>.wav. The set is swappable: replace the files, or
-// add more numbered ones, and the game picks one at random per event. The table below (Settings) is the one place that
-// says how each event is played: how loud, how far it carries and how important it is when the voices run out.
+// The mod ships no sounds for now (sound design for the guardians is wanted, see docs/Guardians.md): the clips are read
+// from Assets/Sounds/Guardians/<Guardian>_<event>_<n>.wav when that folder holds any, and the game picks one at random
+// per event; without them the guardians are silent. The table below (Settings) is the one place that says how each
+// event is played: how loud, how far it carries and how important it is when the voices run out.
 // They are played as 3D sounds at the guardian (quieter with distance) through ModAudio, which also follows the game's
 // mute and volume settings. The clips load once per guardian, the first time it makes a sound.
 [Feature(Features.GuardianSounds, Features.GuardianSoundsInfo)]
@@ -195,7 +194,7 @@ internal static class GuardianSounds
 		if (!Directory.Exists(Folder) && !_folderLogged)
 		{
 			_folderLogged = true;
-			Plugin.Log.LogWarning("Guardian sounds: the folder " + Folder + " is missing, the guardians stay silent");
+			Plugin.Log.LogInfo("Guardian sounds: no sound files in " + Folder + ", the guardians stay silent");
 		}
 		for (int i = 0; i < kind.Length; i++)
 		{

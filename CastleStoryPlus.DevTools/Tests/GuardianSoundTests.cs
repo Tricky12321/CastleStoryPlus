@@ -34,6 +34,14 @@ internal static class GuardianSoundTests
 		{
 			t.Skip("GuardianSounds or Treasure is off");
 		}
+		// The mod ships no guardian sounds for now: these tests run once WAV files are put in the folder.
+		foreach (BeastInfo info in BeastKinds.All)
+		{
+			if (GuardianSounds.Clips(info, GuardianSound.Roar).Length == 0)
+			{
+				t.Skip("No guardian sound files in " + GuardianSounds.Folder);
+			}
+		}
 	}
 
 	private static int Count(BeastKind kind, GuardianSound sound)
@@ -64,6 +72,20 @@ internal static class GuardianSoundTests
 		SoundEngine.mute = false;
 		SoundEngine.volumeMaster = 100f;
 		SoundEngine.volumeSFX = 100f;
+	}
+
+	// A short tone for the tests that need any clip (the mod ships no guardian sounds).
+	private static AudioClip Tone()
+	{
+		const int Rate = 32000;
+		float[] data = new float[Rate / 4];
+		for (int i = 0; i < data.Length; i++)
+		{
+			data[i] = 0.3f * Mathf.Sin(2f * Mathf.PI * 440f * i / Rate);
+		}
+		AudioClip clip = AudioClip.Create("TestTone", data.Length, 1, Rate, false);
+		clip.SetData(data, 0);
+		return clip;
 	}
 
 	private static int Listeners()
@@ -390,12 +412,13 @@ internal static class GuardianSoundTests
 	private static IEnumerator UiSoundAndOwners(TestContext t)
 	{
 		Isolate(t);
-		AudioClip clip = GuardianSounds.Clips(Info(BeastKind.Ironhorn), GuardianSound.Hit)[0];
+		AudioClip clip = Tone();
+		t.Cleanup(() => UnityEngine.Object.Destroy(clip));
 		float uiBefore = SoundEngine.volumeUI;
 		t.Cleanup(() => SoundEngine.volumeUI = uiBefore);
 		SoundEngine.volumeUI = 100f;
 		// A 3D sound first, so the voice that PlayUi gets was left at spatialBlend 1.
-		GuardianSounds.Play(Info(BeastKind.Ironhorn), GuardianSound.Hit, new Vector3(1000f, 50f, 1000f));
+		ModAudio.Play(clip, new Vector3(1000f, 50f, 1000f), ModAudio.Channel.Sfx, 1f, 1f, 10f, 60f, 0);
 		ModAudio.StopAll();
 		t.True(ModAudio.PlayUi(clip, 0.8f), "PlayUi did not play");
 		AudioSource source = Busy();
