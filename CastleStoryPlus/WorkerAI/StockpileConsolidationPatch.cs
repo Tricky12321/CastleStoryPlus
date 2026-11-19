@@ -12,6 +12,11 @@ namespace CastleStoryPlus.WorkerAI;
 [HarmonyPatch(typeof(IdleProject), nameof(IdleProject._GetInstruction))]
 internal static class StockpileConsolidationPatch
 {
+	private static void Enable()
+	{
+		StockpileConsolidation.BindConfig();
+	}
+
 	private static bool Prefix(IdleProject __instance, Labor labor, Var<OrderPackage<Labor>> result, bool __runOriginal)
 	{
 		// Another idle chore (auto cleanup) has already given an order.

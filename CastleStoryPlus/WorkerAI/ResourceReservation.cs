@@ -174,6 +174,26 @@ internal static class ResourceReservation
 		return false;
 	}
 
+	// Items (of any kind) other workers are on their way to take out of the storage; workers skip says yes to are left
+	// out (stockpile consolidation counts its own workers' loads itself).
+	public static int ReservedAt(GameObject source, Labor except, System.Predicate<Labor> skip)
+	{
+		if (source == null || !BySource.TryGetValue(source, out List<Reservation> list))
+		{
+			return 0;
+		}
+		Prune(list);
+		int amount = 0;
+		foreach (Reservation reservation in list)
+		{
+			if (reservation.Labor != except && (skip == null || !skip(reservation.Labor)))
+			{
+				amount += reservation.Amount;
+			}
+		}
+		return amount;
+	}
+
 	public static bool IsReservedByOther(GameObject item, Labor labor)
 	{
 		if (item == null || !BySource.TryGetValue(item, out List<Reservation> list))
