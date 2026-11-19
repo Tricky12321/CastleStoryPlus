@@ -182,6 +182,13 @@ internal abstract class CsStationWindow : MonoBehaviour
 					}
 				});
 				RoundButton(button, UiTheme.SlotRadius);
+				// Without a width of their own the buttons shrank to nothing and the names ran over each other.
+				LayoutElement cell = button.GetComponent<LayoutElement>();
+				cell.minWidth = 58f;
+				cell.preferredWidth = 64f;
+				cell.flexibleWidth = 1f;
+				cell.minHeight = 26f;
+				cell.preferredHeight = 26f;
 				_priority[i] = button;
 			}
 		}
