@@ -1,19 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.Reflection;
+using Brix.Engine;
+using Brix.External.Factories;
+using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.AI.KnowledgeSpace;
 using Brix.Game.AI.Nodes;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
-using Brix.Engine;
-using Brix.Game;
-using Brix.External.Factories;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Economy;
-using Smooth.Slinq;
 using HarmonyLib;
 using Motus.Behavior;
+using Smooth.Slinq;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 namespace CastleStoryPlus.WorkerAI;
@@ -126,6 +126,13 @@ internal static class TaskFlow
 		return Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.Customised(labor.faction) && ResourcePriority.Applies(dig) && ResourcePriority.Get(labor.faction, dig) == ResourcePriority.Never;
 	}
 
+	// A piece a quarry gives: stone, crystals, ore, coal.
+	private static bool IsDigYield(IDescriptor item)
+	{
+		Description d = item.Description;
+		return d.Value<Stones>() + d.Value<BlueCrystal>() + d.Value<OrangeCrystal>() + d.Value<RawIron>() + d.Value<Clay>() > 0;
+	}
+
 	// How many pieces in the bag are not what a digger takes up (stone, crystals, ore, coal): glass from a furnace, planks...
 	internal static int ForeignCarried(Labor labor)
 	{
@@ -133,22 +140,29 @@ internal static class TaskFlow
 		{
 			return 0;
 		}
-		Description content = labor.recepteur.ContentDescription;
 		int total = 0;
-		foreach (Ressource resource in content.GetRessources().ToList())
+		int dug = 0;
+		foreach (IDescriptor item in labor.recepteur.StoredItems)
 		{
-			total += resource.quantifiable.valeur;
+			if (item == null)
+			{
+				continue;
+			}
+			total++;
+			if (IsDigYield(item))
+			{
+				dug++;
+			}
 		}
-		int dug = content.Value<Stones>() + content.Value<BlueCrystal>() + content.Value<OrangeCrystal>() + content.Value<RawIron>() + content.Value<Clay>();
 		return RecoveryRules.ForeignCount(total, dug);
 	}
 
-	// Something the bag carries that a storage takes.
-	internal static bool CanStoreForeign(Labor labor)
+	// A foreign piece in the bag that a storage takes.
+	private static bool CanStoreForeign(Labor labor)
 	{
 		foreach (IDescriptor item in labor.recepteur.StoredItems)
 		{
-			if (item != null && item.GameObject != null && labor.BestRecepteurToStore(item.GameObject) != null)
+			if (item != null && item.GameObject != null && !IsDigYield(item) && labor.BestRecepteurToStore(item.GameObject) != null)
 			{
 				return true;
 			}
@@ -156,17 +170,32 @@ internal static class TaskFlow
 		return false;
 	}
 
+	private static StaticNode DropBag(Labor labor)
+	{
+		return (StaticNode)Node.Sequence.Do((Labor l) =>
+		{
+			l.recepteur.DropAll();
+		}, labor);
+	}
+
 	// Starts a dig task: what the bag holds that is not a digger's load is put into a storage first. The worker took
 	// the glass from a furnace, joined a quarry with it in its hands and dug a few blocks before it went to store it,
-	// and the dig's count of what still fits did not see the glass in the bag (issues #129 and #124).
+	// and the dig's count of what still fits did not see the glass in the bag (issues #129 and #124). When no storage
+	// takes the foreign piece the bag is put down where the worker stands (the clean-up picks it up again), so the dig
+	// is never held up by it.
 	internal static Node StoreForeignFirst(Labor labor, Goal goal)
 	{
-		if (ForeignCarried(labor) == 0 || !CanStoreForeign(labor))
+		if (ForeignCarried(labor) == 0)
 		{
 			return Node.Empty;
 		}
+		if (!CanStoreForeign(labor))
+		{
+			Plugin.Log.LogInfo("TaskFlow: " + labor.name + " carries " + labor.recepteur.ContentString() + " and no storage takes it: put down before it digs");
+			return DropBag(labor);
+		}
 		Plugin.Log.LogInfo("TaskFlow: " + labor.name + " carries " + labor.recepteur.ContentString() + ": stores it before it digs");
-		return labor.GoStoreInBestStorage();
+		return (StaticNode)Node.Catcher.Do(labor.GoStoreInBestStorage()).Catch((Exceptions.CouldNotFindStorageForInventory e, Labor l) => DropBag(l), labor);
 	}
 
 	private static bool NoDigFits(Labor labor, DigGoal finished)
@@ -343,25 +372,5 @@ internal static class TaskFlowStoreForeignFirstPatch
 			.Do((Func<Labor, Goal, Node>)TaskFlow.StoreForeignFirst, Worker, __instance)
 			.Label("Store carried things first")
 			.Do((StaticNode)__result);
-	}
-}
-
-// A worker carrying something a storage does not take does not join a quarry: with it in its hands it could not
-// put the digs' stone into the bag.
-[Feature(Features.TaskFlow, Features.TaskFlowInfo)]
-[HarmonyPatch(typeof(DigGoal), nameof(DigGoal.IsMatchFor))]
-internal static class TaskFlowForeignBagPatch
-{
-	private static void Postfix(Labor labor, AIErrorsStore errorDestination, ref bool __result)
-	{
-		if (!__result || labor == null || labor.recepteur == null || labor.recepteur.IsEmpty() || TaskFlow.ForeignCarried(labor) == 0)
-		{
-			return;
-		}
-		if (!TaskFlow.CanStoreForeign(labor))
-		{
-			__result = false;
-			errorDestination?.AddDecisionError(SharedWorkException<Exceptions.BagTooFullToDig>.Get.Problem, labor);
-		}
 	}
 }

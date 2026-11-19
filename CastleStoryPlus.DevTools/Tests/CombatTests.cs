@@ -37,6 +37,30 @@ internal static class CombatTests
 		t.False(Scenario.Alive(corruptron), "The corruptron still lives");
 	}
 
+	[GameTest("Combat", "A knight that kills two corruptrons one after another keeps its project and is left alone by the reset of all bricktrons and the failed-task recovery (#121)", TimeoutSeconds = 300f)]
+	private static IEnumerator KnightKeepsItsTaskThroughRecovery(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 10, 6);
+		Labor knight = Scenario.Bricktron(t, Occupation.Type.Knight, new XYZ(site.x - 2, site.y, site.z));
+		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 2, site.y, site.z + 2));
+		yield return t.Frames(5);
+		t.False(CastleStoryPlus.WorkerAI.BricktronRecovery.Eligible(knight), "A knight counts as a worker of the recovery");
+		t.True(CastleStoryPlus.WorkerAI.BricktronRecovery.Eligible(builder), "A builder does not count as a worker of the recovery");
+		Project project = knight.Project;
+		AutonomyStatus autonomy = knight.Autonomy;
+		for (int i = 0; i < 2; i++)
+		{
+			XYZ at = XYZ.FromVector3(knight.transform.position);
+			Labor corruptron = Scenario.Corruptron(t, new XYZ(at.x + 4, at.y, at.z));
+			yield return t.UntilGame(() => !Scenario.Alive(corruptron) || !Scenario.Alive(knight), 100f, "the knight to kill corruptron " + (i + 1));
+			t.True(Scenario.Alive(knight), "The knight died");
+			t.False(Scenario.Alive(corruptron), "Corruptron " + (i + 1) + " still lives");
+			CastleStoryPlus.WorkerAI.BricktronRecovery.ResetTeam(Scenario.Player);
+			t.True(knight.Project == project, "The knight's project changed after kill " + (i + 1));
+			t.True(knight.Autonomy == autonomy, "The knight's autonomy changed after kill " + (i + 1) + " to " + knight.Autonomy.Description);
+		}
+	}
+
 	[GameTest("Combat", "An archer 9 voxels from a corruptron shoots it", TimeoutSeconds = 180f)]
 	private static IEnumerator ArcherShootsCorruptron(TestContext t)
 	{

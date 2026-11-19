@@ -1,9 +1,13 @@
 using System.Collections.Generic;
+using Brix.Components;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
+using Brix.Game.Semantique;
+using Brix.External.Factories;
 using Brix.Lifecycle.Pooling;
 using Brix.Network;
+using CastleStoryPlus.Army;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Upgrades;
 using HarmonyLib;
@@ -20,11 +24,13 @@ namespace CastleStoryPlus.WorkerAI;
 //   214) and the host resets the sender's own team only.
 // - A loop of failed tasks: a worker whose tasks fail again and again (a block no one can get to, a build that has run
 //   out of planks, an item that fell off the map) lets go of what it holds, and when the loop comes back within two
-//   minutes it is also taken off the task it was put on and goes free (the game's "the worker can do nothing here" only
-//   ever skipped the task for a moment, and a locked worker tried it again for ever).
-// - A task whose target is gone: a log that rolled off the map (below the world, or destroyed) leaves a worker walking
-//   to it or standing at nothing; its task is ended.
-// Host only; the player's workers, fighters are left alone.
+//   minutes it waits longer before it looks again. A worker locked to a task goes free (it stays a member of the task, so
+//   it comes back when the task has work again, as a worker helping other tasks always did): the game only skipped the
+//   failed task for a moment, and a locked worker tried it again for ever. A locked worker that stands without any task
+//   (the failure came before a task was made, so nothing is counted) is freed by the reset button.
+// - A task whose target is gone: a log that rolled off the map (below the world) is taken out of the game, a destroyed
+//   target ends the task, so the worker does not walk to it for ever.
+// Host only; the player's workers (builders and the like), never soldiers or members of a raid.
 [Feature(Features.StuckReset, Features.StuckResetInfo)]
 internal sealed class BricktronRecovery : MonoBehaviour
 {
@@ -32,11 +38,25 @@ internal sealed class BricktronRecovery : MonoBehaviour
 
 	private const float CheckSeconds = 1f;
 
+	private const float VoidSeconds = 3f;
+
 	private sealed class ResetNetMessage : MessageBase
 	{
 	}
 
-	private static readonly Dictionary<Labor, List<float>> Failures = new Dictionary<Labor, List<float>>();
+	// The failed tasks in a row of one worker on one task area or goal.
+	private sealed class Run
+	{
+		public object Key;
+
+		public readonly List<float> Times = new List<float>();
+	}
+
+	private static readonly Dictionary<Labor, Run> Failures = new Dictionary<Labor, Run>();
+
+
+	// A worker whose task target looked destroyed at the last check (it must look so twice).
+	private static readonly Dictionary<Labor, Task> GoneSeen = new Dictionary<Labor, Task>();
 
 	private static readonly Dictionary<Labor, float> LastLoop = new Dictionary<Labor, float>();
 
@@ -56,6 +76,7 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		{
 			Failures.Clear();
 			LastLoop.Clear();
+			GoneSeen.Clear();
 			Loops.Clear();
 			LastReset.Clear();
 		});
@@ -93,7 +114,7 @@ internal sealed class BricktronRecovery : MonoBehaviour
 			return "Not connected to a host.";
 		}
 		client.Send(ResetMessage, new ResetNetMessage());
-		return "Asked the host to reset your bricktrons.";
+		return "Asked the host to reset your bricktrons (the host needs the StuckReset feature on).";
 	}
 
 	// Host: a client's button. Only the sender's own team is reset.
@@ -119,13 +140,13 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		List<Labor> labors = new List<Labor>();
 		Live<Labor>.Active(labors);
 		int count = 0;
-		UnreachableTasks.ForgetAll();
 		foreach (Labor labor in labors)
 		{
 			if (labor == null || labor.faction != team)
 			{
 				continue;
 			}
+			Forget(labor);
 			try
 			{
 				if (Unstick(labor))
@@ -142,27 +163,45 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		return count;
 	}
 
+	private static void Forget(Labor labor)
+	{
+		Failures.Remove(labor);
+		LastLoop.Remove(labor);
+		GoneSeen.Remove(labor);
+	}
+
+	// A worker of the player's: not a soldier (their tasks fail when the enemy dies or runs off, and they belong to a raid
+	// task), not a member of a raid.
+	internal static bool Eligible(Labor labor)
+	{
+		if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI || labor.Project is RaidProject2)
+		{
+			return false;
+		}
+		Profession profession = (labor.Occupation != null) ? labor.Occupation.GetProfession() : null;
+		return profession != null && profession.IsWorker();
+	}
+
 	private static bool Unstick(Labor labor)
 	{
-		if (labor.IsNullOrReleased() || labor.IsPhasedOut || labor.Activity == Activity.Fighting)
+		if (!Eligible(labor) || labor.IsPhasedOut || labor.Activity == Activity.Fighting)
 		{
 			return false;
 		}
 		LetGo(labor);
-		if (labor.Autonomy == AutonomyStatus.LockedToOperable)
-		{
-			// Put on a task with nothing to do for it: free to help elsewhere, still a member of the task.
-			Project project = labor.Project;
-			if (labor.Operable == null && project != null && !(project is IdleProject) && !(project is RaidProject2) && !project.HasWorkFor(labor))
-			{
-				labor.Autonomy = AutonomyStatus.FreeAgent;
-			}
-		}
-		else if (labor.Autonomy != AutonomyStatus.HoldingPosition)
-		{
-			labor.Autonomy = AutonomyStatus.FreeAgent;
-		}
+		Free(labor);
 		return true;
+	}
+
+	// A locked worker goes free but stays a member of its task (the task's work brings it back, as with the game's
+	// helping of other tasks); a worker holding its position keeps to it.
+	private static void Free(Labor labor)
+	{
+		if (labor.Autonomy == AutonomyStatus.HoldingPosition || labor.Operable != null)
+		{
+			return;
+		}
+		labor.Autonomy = AutonomyStatus.FreeAgent;
 	}
 
 	// The worker's task, queued task, reservations and wait for an order are let go; it looks for work afresh.
@@ -182,6 +221,9 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		TaskReservation.Release(labor);
 		ResourceReservation.Release(labor);
 		AutoCleanup.Release(labor);
+		AutoRepair.Release(labor);
+		StockpileConsolidation.Release(labor);
+		KitReservation.Release(labor);
 		HoldAfterOrder.Release(labor);
 		if (labor.CurrentTask != null && labor.Operable == null)
 		{
@@ -194,7 +236,7 @@ internal sealed class BricktronRecovery : MonoBehaviour
 
 	internal static void TaskEnded(Labor labor, Task task)
 	{
-		if (!NetworkServer.active || labor == null || task == null || labor.faction == null || labor.faction.isAI)
+		if (!NetworkServer.active || labor == null || task == null || !Eligible(labor))
 		{
 			return;
 		}
@@ -203,18 +245,41 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		{
 			return;
 		}
-		if (!Failures.TryGetValue(labor, out List<float> failures))
+		// The failures count for one task area or goal: a worker that fails on different tasks is only unlucky.
+		object key = KeyOf(task);
+		if (!Failures.TryGetValue(labor, out Run run))
 		{
-			failures = new List<float>();
-			Failures[labor] = failures;
+			run = new Run();
+			Failures[labor] = run;
 		}
-		if (!RecoveryRules.RecordOutcome(failures, Time.time, IsFailure(task.result)))
+		if (run.Key != key)
+		{
+			run.Key = key;
+			run.Times.Clear();
+		}
+		if (!RecoveryRules.RecordOutcome(run.Times, Time.time, IsFailure(task.result)))
 		{
 			return;
 		}
 		bool hard = LastLoop.TryGetValue(labor, out float last) && RecoveryRules.Escalates(last, Time.time);
 		LastLoop[labor] = Time.time;
 		Loops.Add(new KeyValuePair<Labor, bool>(labor, hard));
+	}
+
+	private static object KeyOf(Task task)
+	{
+		GameObject giver = (task.Giver != null) ? task.Giver : task.Target;
+		if (giver == null)
+		{
+			return null;
+		}
+		Project project = giver.GetComponent<Project>();
+		if (project == null)
+		{
+			Goal goal = giver.GetComponent<Goal>();
+			project = (goal != null) ? goal.project : null;
+		}
+		return (object)project ?? giver;
 	}
 
 	private static bool IsFailure(TaskResult result)
@@ -224,22 +289,21 @@ internal sealed class BricktronRecovery : MonoBehaviour
 
 	private static void HandleLoop(Labor labor, bool hard)
 	{
-		if (labor.IsNullOrReleased() || labor.Activity == Activity.Fighting)
+		if (!Eligible(labor) || labor.Activity == Activity.Fighting)
 		{
 			return;
 		}
 		string where = (labor.CurrentTask != null) ? labor.CurrentTask.Description : "no task";
 		LetGo(labor);
-		if (hard)
+		// The first loop only lets go of the tasks (a worker locked to its task stays on it, the failures may be passing);
+		// a loop that comes back within two minutes frees it, still a member of its task.
+		if (hard || labor.Autonomy != AutonomyStatus.LockedToOperable)
 		{
-			labor.AssignToIdle();
-			labor.Autonomy = AutonomyStatus.FreeAgent;
+			Free(labor);
 		}
-		else if (labor.Autonomy != AutonomyStatus.LockedToOperable && labor.Autonomy != AutonomyStatus.HoldingPosition)
-		{
-			labor.Autonomy = AutonomyStatus.FreeAgent;
-		}
-		Plugin.Log.LogInfo("BricktronRecovery: " + labor.name + " failed " + RecoveryRules.FailureLimit + " tasks in a row (" + where + "): tasks let go" + (hard ? ", taken off its task" : string.Empty));
+		// A repeated loop waits longer before the next look, so other tasks get their turn.
+		labor.DelayBeforeAvailable = hard ? 10f : 3f;
+		Plugin.Log.LogInfo("BricktronRecovery: " + labor.name + " failed " + RecoveryRules.FailureLimit + " tasks in a row (" + where + "): tasks let go" + (hard ? ", free to take other work" : string.Empty));
 	}
 
 	// ---- a task whose target is gone
@@ -283,35 +347,138 @@ internal sealed class BricktronRecovery : MonoBehaviour
 				Plugin.Log.LogWarning("BricktronRecovery: " + ex.Message);
 			}
 		}
+		Prune();
+		CheckVoidItems();
 	}
 
 	private static void CheckTarget(Labor labor)
 	{
 		Task task = (labor != null) ? labor.CurrentTask : null;
-		if (task == null || labor.IsPhasedOut || labor.Operable != null || labor.Activity == Activity.Fighting || labor.faction == null || labor.faction.isAI)
+		if (task == null || !Eligible(labor) || labor.IsPhasedOut || labor.Operable != null || labor.Activity == Activity.Fighting)
 		{
+			GoneSeen.Remove(labor);
 			return;
 		}
-		if (task.InitialPackage == null || task.InitialPackage.DecisionSource == Labor.DecisionSource.Character)
+		if (task.InitialPackage == null || task.InitialPackage.DecisionSource == Labor.DecisionSource.Character || task.Status != TaskProgression.Running)
 		{
+			GoneSeen.Remove(labor);
 			return;
 		}
-		if (!Gone(task.Target) && !Gone(task.Giver))
+		GameObject target = (task.Target != null) ? task.Target : task.Giver;
+		if ((object)target != null && target != null && RecoveryRules.InVoid(target.transform.position.y))
 		{
+			// A loose item that fell off the map stays a valid goal for ever: it is taken out of the game.
+			Plugin.Log.LogInfo("BricktronRecovery: the target of " + labor.name + "'s '" + task.Description + "' is off the map: taken out, task ended");
+			ReleaseVoidItem(target);
+			labor.AbortWorkSignal.Invoke(TaskResult.GoalWasRemoved);
+			GoneSeen.Remove(labor);
 			return;
 		}
-		Plugin.Log.LogInfo("BricktronRecovery: " + labor.name + "'s target of '" + task.Description + "' is gone (destroyed or off the map): task ended");
-		labor.AbortWorkSignal.Invoke(TaskResult.GoalWasRemoved);
+		// A destroyed target must look so at two checks in a row (a task that ends well destroys its target too).
+		if (Destroyed(task.Target) || Destroyed(task.Giver))
+		{
+			if (GoneSeen.TryGetValue(labor, out Task seen) && seen == task)
+			{
+				Plugin.Log.LogInfo("BricktronRecovery: " + labor.name + "'s target of '" + task.Description + "' is destroyed: task ended");
+				labor.AbortWorkSignal.Invoke(TaskResult.GoalWasRemoved);
+				GoneSeen.Remove(labor);
+			}
+			else
+			{
+				GoneSeen[labor] = task;
+			}
+			return;
+		}
+		GoneSeen.Remove(labor);
 	}
 
-	// A thing that was destroyed, or lies below the map.
-	private static bool Gone(GameObject target)
+	private static bool Destroyed(GameObject target)
 	{
-		if ((object)target == null)
+		return (object)target != null && target == null;
+	}
+
+	// Entries of workers that are gone (the pool reuses the objects).
+	private static void Prune()
+	{
+		if (Failures.Count + LastLoop.Count + GoneSeen.Count == 0)
 		{
-			return false;
+			return;
 		}
-		return target == null || RecoveryRules.InVoid(target.transform.position.y);
+		Drop(Failures);
+		Drop(LastLoop);
+		Drop(GoneSeen);
+	}
+
+	private static void Drop<T>(Dictionary<Labor, T> map)
+	{
+		List<Labor> gone = null;
+		foreach (Labor labor in map.Keys)
+		{
+			if (labor == null || !labor.gameObject.activeInHierarchy)
+			{
+				(gone ?? (gone = new List<Labor>())).Add(labor);
+			}
+		}
+		if (gone != null)
+		{
+			foreach (Labor labor in gone)
+			{
+				map.Remove(labor);
+			}
+		}
+	}
+
+	// ---- items off the map
+
+	private readonly List<Goal> _goals = new List<Goal>();
+
+	private float _nextVoid;
+
+	// The loose items of the clean-up areas that lie below the map are taken out of the game, so every worker and every
+	// area drops them (nothing destroyed them: they kept falling and stayed valid tasks).
+	private void CheckVoidItems()
+	{
+		if (Time.time < _nextVoid)
+		{
+			return;
+		}
+		_nextVoid = Time.time + VoidSeconds;
+		foreach (GameObject go in BrixSingleton<AutoList>.Instance.GetInstances(Groupes.Cleanup))
+		{
+			Project project = (go != null) ? go.GetComponent<Project>() : null;
+			if (project == null || !project.IsStillAlive)
+			{
+				continue;
+			}
+			_goals.Clear();
+			foreach (IGoalProvider provider in project.GetGoalProviders())
+			{
+				provider?.GetAll(_goals);
+			}
+			foreach (Goal goal in _goals)
+			{
+				if (goal is CleanUpGoal && !goal.IsNullOrReleased() && RecoveryRules.InVoid(goal.transform.position.y))
+				{
+					Plugin.Log.LogInfo("BricktronRecovery: " + goal.gameObject.name + " lies off the map: taken out of the game");
+					ReleaseVoidItem(goal.gameObject);
+				}
+			}
+		}
+		_goals.Clear();
+	}
+
+	// Takes a loose thing below the map out of the game as the game does with its own: off the network, back to its pool.
+	internal static void ReleaseVoidItem(GameObject item)
+	{
+		if (item == null || item.IsNullOrReleased() || !RecoveryRules.InVoid(item.transform.position.y) || item.GetComponentInParent<Labor>() != null || item.GetComponent<Apparence>() == null)
+		{
+			return;
+		}
+		if (NetworkServer.active && item.GetComponent<NetworkIdentity>() != null)
+		{
+			NetworkServer.UnSpawn(item);
+		}
+		ObjectPoolSingleton.Release(item);
 	}
 }
 

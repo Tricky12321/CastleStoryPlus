@@ -5,6 +5,7 @@ using Brix.Engine.Nature;
 using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.Beacons;
 using Brix.Game.AI.KnowledgeSpace;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
@@ -140,6 +141,41 @@ internal static class WorkerOrderTests
 		t.Equal(1, InStorage(new List<GameObject> { plank }), "Planks in a storage (not dropped)");
 		t.Equal(before, QuarryGround(site), "Quarry blocks left when the plank was stored");
 		yield return t.UntilGame(() => QuarryGround(site) < before, 120f, "the worker to dig in the quarry afterwards", 15f, () => t.Log(Describe(worker)));
+	}
+
+	[GameTest("Tasks", "A worker that joins a quarry with planks in its bag and no storage that takes them puts the planks down and still digs (#129)", TimeoutSeconds = 300f)]
+	private static IEnumerator UnstorableLoadIsDroppedThenDigs(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 14, 8);
+		Scenario.LeavesMess(t);
+		MineProject quarry = Quarry(t, site);
+		// It keeps nothing: no storage is needed for what it digs, and none takes the plank either.
+		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 1, site.y, site.z - 3));
+		yield return t.Frames(5);
+		int before = QuarryGround(site);
+		GameObject plank = Scenario.Items(t, FactoryBlocks.Wood_DoublePlank_AA, 1, worker.transform.position + Vector3.up * 3f)[0];
+		t.True(worker.recepteur.HasRoomFor(plank), "The bag has no room for a plank");
+		worker.recepteur.AddObject(plank);
+		Scenario.Hire(quarry, worker);
+		yield return t.UntilGame(() => QuarryGround(site) < before, 150f, "the worker to dig in the quarry although it cannot store the plank", 15f, () => t.Log(Describe(worker)));
+		t.False(worker.recepteur.Carries(plank), "The worker still carries the plank");
+	}
+
+	[GameTest("Tasks", "A loose log of a clean-up area that falls below the map is taken out of the game and no longer a task (#121)", TimeoutSeconds = 200f)]
+	private static IEnumerator LogInTheVoidIsRemoved(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 12, 8, 4, away: 30);
+		GameObject log = Scenario.Items(t, FactoryBlocks.Wood_DoubleLog_AA, 1, new XYZ(site.x + 3, site.y, site.z - 1).ToVector3())[0];
+		CleanupProject project = Scenario.NewProject<CleanupProject>(t, () => Scenario.Groupe.CmdSpawnGoupe("Groupes", "Cleanup", new XYZ(site.x, site.y, site.z - 1).ToVector3(), Quaternion.identity, false));
+		BeaconDriver driver = project.GetComponent<BeaconDriver>();
+		driver.Beacon.radius = 8;
+		driver.NetworkNetworkRadius = 8;
+		ProjectEndpoints.Commit(project);
+		yield return t.UntilGame(() => project.GoalCounts() >= 1, 30f, "the log to be a goal of the clean-up area");
+		log.transform.position = new Vector3(site.x + 3, -60f, site.z - 1);
+		yield return t.UntilGame(() => log == null || log.IsNullOrReleased() || !log.activeInHierarchy, 30f, "the log below the map to be taken out of the game");
+		yield return t.UntilGame(() => project.GoalCounts() == 0, 30f, "the clean-up area to have no task left for the log");
 	}
 
 	[GameTest("Tasks", "Reset all bricktrons: a worker waiting after its dig order is let go of the wait and looks for work at once (#121)", TimeoutSeconds = 300f)]
