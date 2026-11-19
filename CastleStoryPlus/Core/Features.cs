@@ -403,6 +403,10 @@ internal static class Features
 
 	public const string StockpileSpillInfo = "A demolished or deconstructed stockpile (also the large one), warehouse, workshop or weapon stand drops what it holds on the ground instead of destroying it.";
 
+	public const string RoofItems = "RoofItems";
+
+	public const string RoofItemsInfo = "Logs and other loose items that come to rest on the roof of a mod building (market, research station, smithy, armoury, warehouse...) are moved to open ground beside it, where workers can pick them up (#128).";
+
 	public const string EmptyStockpile = "EmptyStockpile";
 
 	public const string EmptyStockpileInfo = "\"Empty stockpile\" on the context wheel of a stockpile, large stockpile or warehouse: it takes nothing new and idle workers carry what it holds to other storages; it stays empty until switched off.";

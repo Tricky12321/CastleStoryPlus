@@ -289,6 +289,33 @@ internal static class TaskTests
 		t.True(b.Project == null || b.Project is IdleProject, b.name + " went to a " + b.Project?.GetType().Name);
 	}
 
+	[GameTest("Tasks", "With at most 22 bricktrons per task in single player (#127) ten bricktrons put on a project, by the game's assign and by a direct hire, all join its crew: the crew size grows past 8", TimeoutSeconds = 60f)]
+	private static IEnumerator TenOnOneProject(TestContext t)
+	{
+		int setting = CastleStoryPlus.WorkerAI.TaskCrewSize.Setting.Value;
+		t.Cleanup(() => CastleStoryPlus.WorkerAI.TaskCrewSize.Set(setting));
+		CastleStoryPlus.WorkerAI.TaskCrewSize.Set(22);
+		XYZ site = Scenario.Site(t, 8, 6);
+		BuildProject project = Scenario.BuildProject(t, site);
+		Labor[] crew = new Labor[10];
+		for (int i = 0; i < crew.Length; i++)
+		{
+			crew[i] = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 4 + i, site.y, site.z));
+		}
+		yield return t.Frames(5);
+		for (int i = 0; i < 8; i++)
+		{
+			Scenario.Hire(project, crew[i]);
+		}
+		t.Equal(8, project.CrewCount(), "Crew after putting 8 on the project");
+		// The ninth by the game's assign, the tenth by the hire itself (as the mod's direct orders do).
+		Scenario.Hire(project, crew[8]);
+		t.Equal(9, project.CrewCount(), "Crew after the ninth by the game's assign");
+		t.True(project.Hire(crew[9]), "The project turned away the tenth");
+		t.Equal(10, project.CrewCount(), "Crew after the tenth");
+		t.AtLeast(10f, project.MaximumCrewSize, "Crew size after ten");
+	}
+
 	[GameTest("Tasks", "Hiring three bricktrons onto a project with room for one: the crew size grows to take them all", TimeoutSeconds = 60f)]
 	private static IEnumerator HiringGrowsFullCrew(TestContext t)
 	{

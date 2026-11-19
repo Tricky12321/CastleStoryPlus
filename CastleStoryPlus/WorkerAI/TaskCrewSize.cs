@@ -24,7 +24,7 @@ namespace CastleStoryPlus.WorkerAI;
 internal static class TaskCrewSize
 {
 	// The game's crew size and limit: what a task starts with.
-	internal const int GameValue = 8;
+	internal const int GameValue = CrewRules.GameValue;
 
 	// The maximum when nothing is set.
 	internal const int DefaultMost = 15;
@@ -148,7 +148,7 @@ internal static class TaskCrewSize
 		{
 			return;
 		}
-		int value = Mathf.Min(GameValue, Value);
+		int value = CrewRules.StartSize(Value);
 		if (MaxPopulationField(provider) != value)
 		{
 			MaxPopulationField(provider) = value;
@@ -160,6 +160,36 @@ internal static class TaskCrewSize
 	internal static int Clamp(Project project, int value)
 	{
 		return Mathf.Clamp(value, 0, Applies(project) ? Value : GameValue);
+	}
+
+	// Server: a bricktron is about to join a full task: its crew size grows by one place, set on the provider itself
+	// (the game's own grow, project.MaximumCrewSize++, goes through the clamp setter, which a caller may have inlined
+	// and so skipped: single player stayed at 8, #127). True when it grew.
+	internal static bool GrowFor(Project project, Labor labor)
+	{
+		if (project == null || labor == null || labor.Project == project || !Applies(project))
+		{
+			return false;
+		}
+		WorkForceProvider provider = ProviderField(project);
+		if (provider == null)
+		{
+			return false;
+		}
+		int limit = WorkLimit.Get(project);
+		if (limit > 0 && project.CrewCount() >= limit)
+		{
+			// Held back by "Workers at a time", not by the crew size.
+			return false;
+		}
+		int size = provider.MaxPopulation;
+		int grown = CrewRules.GrowFor(project.CrewCount(), size, Value);
+		if (grown == size)
+		{
+			return false;
+		}
+		provider.MaxPopulation = grown;
+		return true;
 	}
 
 	// Every frame: the client's handler, the host's broadcast, and a changed value applied to the tasks.
@@ -279,5 +309,17 @@ internal static class TaskCrewSizeStartPatch
 	private static void Postfix(WorkForceProvider __instance)
 	{
 		TaskCrewSize.Started(__instance);
+	}
+}
+
+// Any bricktron put on a task (the game's assign, the mod's direct orders) finds a place when the maximum allows one.
+[Feature(Features.TaskCrewSize, Features.TaskCrewSizeInfo)]
+[HarmonyPatch(typeof(Project), nameof(Project.Hire))]
+internal static class TaskCrewSizeHirePatch
+{
+	[HarmonyPriority(Priority.First)]
+	private static void Prefix(Project __instance, Labor labor)
+	{
+		TaskCrewSize.GrowFor(__instance, labor);
 	}
 }

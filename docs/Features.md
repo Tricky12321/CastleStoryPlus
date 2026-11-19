@@ -115,6 +115,7 @@ New blocks, new buildings and faster ways to build.
 | Idle workers consolidate small stockpiles into the fullest one. | `StockpileConsolidation` |
 | "Empty stockpile" on the context wheel of a stockpile, large stockpile or warehouse: it takes nothing new and idle workers carry its contents to other storages. It stays empty (overhead icon, "Emptying" in its tooltip) until switched off; saved, host decides in multiplayer. | `EmptyStockpile` |
 | A demolished or deconstructed stockpile (also the large one), warehouse, workshop or weapon stand drops what it holds instead of destroying it. | `StockpileSpill` |
+| Loose items (logs...) that come to rest on the roof of a mod building are moved to open ground beside it, where workers can reach them. | `RoofItems` |
 | Hovering a stockpile lists what it holds next to the mouse (icon, name, count); a warehouse also shows how full it is in percent. The game's own icon-and-count line above it is hidden. | `StockpileTooltip` |
 
 ## Workshops, market and research

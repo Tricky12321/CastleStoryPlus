@@ -89,6 +89,31 @@ internal static class KitBundleTests
 		t.True(recepteur.ContentDescription.Value(Adjectif.sword) <= swordsBefore, "A loose sword of the test is left on the stand");
 	}
 
+	[GameTest("KitBundles", "A weapon stand's class filter also refuses the kit bundle and pieces of a class left out", TimeoutSeconds = 60f)]
+	private static IEnumerator StandFilterRefusesBundle(TestContext t)
+	{
+		if (!Plugin.IsEnabled(Features.KitBundles) || !Plugin.IsEnabled(Features.RackFilter))
+		{
+			t.Skip("KitBundles or RackFilter is switched off");
+		}
+		ToolRack rack = PlayerRack();
+		if (rack == null)
+		{
+			XYZ site = Scenario.Site(t, 4, 4);
+			yield return Scenario.Building(t, Toolrack, site, Scenario.BuildProject(t, site), go => rack = go.GetComponent<ToolRack>());
+			t.NotNull(rack, "The weapon stand built for the test");
+		}
+		int before = RackFilter.Mask(rack);
+		t.Cleanup(() => RackFilter.Set(rack, before));
+		KitBundles.Bundle knight = KitBundles.All[0];
+		// Only archer gear: every other class left out.
+		RackFilter.Set(rack, 0b111101);
+		yield return t.Frames(3);
+		t.False(rack.recepteur.HasRoomFor(knight.Key), "The stand set to archer gear takes a knight kit bundle");
+		t.False(rack.recepteur.HasRoomFor(knight.PieceRecipes[0].Creates), "The stand set to archer gear takes a knight sword");
+		t.Equal(0, rack.recepteur.CurrentCapacity.Value(knight.Resource), "Room for knight bundles on the stand set to archer gear");
+	}
+
 	private static ToolRack PlayerRack()
 	{
 		HashSet<GameObject> racks = BrixSingleton<AutoList>.Instance.GetInstances(ObjetsDynamiques.Toolrack);
