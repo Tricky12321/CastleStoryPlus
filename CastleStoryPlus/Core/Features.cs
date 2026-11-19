@@ -67,6 +67,10 @@ internal static class Features
 
 	public const string FocusInputGuardInfo = "Ignores the build-mode key (Tab) for half a second after the game window regains focus, so alt+tab no longer opens the construction menu.";
 
+	public const string CameraMouseGuard = "CameraMouseGuard";
+
+	public const string CameraMouseGuardInfo = "The game's edge scrolling and the camera's mouse drag wait until the cursor has really moved inside the window after a level load or focus change and never run without window focus; huge per-frame mouse jumps are clamped. Stops the camera scrolling off by itself when a game starts.";
+
 	public const string StockpileConsolidation = "StockpileConsolidation";
 
 	public const string StockpileConsolidationInfo = "Idle workers move resources out of small stockpiles into the fullest one.";
