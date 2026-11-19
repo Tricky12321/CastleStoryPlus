@@ -276,8 +276,9 @@ def check_task_crew(host, client):
     client.call("POST", "/api/projects/create", type="build")
     client.wait_for("its new build task", lambda: len([p for p in own_projects(client, "Build") if p["id"] not in before]) > 0, 30)
     project = [p for p in own_projects(client, "Build") if p["id"] not in before][0]
-    if project["maxCrew"] != 8:
-        return False, "the client's new task starts at %d, not 8" % project["maxCrew"]
+    # Since #127 a task starts with the host's "Max bricktrons per task" as its crew size, so free workers fill it.
+    if project["maxCrew"] != TASK_CREW:
+        return False, "the client's new task starts at %d, not the host's %d" % (project["maxCrew"], TASK_CREW)
     units = ",".join(str(b["id"]) for b in builders(client)[:TASK_CREW])
     client.call("POST", "/api/projects/hire", id=project["id"], units=units)
 

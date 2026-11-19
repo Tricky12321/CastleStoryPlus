@@ -24,4 +24,10 @@ if git -C "$ROOT" ls-files '*.cs' | (cd "$ROOT" && xargs grep -n -E "$DATES"); t
     FAILED=1
 fi
 
+# Merge conflict markers left behind in any tracked text file (the CHANGELOG is where they usually end up).
+if git -C "$ROOT" grep -n -I -E '^(<<<<<<< |>>>>>>> |=======$)' -- ':!*.png' ':!*.wav'; then
+    echo "Merge conflict markers: resolve the conflict and remove the markers." >&2
+    FAILED=1
+fi
+
 exit $FAILED
