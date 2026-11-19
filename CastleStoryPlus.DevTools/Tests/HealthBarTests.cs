@@ -46,4 +46,23 @@ internal static class HealthBarTests
 		t.Equal(1f, receiver.CurrentHP, "Health after the smaller maximum");
 		t.True(changes.Count >= 1, "A new maximum with the health unchanged sent no signal, so the bar kept its old fill");
 	}
+
+	[GameTest("Combat", "A change of tools or armour never heals a bricktron that has one hit point left", TimeoutSeconds = 40f)]
+	private static IEnumerator ToolSwapDoesNotHeal(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 6, 6);
+		Labor knight = Scenario.Bricktron(t, Occupation.Type.Knight, new XYZ(site.x, site.y, site.z));
+		yield return t.Frames(5);
+		DamageReceiver receiver = knight.GetComponent<DamageReceiver>();
+		Toolbag toolbag = knight.GetComponent<Toolbag>();
+		t.NotNull(receiver, "The knight's damage receiver");
+		t.NotNull(toolbag, "The knight's toolbag");
+		receiver.CurrentHP = 1f;
+		for (int i = 0; i < 3; i++)
+		{
+			toolbag.CompileToolStatistics();
+			yield return t.Frames(1);
+			t.Equal(1f, receiver.CurrentHP, "Health after tool change " + (i + 1));
+		}
+	}
 }

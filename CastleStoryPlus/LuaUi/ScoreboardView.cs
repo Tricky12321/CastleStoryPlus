@@ -138,7 +138,7 @@ end
 	// from the Lua side is its number, then what is left and what was seen of each kind.
 	private const int KindCount = 5;
 
-	private const int RowLength = 1 + KindCount * 2;
+	private const int RowLength = Invasion.WaveCountsSync.RowLength;
 
 	// Three counters side by side in a row of the block (its width less its padding), as wide as the largest "27/41".
 	private const float CellWidth = 86f;
@@ -237,6 +237,9 @@ end
 
 		// The second line of counters (the last two kinds): hidden when none of them was seen.
 		public GameObject SecondLine;
+
+		// The first line (the first three kinds): hidden when none of them was seen.
+		public GameObject FirstLine;
 	}
 
 	private static void Enable()
@@ -582,14 +585,15 @@ end
 		return line;
 	}
 
-	// An icon with its count on the right, right-aligned and on one line: the cell has a width of its own, so a
-	// "27/41" is never squeezed into a column of single digits.
+	// An icon with its count right beside it, right-aligned within a width of its own and on one line, so a "27/41" is
+	// never squeezed into a column of single digits.
 	private static Text Cell(Transform parent, IconKey icon, float iconWidth, Color tint, out GameObject root)
 	{
-		RectTransform cell = LuiWidgets.Horizontal(parent, 2f, 0);
+		RectTransform cell = LuiWidgets.Horizontal(parent, 4f, 0);
 		Destroy(cell.GetComponent<ContentSizeFitter>());
 		UiKit.Fixed(cell.gameObject, CellWidth, CellHeight);
 		root = cell.gameObject;
+		root.AddComponent<CanvasGroup>();
 		RectTransform image = UiKit.CreateRect("Icon", cell);
 		UiKit.Fixed(image.gameObject, iconWidth, 28f);
 		Image sprite = image.gameObject.AddComponent<Image>();
@@ -599,7 +603,7 @@ end
 		sprite.raycastTarget = false;
 		Text text = LuiWidgets.Label(cell, "0", 12, LuiStyle.White, TextAnchor.MiddleRight, null);
 		text.horizontalOverflow = HorizontalWrapMode.Overflow;
-		UiKit.Flexible(text.gameObject);
+		UiKit.Fixed(text.gameObject, CellWidth - iconWidth - 8f, CellHeight);
 		return text;
 	}
 
@@ -780,8 +784,10 @@ end
 				left += kindLeft;
 				seen += kindSeen;
 				Set(row.Kinds[k], kindLeft + "/" + kindSeen);
-				Active(row.Cells[k], kindSeen > 0);
+				// An unseen kind keeps its place, so the columns of the waves line up.
+				row.Cells[k].GetComponent<CanvasGroup>().alpha = (kindSeen > 0) ? 1f : 0f;
 			}
+			Active(row.FirstLine, waves[at + 1 + KindCount] > 0 || waves[at + 2 + KindCount] > 0 || waves[at + 3 + KindCount] > 0);
 			Active(row.SecondLine, waves[at + 1 + KindCount + 3] > 0 || waves[at + 1 + KindCount + 4] > 0);
 			Set(row.Name, _waveName + " " + wave);
 			Set(row.Group, left + "/" + seen);
@@ -825,6 +831,7 @@ end
 		row.Group.horizontalOverflow = HorizontalWrapMode.Overflow;
 		Transform first = KindLine(root);
 		Transform second = KindLine(root);
+		row.FirstLine = first.gameObject;
 		row.SecondLine = second.gameObject;
 		IconKey[] icons = { IconKeys._Minitron, IconKeys._Corruptron, IconKeys._Corruptron, IconKeys._Biftron, IconKeys._Warlock };
 		for (int k = 0; k < KindCount; k++)

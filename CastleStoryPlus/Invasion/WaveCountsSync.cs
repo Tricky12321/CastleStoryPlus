@@ -17,6 +17,13 @@ internal static class WaveCountsSync
 
 	private const float ResendSeconds = 5f;
 
+	// Numbers in a row: the wave, then what is left and what was seen of each of the five enemy kinds.
+	internal const int RowLength = 11;
+
+	// The first number of a payload, with the row length in it: a payload without it is from a version with other rows
+	// and is ignored (its rows would show as wrong numbers).
+	private const int Marker = 0x40000000 | RowLength;
+
 	private static NetworkClient _client;
 
 	private static int[] _sent;
@@ -79,7 +86,10 @@ internal static class WaveCountsSync
 		}
 		_sent = rows;
 		_nextSend = Time.unscaledTime + ResendSeconds;
-		NetworkServer.SendToAll(WavesMessage, new WavesNetMessage { Rows = rows });
+		int[] payload = new int[rows.Length + 1];
+		payload[0] = Marker;
+		rows.CopyTo(payload, 1);
+		NetworkServer.SendToAll(WavesMessage, new WavesNetMessage { Rows = payload });
 	}
 
 	internal static void Forget()
@@ -96,7 +106,13 @@ internal static class WaveCountsSync
 		{
 			return;
 		}
-		Rows = message.Rows;
+		if (message.Rows.Length == 0 || message.Rows[0] != Marker)
+		{
+			return;
+		}
+		int[] rows = new int[message.Rows.Length - 1];
+		System.Array.Copy(message.Rows, 1, rows, 0, rows.Length);
+		Rows = rows;
 	}
 
 	private static bool Same(IList<int> a, IList<int> b)
