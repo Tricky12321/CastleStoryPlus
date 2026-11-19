@@ -88,7 +88,7 @@ Every guardian has sounds of its own (`GuardianSounds`, `BeastVoice`), so a new 
   - `death`: when its corpse appears (only where it is seen, not from the fog).
 - **Only real recordings, no synthesis:** every sound in every clip is cut from a CC0 / public domain recording: the
   voice of the animal (a lion's roars and growls, a gorilla's roar and chest beats, a rhino's calls; giraffes are
-  almost silent, so the Spirestalker uses dromedary and elk moans, an alpaca moan and a horse snort) and the material
+  almost silent, so the Spirestalker uses dromedary moans, an alpaca moan and a horse snort) and the material
   as short accents on top: a struck crystal bowl (Spirestalker), a flame burst or torch pops (Cindermane), a rock hit
   or crumble (Boulderback), an anvil or chain clank (Ironhorn). Footsteps are recorded thuds and stomps. The voices
   are cleaned and pitched down for the guardian's size. There are no noise beds, no ambience and no reverb: the clips

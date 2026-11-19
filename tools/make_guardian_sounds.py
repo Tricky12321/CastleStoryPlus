@@ -22,8 +22,8 @@ File names: <Guardian>_<event>_<n>.wav, with event one of idle, roar, step, atta
 picks one at random per event (every numbered file in the folder is read), clips must be 0.15 - 6 s.
 
 The sound of each guardian (stand-ins are named in SOURCES.md):
-    Spirestalker  giraffe, blue crystal   dromedary and elk / moose moans and grunts, horse and alpaca snorts and
-                                          bleats (no CC0 giraffe exists); struck crystal bowls
+    Spirestalker  giraffe, blue crystal   dromedary moans and grunts, a horse snort and an alpaca moan (no CC0
+                                          giraffe exists); struck crystal bowls
     Cindermane    lion, fire and embers   real lion roars, grunts and growls; flame bursts and torch pops
     Boulderback   gorilla, stone          a real gorilla roar, chest beats; rock hits and crumbles
     Ironhorn      rhino, iron             real Indian rhinoceros calls; anvil strikes, chains and clanks
@@ -164,9 +164,9 @@ def track(*items, tail=0.15):
 # Freesound ids, see SOURCES.md. Times are in the original recording. Every layer is (samples, start seconds, gain),
 # the voice has gain 1 and the accents 0.2 - 0.5 of it.
 
-LION_A, LION_B, LION_R, LION_N, LION_E = 69570, 69571, 223978, 405211, 270383
+LION_A, LION_B, LION_R, LION_N = 69570, 69571, 223978, 405211
 GORILLA, CHEST, RHINO = 397054, 367821, 535810
-CAMEL, MOOSE, HORSE, ALPACA = 693564, 486554, 397236, 852641
+CAMEL, HORSE, ALPACA = 693564, 397236, 852641
 CRY_A, CRY_B, CRY_C = 150453, 150454, 150456
 FIRE_BURST, FIRE_LIGHTER, FIRE_TORCH = 166553, 111331, 675771
 STONE_HIT, STONE_DROP, STONE_CRUMBLE = 179365, 369981, 521956
@@ -182,22 +182,23 @@ def spire_idle(v):
     if v == 1:
         return track((cut(CAMEL, 6.8, 8.8, 0.0), 0.0, 1.0), (cut(CRY_B, 0.0, 1.8, 5.0), 0.1, 0.22))
     if v == 2:
-        return track((cut(MOOSE, 0.8, 2.1, -1.0), 0.0, 1.0), (cut(HORSE, 0.5, 0.9, -3.0), 1.5, 0.8), (cut(CRY_A, 0.0, 1.8, 10.0), 1.5, 0.2))
-    return track((cut(ALPACA, 0.0, 0.6, -2.0), 0.0, 0.9), (cut(MOOSE, 4.2, 5.5, 0.0), 0.8, 1.0), (cut(CRY_B, 0.0, 1.8, 9.0), 0.05, 0.2))
+        return track((cut(CAMEL, 7.8, 9.2, -3.0), 0.0, 1.0), (cut(HORSE, 0.5, 0.9, -3.0), 1.5, 0.8), (cut(CRY_A, 0.0, 1.8, 10.0), 1.5, 0.2))
+    return track((cut(ALPACA, 0.0, 0.6, -2.0), 0.0, 0.9), (cut(CAMEL, 10.1, 11.1, -2.0), 0.8, 1.0), (cut(CRY_B, 0.0, 1.8, 9.0), 0.05, 0.2))
 
 
 def spire_roar(v):
     if v == 0:
         return track((cut(CAMEL, 3.2, 5.9, 1.0, 0.25), 0.0, 1.0), (cut(CRY_A, 0.0, 1.8, 5.0), 0.0, 0.28), (cut(CRY_B, 0.0, 1.8, 12.0), 0.7, 0.16))
     if v == 1:
-        return track((seq(MOOSE, [(0.8, 2.1), (4.2, 5.5)], 0.0, 0.2, 0.12), 0.0, 1.0), (cut(CRY_B, 0.0, 1.8, 7.0), 0.0, 0.26))
+        return track((seq(CAMEL, [(7.8, 9.9), (10.1, 11.1)], -1.0, 0.25, 0.12), 0.0, 1.0), (cut(CRY_B, 0.0, 1.8, 7.0), 0.0, 0.26))
     return track((cut(CAMEL, 9.0, 11.2, 2.0, 0.2), 0.0, 1.0), (cut(CRY_A, 0.0, 1.8, 3.0), 0.0, 0.26), (cut(CRY_B, 0.0, 1.8, 10.0), 0.9, 0.16))
 
 
 def spire_step(v):
-    # a light hoof tick and a tiny crystal glint
+    # a light hoof (a stomp pitched up), a small stone tick and a tiny crystal glint
+    st = [(1.6, 2.1), (3.8, 4.3), (4.4, 4.9)][v]
     hit = [(0.35, 0.75), (1.55, 1.95), (3.35, 3.8)][v]
-    return track((cut(STONE_HIT, hit[0], hit[1], 3.0), 0.0, 0.9), (cut(CRY_C, 0.0, 0.3, [6.0, 9.0, 12.0][v]), 0.01, 0.14), tail=0.05)
+    return track((cut(STOMP, st[0], st[1], 7.0), 0.0, 1.0), (cut(STONE_HIT, hit[0], hit[1], 3.0), 0.0, 0.2), (cut(CRY_C, 0.0, 0.3, [6.0, 9.0, 12.0][v]), 0.01, 0.1), tail=0.05)
 
 
 def spire_attack(v):
@@ -210,7 +211,7 @@ def spire_hit(v):
     if v == 0:
         return track((cut(ALPACA, 0.0, 0.6, -1.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 12.0), 0.0, 0.25))
     if v == 1:
-        return track((cut(MOOSE, 4.2, 5.0, 0.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 9.0), 0.0, 0.25), (cut(CRY_C, 0.0, 0.3, 14.0), 0.08, 0.15))
+        return track((cut(CAMEL, 11.4, 11.95, 1.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 9.0), 0.0, 0.25), (cut(CRY_C, 0.0, 0.3, 14.0), 0.08, 0.15))
     return track((cut(CAMEL, 10.0, 10.8, 1.0), 0.0, 1.0), (cut(CRY_C, 0.0, 0.3, 7.0), 0.02, 0.25))
 
 
@@ -218,7 +219,7 @@ def spire_death(v):
     glints = [(cut(CRY_A if i % 2 == 0 else CRY_B, 0.0, 1.8, st), 0.9 + i * 0.3, 0.25 - 0.03 * i) for i, st in enumerate([9.0, 5.0, 2.0, -3.0])]
     if v == 0:
         return track((cut(CAMEL, 3.2, 5.9, -4.0, 0.25), 0.0, 1.0), *glints)
-    return track((seq(MOOSE, [(0.8, 2.1), (4.2, 5.5)], -5.0, 0.25, 0.15), 0.0, 1.0), *glints)
+    return track((seq(CAMEL, [(7.8, 9.9), (10.1, 11.1)], -5.0, 0.25, 0.15), 0.0, 1.0), *glints)
 
 
 # --- Cindermane (lion, fire and embers): real lion voice; flame bursts and torch pops ---
@@ -243,18 +244,18 @@ def cinder_step(v):
     if v == 0:
         return track((cut(THUD_SOFT, 0.15, 0.45, -3.0), 0.0, 1.0), tail=0.05)
     if v == 1:
-        return track((cut(THUD_SOFT, 0.45, 0.75, -2.0), 0.0, 1.0), tail=0.05)
+        return track((cut(STOMP, 4.4, 4.9, 3.0), 0.0, 1.0), tail=0.05)
     return track((cut(STOMP, 3.8, 4.3, 4.0), 0.0, 1.0), tail=0.05)
 
 
 def cinder_attack(v):
-    src = [(LION_R, 7.2, 8.8), (LION_A, 18.2, 19.4), (LION_E, 3.5, 4.5)][v]
+    src = [(LION_R, 7.2, 8.8), (LION_A, 18.2, 19.4), (LION_A, 11.95, 13.0)][v]
     fire = [(FIRE_BURST, 0.9, 1.9), (FIRE_LIGHTER, 0.0, 0.9), (FIRE_BURST, 3.9, 4.8)][v]
     return track((cut(src[0], src[1], src[2], -2.0, 0.2), 0.0, 1.0), (cut(fire[0], fire[1], fire[2]), 0.0, 0.35))
 
 
 def cinder_hit(v):
-    src = [(LION_E, 0.5, 1.2), (LION_E, 1.3, 2.1), (LION_R, 4.0, 4.9)][v]
+    src = [(LION_N, 14.7, 15.1), (LION_N, 15.7, 16.1), (LION_R, 4.0, 4.9)][v]
     pop = [(0.2, 0.5), (0.9, 1.2), (1.4, 1.7)][v]
     return track((cut(src[0], src[1], src[2], -2.0), 0.0, 1.0), (cut(FIRE_TORCH, pop[0], pop[1]), 0.0, 0.35))
 
@@ -266,7 +267,7 @@ def cinder_death(v):
     return track((cut(LION_N, 16.9, 18.9, -5.0, 0.3), 0.0, 1.0), (cut(FIRE_TORCH, 1.4, 1.7), 1.0, 0.3), (cut(FIRE_TORCH, 3.0, 3.2), 1.9, 0.25), (cut(FIRE_BURST, 0.9, 1.9), 1.5, 0.2))
 
 
-# --- Boulderback (gorilla, stone): a real gorilla roar, bonobo hoots, real chest beats, rock hits and crumbles ---
+# --- Boulderback (gorilla, stone): a real gorilla roar, real chest beats, rock hits and crumbles ---
 
 def boulder_idle(v):
     if v == 0:
@@ -291,7 +292,7 @@ def boulder_roar(v):
 def boulder_step(v):
     # a heavy knuckle or foot: a deep thud and a rock knock
     st = [(1.6, 2.1), (3.8, 4.3), (4.4, 4.9)][v]
-    src = STOMP if v < 2 else STONE_DROP
+    src = STOMP
     hit = [(0.35, 0.75), (1.55, 1.95), (3.35, 3.8)][v]
     return track((cut(src, st[0], st[1], -2.0), 0.0, 1.0), (cut(STONE_HIT, hit[0], hit[1], -3.0), 0.005, 0.3), tail=0.05)
 
@@ -379,6 +380,8 @@ SOUNDS = {
 # the active RMS each event is levelled to (the level of the earlier sound set)
 TARGET_RMS = {"idle": 0.18, "roar": 0.18, "attack": 0.15, "hit": 0.17, "death": 0.15, "step": 0.20}
 PEAK = 0.89
+# the highest peak the levelling gain may produce before the soft clip (above it the clip would audibly distort)
+MAX_DRIVE = 1.2
 
 
 def soft(x, knee=0.5):
@@ -399,11 +402,13 @@ def active_rms(x):
 
 def level(x, event):
     """Highpass, then level to the event's RMS over the active part; the peaks above the knee are soft clipped and
-    the gain is corrected for what the clip took away."""
+    the gain is corrected for what the clip took away. The gain never drives a peak above MAX_DRIVE: a clip with very
+    sharp transients ends up a little quieter instead of audibly distorted."""
     x = highpass(x, 30.0, 2)
     g = TARGET_RMS[event] / active_rms(x)
     for _ in range(4):
         g *= TARGET_RMS[event] / active_rms(soft(x * g))
+    g = min(g, MAX_DRIVE / (np.max(np.abs(x)) + 1e-9))
     return fade(soft(x * g), 0.002, 0.04)
 
 
