@@ -7,6 +7,7 @@ using Brix.Game.Semantique;
 using Brix.IO.Serialization.Contracts;
 using Brix.Network;
 using Brix.UI.GameSelector;
+using CastleStoryPlus.Army;
 using CastleStoryPlus.Core;
 using HarmonyLib;
 using Newtonsoft.Json.Serialization;
@@ -204,6 +205,12 @@ internal static class RackFilter
 					return false;
 				}
 			}
+			// A kit bundle (KitBundles) holds the whole kit of its class in one item that is in none of the class's lists.
+			KitBundles.Bundle bundle = KitBundles.ForKit(ToolRack.AllClasses[i]);
+			if (bundle != null && description.Value(bundle.Resource) > 0)
+			{
+				return false;
+			}
 		}
 		return true;
 	}
@@ -230,6 +237,11 @@ internal static class RackFilter
 				{
 					capacity.Set(item, 0);
 				}
+			}
+			KitBundles.Bundle bundle = KitBundles.ForKit(ToolRack.AllClasses[i]);
+			if (bundle != null && capacity.Value(bundle.Resource) > 0)
+			{
+				capacity.Set(bundle.Resource, 0);
 			}
 		}
 	}

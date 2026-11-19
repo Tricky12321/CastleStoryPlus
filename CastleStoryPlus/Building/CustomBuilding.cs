@@ -41,6 +41,13 @@ internal sealed class CustomBuilding
 	// placement check's own.
 	public int MaxMissingSupport = -1;
 
+	// Set for the large buildings with a roof (market, research station, smithy, armoury, warehouse): RoofItems moves
+	// loose items that lie on it to the ground. Not for the small ones (saplings).
+	public bool RoofCleanup;
+
+	// Every mod building made.
+	internal static readonly List<CustomBuilding> All = new List<CustomBuilding>();
+
 	public readonly string Name;
 
 	public readonly int Width;
@@ -83,6 +90,7 @@ internal sealed class CustomBuilding
 		Height = height;
 		BlueprintKey = new Factory.AssetKey("Blueprints", name);
 		BuildingKey = new Factory.AssetKey("ObjetsDynamiques", name);
+		All.Add(this);
 	}
 
 	// Factories with the same name are merged: a later one moves its templates into the first and is destroyed
