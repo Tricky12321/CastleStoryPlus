@@ -131,8 +131,8 @@ def cut(fid, t0, t1, st=0.0):
     seg = x[i0:i1]
     if fid in LOWPASS:
         seg = lowpass(seg, LOWPASS[fid], 4)
-    seg = fade(gate(seg), 0.008, 0.02)
-    out = highpass(pitch(seg, st), 30.0, 2)
+    # the fades come after the high pass, so the part ends at zero (the filter's tail would end in a step: a click)
+    out = fade(highpass(pitch(gate(seg), st), 30.0, 2), 0.008, 0.02)
     return out * (0.8 / (np.max(np.abs(out)) + 1e-9))
 
 
@@ -144,30 +144,21 @@ def seq(fid, parts, st=0.0, gap=0.14):
     return out
 
 
-def track(*items, tail=0.15):
-    """items: (samples, start seconds, gain)."""
-    n = max(int((a + len(x) / SR) * SR) for x, a, g in items) + int(tail * SR)
-    out = np.zeros(n)
-    for x, a, g in items:
-        i = int(a * SR)
-        j = min(n, i + len(x))
-        out[i:j] += x[: j - i] * g
-    return out
-
-
 # ---------------------------------------------------------------- the clips
 # Freesound ids, see SOURCES.md. Times are in the original recording. A clip is one voice (or a few parts of it in a
-# row); the layers are (samples, start seconds, gain).
+# row), followed by silence.
 
 LION_A, LION_B, LION_R, LION_N = 69570, 69571, 223978, 405211
 GORILLA, RHINO = 397054, 535810
 CAMEL, HORSE, ALPACA = 693564, 397236, 852641
 STOMP = 334228
-STOMPS = [(1.6, 2.1), (3.8, 4.3), (6.0, 6.5)]
+# each starts 20 ms before the stomp (onsets at 1.65, 3.92 and 6.30 s), so the sound is not late on the footfall
+STOMPS = [(1.63, 2.13), (3.90, 4.36), (6.28, 6.50)]
 
 
 def one(x, tail=0.15):
-    return track((x, 0.0, 1.0), tail=tail)
+    """The voice, then `tail` seconds of silence."""
+    return np.concatenate([x, np.zeros(int(tail * SR))])
 
 
 def step(semitones, v):

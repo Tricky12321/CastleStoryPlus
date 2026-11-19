@@ -20,11 +20,10 @@ internal enum GuardianSound
 }
 
 // The guardians' sounds (Features.GuardianSounds): a call now and then, a roar when it spots players' units or is
-// provoked, footsteps that fit its size and gait, an attack, a hit and a death sound, each guardian with its own
-// material in them (crystal chimes, crackling embers, grinding stone, clanking iron).
+// provoked, footsteps that fit its size and gait, an attack, a hit and a death sound, only the animal's own voice.
 //
-// The sounds are made for the mod by tools/make_guardian_sounds.py (synthesised, no recordings and nothing from the
-// game) and read from Assets/Sounds/Guardians/<Guardian>_<event>_<n>.wav. The set is swappable: replace the files, or
+// The sounds are cut by tools/make_guardian_sounds.py from CC0 animal recordings (listed in
+// Assets/Sounds/Guardians/SOURCES.md, nothing from the game) and read from Assets/Sounds/Guardians/<Guardian>_<event>_<n>.wav. The set is swappable: replace the files, or
 // add more numbered ones, and the game picks one at random per event. The table below (Settings) is the one place that
 // says how each event is played: how loud, how far it carries and how important it is when the voices run out.
 // They are played as 3D sounds at the guardian (quieter with distance) through ModAudio, which also follows the game's
