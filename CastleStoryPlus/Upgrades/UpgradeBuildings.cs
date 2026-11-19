@@ -32,6 +32,7 @@ internal static class UpgradeBuildings
 
 	private static readonly CustomBuilding Smithy = new CustomBuilding(SmithyName, 4, 3, 5)
 	{
+		RoofCleanup = true,
 		BuildModel = SmithyModel.Build,
 		BuildCost = (Description cost) =>
 		{
@@ -46,6 +47,7 @@ internal static class UpgradeBuildings
 
 	private static readonly CustomBuilding Armoury = new CustomBuilding(ArmouryName, 4, 3, 4)
 	{
+		RoofCleanup = true,
 		BuildModel = ArmouryModel.Build,
 		BuildCost = (Description cost) =>
 		{
@@ -60,6 +62,7 @@ internal static class UpgradeBuildings
 
 	private static readonly CustomBuilding Research = new CustomBuilding(ResearchName, 4, 3, 4)
 	{
+		RoofCleanup = true,
 		BuildModel = ResearchModel.Build,
 		BuildCost = (Description cost) =>
 		{

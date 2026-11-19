@@ -168,7 +168,7 @@ internal static class WorkerOrderTests
 		t.Record("felled", Felled(treesAtStart));
 	}
 
-	[GameTest("Tasks", "With at most 12 bricktrons per task (TaskCrewSize, #88) a new quarry (keeping nothing) starts at 8 and takes 12: twelve builders put on it all join its crew (a thirteenth does not) and stay on it, more than 8 work on it at once, and a work limit of 5 cuts the crew down to 5", TimeoutSeconds = 240f, Exclusive = true)]
+	[GameTest("Tasks", "With at most 12 bricktrons per task (TaskCrewSize, #88) a new quarry (keeping nothing) has a crew size of 12: twelve builders put on it all join its crew (a thirteenth does not) and stay on it, more than 8 work on it at once, and a work limit of 5 cuts the crew down to 5", TimeoutSeconds = 240f, Exclusive = true)]
 	private static IEnumerator TwelveOnOneQuarry(TestContext t)
 	{
 		int setting = CastleStoryPlus.WorkerAI.TaskCrewSize.Setting.Value;
@@ -188,7 +188,7 @@ internal static class WorkerOrderTests
 		quarry = Quarry(t, new Vector3(site.x - 9, top - 1, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
 		// It keeps nothing, so its ground can be dug without a storage for the stone.
 		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
-		t.Equal(8, quarry.MaximumCrewSize, "A new quarry's crew size");
+		t.Equal(12, quarry.MaximumCrewSize, "A new quarry's crew size");
 		Labor[] crew = new Labor[13];
 		for (int i = 0; i < crew.Length; i++)
 		{
@@ -229,6 +229,52 @@ internal static class WorkerOrderTests
 		CastleStoryPlus.WorkerAI.WorkLimit.Set(quarry, 5);
 		yield return t.Frames(2);
 		t.Equal(5, quarry.CrewCount(), "Crew after a work limit of 5");
+	}
+
+	[GameTest("Tasks", "With at most 22 bricktrons per task (#127) twelve free workers fill a quarry with plenty of work by themselves: more than 8 join its crew without being assigned, and with \"Workers at a time\" 5 no more than 5 do", TimeoutSeconds = 300f, Exclusive = true)]
+	private static IEnumerator FreeWorkersFillLargeCrew(TestContext t)
+	{
+		int setting = CastleStoryPlus.WorkerAI.TaskCrewSize.Setting.Value;
+		MineProject quarry = null;
+		t.Cleanup(() =>
+		{
+			if (quarry != null)
+			{
+				CastleStoryPlus.WorkerAI.WorkLimit.Set(quarry, 0);
+			}
+			CastleStoryPlus.WorkerAI.TaskCrewSize.Set(setting);
+		});
+		CastleStoryPlus.WorkerAI.TaskCrewSize.Set(22);
+		XYZ site = Scenario.Site(t, 20, 14);
+		Scenario.LeavesMess(t);
+		int top = site.y - 1;
+		quarry = Quarry(t, new Vector3(site.x - 9, top - 1, site.z - 4), new Vector3(site.x - 2, top + 2, site.z + 3));
+		quarry.GetComponent<QuarryData>().SetTypesToHarvest(0);
+		t.Equal(22, quarry.MaximumCrewSize, "A new quarry's crew size");
+		Scenario.QuietWorldTasks(t);
+		Labor[] workers = new Labor[12];
+		for (int i = 0; i < workers.Length; i++)
+		{
+			workers[i] = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 9 + i % 8, site.y, site.z - 6 - i / 8 * 2));
+		}
+		yield return t.Frames(5);
+		int most = 0;
+		yield return t.UntilGame(() =>
+		{
+			most = Mathf.Max(most, quarry.CrewCount());
+			return most > 8;
+		}, 120f, "more than 8 free workers to join the quarry's crew", 20f, () => t.Log("crew " + quarry.CrewCount() + "; " + Describe(workers[0])));
+		t.Record("mostInCrew", most);
+		// A limit of 5 sends the crew above it away, and keeps others out.
+		CastleStoryPlus.WorkerAI.WorkLimit.Set(quarry, 5);
+		yield return t.Frames(2);
+		t.Equal(5, quarry.CrewCount(), "Crew after a work limit of 5");
+		float end = Time.time + 20f;
+		yield return t.UntilGame(() =>
+		{
+			t.True(quarry.CrewCount() <= 5, "The crew grew past the limit of 5: " + quarry.CrewCount());
+			return Time.time >= end;
+		}, 60f, "twenty seconds under the limit");
 	}
 
 	[GameTest("Tasks", "Eight builders put on an 8 x 8 quarry that keeps stone, with no storage for it, stay on it for a minute: none walks off to the gather point or to another quarry of higher priority next to it that can be dug (#86)", TimeoutSeconds = 300f)]

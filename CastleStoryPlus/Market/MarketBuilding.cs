@@ -19,6 +19,7 @@ internal static class MarketBuilding
 
 	private static readonly CustomBuilding Building = new CustomBuilding(Name, 4, 3, 4)
 	{
+		RoofCleanup = true,
 		BuildModel = MarketModel.Build,
 		BuildCost = SetBuildCost,
 		SetupBuilding = Setup,
