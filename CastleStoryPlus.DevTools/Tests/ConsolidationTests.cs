@@ -94,13 +94,16 @@ internal static class ConsolidationTests
 	{
 		Piles piles = null;
 		yield return Setup(t, made => piles = made);
-		// More than two loads in the small one, the large one filled so the small one's bricks just fit in it.
-		int small = Mathf.Min(2 * piles.Hand + 1, (piles.Room - 2) / 2);
+		// More than one load in the small one, the large one holding clearly more (the config's MinLead and one), and
+		// both together at most two thirds of a stockpile's room: a stockpile's columns can leave it less room than its
+		// count says, so a large one filled to the brim may not take the small one's last load.
+		int lead = CastleStoryPlus.WorkerAI.StockpileConsolidation.MinLead + 1;
+		int small = Mathf.Min(2 * piles.Hand + 1, (piles.Room * 2 / 3 - lead) / 2);
 		if (piles.Hand <= 0 || small <= piles.Hand)
 		{
 			t.Skip("A stockpile holds too few stone bricks (" + piles.Room + ") for more than one load (" + piles.Hand + ")");
 		}
-		int large = piles.Room - small;
+		int large = small + lead;
 		Fill(t, piles.Small, small);
 		Fill(t, piles.Large, large);
 		yield return t.Frames(3);

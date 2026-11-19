@@ -73,7 +73,7 @@ internal static class Features
 
 	public const string StockpileConsolidation = "StockpileConsolidation";
 
-	public const string StockpileConsolidationInfo = "Idle workers empty the stockpile (or weapon stand) holding the least of a resource into the fullest one, over several trips; settings in [Storage.Consolidation].";
+	public const string StockpileConsolidationInfo = "Idle workers empty the stockpile holding the least of a resource into the fullest one, over several trips; settings in [Storage.Consolidation].";
 
 	public const string RespawnStatus = "RespawnStatus";
 

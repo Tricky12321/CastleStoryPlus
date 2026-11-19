@@ -26,8 +26,8 @@ namespace CastleStoryPlus.WorkerAI;
 // moving things by hand. Only offered by IdleProject, which workers reach when no real project has work for them, and
 // interruptible until something is picked up, so real work always wins. Host only (the clients see the game's own
 // pick up and store).
-// - Storages: the team's stockpiles (also mixed ones) and, separately, its weapon stands (gear only goes from stand to
-//   stand, through each stand's room, so RackFilter's limits hold). Warehouses are left out both ways: they are the
+// - Storages: the team's stockpiles (also mixed ones) and, separately and only with WeaponStands on (off by default),
+//   its weapon stands (gear only goes from stand to stand, through each stand's room, so RackFilter's limits hold). Warehouses are left out both ways: they are the
 //   team's big store and take every resource, so they would be the target of every move and stockpiles the player
 //   placed by a building site on purpose would be emptied into them; and the warehouse is never the smaller store.
 // - The choice is ConsolidationRules': a source is emptied over as many trips and workers as it takes (or until
@@ -50,6 +50,9 @@ internal static class StockpileConsolidation
 		public int Amount;
 
 		public float ClaimedUntil;
+
+		// The task carrying the move out, once it has started (null while the order waits to be taken up).
+		public Task Task;
 	}
 
 	private const string Section = "Storage.Consolidation";
@@ -125,8 +128,11 @@ internal static class StockpileConsolidation
 		_receivedSeconds = Plugin.Cfg.Bind(Section, "ReceivedSeconds", ConsolidationSettings.DefaultReceivedSeconds, new ConfigDescription("A stockpile that was given a load is not emptied for this many seconds.", new AcceptableValueRange<float>(0f, 1800f)));
 		_claimSeconds = Plugin.Cfg.Bind(Section, "ClaimSeconds", ConsolidationSettings.DefaultClaimSeconds, new ConfigDescription("Longest (seconds) a planned move holds its items and room, in case its worker is taken off without letting go.", new AcceptableValueRange<float>(10f, 600f)));
 		_scanSeconds = Plugin.Cfg.Bind(Section, "ScanSeconds", ConsolidationSettings.DefaultScanSeconds, new ConfigDescription("After a look at the stockpiles found nothing to move, they are not looked at again for this many seconds.", new AcceptableValueRange<float>(0f, 60f)));
-		_racks = Plugin.Cfg.Bind(Section, "WeaponStands", true, "Weapon stands are consolidated too (gear only goes from stand to stand, within each stand's class filter).");
+		_racks = Plugin.Cfg.Bind(Section, "WeaponStands", false, "Weapon stands are consolidated too (gear only goes from stand to stand, within each stand's class filter). Off by default: untried in game, loose kit pieces do not fit in a worker's hands (only kit bundles are moved) and a stand is emptied piece by piece, which splits its kits for a while.");
 	}
+
+	// The lead a target needs over its source (the config's, for the in-game tests).
+	internal static int MinLead => (_minLead != null) ? _minLead.Value : ConsolidationSettings.DefaultMinLead;
 
 	private static void ReadSettings()
 	{
@@ -160,7 +166,7 @@ internal static class StockpileConsolidation
 		ExpireClaims(now);
 		_reach.Clear();
 		GameObject item = PlanIn(labor, faction, now, racks: false);
-		if (item == null && (_racks == null || _racks.Value))
+		if (item == null && _racks != null && _racks.Value)
 		{
 			item = PlanIn(labor, faction, now, racks: true);
 		}
@@ -376,10 +382,34 @@ internal static class StockpileConsolidation
 		}
 	}
 
-	// The worker is carrying a load from one stockpile to the other.
+	// The worker is carrying a load from one stockpile to the other: its move's task is the one it is on (a move
+	// planned for an order that was replaced before it started, or of an earlier task, does not count, so a worker
+	// coming back from a real task with a load is not kept from storing it).
 	public static bool IsMoving(Labor labor)
 	{
-		return labor != null && labor.CurrentTask != null && _moves.ContainsKey(labor);
+		if (labor == null || labor.CurrentTask == null || !_moves.TryGetValue(labor, out Move move))
+		{
+			return false;
+		}
+		return move.Task != null && move.Task == labor.CurrentTask;
+	}
+
+	private static void Started(Labor labor)
+	{
+		if (labor != null && _moves.TryGetValue(labor, out Move move))
+		{
+			move.Task = labor.CurrentTask;
+		}
+	}
+
+	// Carrying now: the claim lasts for the walk to the target from here (a long walk to the source took part of it,
+	// and an expired claim let the idle project send the load back to the nearest stockpile, the source).
+	private static void PickedUp(Labor labor)
+	{
+		if (labor != null && _moves.TryGetValue(labor, out Move move))
+		{
+			move.ClaimedUntil = Time.time + Settings.ClaimSeconds;
+		}
 	}
 
 	private static Node MoveNode(Labor labor, GameObject item)
@@ -391,12 +421,17 @@ internal static class StockpileConsolidation
 		GameComponent itemComponent = item.GetComponent<GameComponent>();
 		GameComponent targetComponent = move.Target.GetComponent<GameComponent>();
 		return Node.Sequence.Label("Consolidate stockpiles")
+			.Do((Labor l) =>
+			{
+				Started(l);
+			}, labor)
 			.Do(labor.GoPickUp(itemComponent, move.Amount))
 			.Label("Pick up from small stockpile")
 			.Do((Labor l) =>
 			{
 				// Carrying now: stop being interruptible so the load is not dumped back by GoStore.
 				l.Activity = Activity.Idle;
+				PickedUp(l);
 			}, labor)
 			.Do((Labor l) => l.GoStoreIn(targetComponent), labor)
 			.Label("Store in fullest stockpile")
