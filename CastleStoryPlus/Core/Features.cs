@@ -67,6 +67,10 @@ internal static class Features
 
 	public const string FocusInputGuardInfo = "Ignores the build-mode key (Tab) for half a second after the game window regains focus, so alt+tab no longer opens the construction menu.";
 
+	public const string CameraMouseGuard = "CameraMouseGuard";
+
+	public const string CameraMouseGuardInfo = "The game's edge scrolling and the camera's mouse drag wait until the cursor has really moved inside the window after a level load or focus change and never run without window focus; huge per-frame mouse jumps are clamped. Stops the camera scrolling off by itself when a game starts.";
+
 	public const string StockpileConsolidation = "StockpileConsolidation";
 
 	public const string StockpileConsolidationInfo = "Idle workers move resources out of small stockpiles into the fullest one.";
@@ -403,6 +407,10 @@ internal static class Features
 
 	public const string StockpileSpillInfo = "A demolished or deconstructed stockpile (also the large one), warehouse, workshop or weapon stand drops what it holds on the ground instead of destroying it.";
 
+	public const string RoofItems = "RoofItems";
+
+	public const string RoofItemsInfo = "Logs and other loose items that come to rest on the roof of a mod building (market, research station, smithy, armoury, warehouse) are moved to open ground beside it, where workers can pick them up (#128).";
+
 	public const string EmptyStockpile = "EmptyStockpile";
 
 	public const string EmptyStockpileInfo = "\"Empty stockpile\" on the context wheel of a stockpile, large stockpile or warehouse: it takes nothing new and idle workers carry what it holds to other storages; it stays empty until switched off.";
@@ -497,7 +505,7 @@ internal static class Features
 
 	public const string TaskCrewSize = "TaskCrewSize";
 
-	public const string TaskCrewSizeInfo = "The most bricktrons a task's crew can hold, [Workers] MaxBricktronsPerTask (1 to 31, default 15; the game fixes 8): a task starts with 8 and putting more bricktrons on it grows it up to the maximum. In a multiplayer game the host's choice applies (\"Max bricktrons per task\" in the lobby, shown to every player) (#88).";
+	public const string TaskCrewSizeInfo = "The most bricktrons a task's crew can hold, [Workers] MaxBricktronsPerTask (1 to 31, default 15; the game fixes 8): every task has it as its crew size, so free workers fill a task up to it by themselves; \"Workers at a time\" on a task can lower it. In a multiplayer game the host's choice applies (\"Max bricktrons per task\" in the lobby, shown to every player) (#88, #127).";
 
 	public const string PauseTasks = "PauseTasks";
 

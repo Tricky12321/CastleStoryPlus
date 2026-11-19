@@ -8,7 +8,7 @@ namespace CastleStoryPlus.Invasion;
 // The scoreboard's waves (the enemies left of each wave, of as many as were seen) for the clients. They are counted
 // from the enemy faction's raid projects and their crews, which only the host has: a raid is an object of the enemy
 // faction that the game never sends to a player, so a client's scoreboard showed the kills but no wave. The host
-// sends its rows (nine numbers each: wave, then left and seen of minitrons, corruptrons, biftrons and magitrons)
+// sends its rows (eleven numbers each: wave, then left and seen of minitrons, corruptrons, healtrons, biftrons and magitrons)
 // when they change and every few seconds; a client shows the host's rows.
 internal static class WaveCountsSync
 {
@@ -16,6 +16,13 @@ internal static class WaveCountsSync
 	private const short WavesMessage = 206;
 
 	private const float ResendSeconds = 5f;
+
+	// Numbers in a row: the wave, then what is left and what was seen of each of the five enemy kinds.
+	internal const int RowLength = 11;
+
+	// The first number of a payload, with the row length in it: a payload without it is from a version with other rows
+	// and is ignored (its rows would show as wrong numbers).
+	private const int Marker = 0x40000000 | RowLength;
 
 	private static NetworkClient _client;
 
@@ -79,7 +86,10 @@ internal static class WaveCountsSync
 		}
 		_sent = rows;
 		_nextSend = Time.unscaledTime + ResendSeconds;
-		NetworkServer.SendToAll(WavesMessage, new WavesNetMessage { Rows = rows });
+		int[] payload = new int[rows.Length + 1];
+		payload[0] = Marker;
+		rows.CopyTo(payload, 1);
+		NetworkServer.SendToAll(WavesMessage, new WavesNetMessage { Rows = payload });
 	}
 
 	internal static void Forget()
@@ -96,7 +106,13 @@ internal static class WaveCountsSync
 		{
 			return;
 		}
-		Rows = message.Rows;
+		if (message.Rows.Length == 0 || message.Rows[0] != Marker)
+		{
+			return;
+		}
+		int[] rows = new int[message.Rows.Length - 1];
+		System.Array.Copy(message.Rows, 1, rows, 0, rows.Length);
+		Rows = rows;
 	}
 
 	private static bool Same(IList<int> a, IList<int> b)

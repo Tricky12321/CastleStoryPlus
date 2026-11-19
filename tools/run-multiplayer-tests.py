@@ -216,13 +216,14 @@ def check_blueprint_deliveries(host, client):
 
 def check_wave_rows(host, client):
     host.call("POST", "/api/cheat/enemies", type="corruptron", count=2, wave=7)
+    host.call("POST", "/api/cheat/enemies", type="healtron", count=1, wave=7)
 
     def rows():
         values = client.call("GET", "/api/raids").get("hostWaveRows") or []
-        return [values[i:i + 9] for i in range(0, len(values) - 8, 9)]
+        return [values[i:i + 11] for i in range(0, len(values) - 10, 11)]
 
     try:
-        client.wait_for("wave 7 on its scoreboard", lambda: any(r[0] == 7 and sum(r[1:5]) > 0 for r in rows()), 30)
+        client.wait_for("wave 7 on its scoreboard", lambda: any(r[0] == 7 and sum(r[1:6]) > 0 and r[3] > 0 for r in rows()), 30)
     except RuntimeError:
         return False, "the client's scoreboard rows: %s (it has %d raids itself)" % (rows(), client.call("GET", "/api/raids")["count"])
     return True, "client shows %s" % rows()

@@ -276,6 +276,37 @@ public sealed class Installer
 		string target = Path.Combine(PlayerDataDir, "Plugins");
 		bool windows = Directory.Exists(source) && Directory.GetFiles(source, "*.dll").Length > 0;
 		CopyTree(source, windows ? Path.Combine(target, "x86_64") : target);
+		if (!windows)
+		{
+			UseMouseLib64(target);
+		}
+	}
+
+	// The game's cursor lock (Curseur / ProMouse) calls the native "MouseLib", which the Linux game ships twice: a
+	// 32-bit Plugins/libMouseLib.so and a 64-bit Plugins/libMouseLib64.so (same exports). The 64-bit Unity 6 player
+	// looks for Plugins/x86_64/libMouseLib.so and otherwise fails with "Failed to open plugin ... libMouseLib.so" (the
+	// 32-bit file), so the cursor is never kept in the window. The 64-bit library is put there under the plain name
+	// and the unusable 32-bit one is removed.
+	private static void UseMouseLib64(string pluginsDir)
+	{
+		string lib64 = Path.Combine(pluginsDir, "libMouseLib64.so");
+		string wanted = Path.Combine(pluginsDir, "x86_64", "libMouseLib.so");
+		if (File.Exists(lib64))
+		{
+			Directory.CreateDirectory(Path.GetDirectoryName(wanted));
+			var from = new FileInfo(lib64);
+			var to = new FileInfo(wanted);
+			if (!to.Exists || to.Length != from.Length || to.LastWriteTimeUtc < from.LastWriteTimeUtc)
+			{
+				File.Copy(lib64, wanted + ".tmp", true);
+				MoveInto(wanted + ".tmp", wanted);
+			}
+			string lib32 = Path.Combine(pluginsDir, "libMouseLib.so");
+			if (File.Exists(lib32))
+			{
+				File.Delete(lib32);
+			}
+		}
 	}
 
 	private static void CopyTree(string source, string target)

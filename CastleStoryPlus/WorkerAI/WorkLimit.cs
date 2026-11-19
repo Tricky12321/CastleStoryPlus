@@ -142,12 +142,7 @@ end
 	// The crew size a task takes: the game's, or the limit when it is lower.
 	internal static int Capacity(IOperable<Labor> operable, int max)
 	{
-		int limit = Get(operable as Project);
-		if (limit == 0)
-		{
-			return max;
-		}
-		return (max == -1) ? limit : Mathf.Min(max, limit);
+		return CrewRules.Capacity(max, Get(operable as Project));
 	}
 
 	// How far the limit steps: the task's crew size (TaskCrewSize: 8 in the game, up to 31), or more when the task
@@ -310,7 +305,8 @@ internal static class WorkLimitAvailablePatch
 	}
 }
 
-// The task's marker shows its limit in place of the crew size ("x 0/4" rather than "x 0/8") while it has one.
+// The task's marker shows the room in effect: the crew over its crew size, or over the lower "Workers at a time" limit
+// ("x 8/22", "x 3/5"). The game's own marker shows the crew size only.
 [Feature(Features.WorkLimit, Features.WorkLimitInfo)]
 [HarmonyPatch(typeof(BaliseOverheadDisplayDriver), "BuildString", new System.Type[0])]
 internal static class WorkLimitMarkerPatch
@@ -325,10 +321,11 @@ internal static class WorkLimitMarkerPatch
 		{
 			return;
 		}
-		int key = project.CrewCount() * 64 + limit;
+		int size = project.MaximumCrewSize;
+		int key = (project.CrewCount() * 64 + limit) * 64 + size;
 		if (!Texts.TryGetValue(key, out string text))
 		{
-			text = " x " + project.CrewCount() + "/" + limit;
+			text = CrewRules.Marker(project.CrewCount(), size, limit);
 			Texts[key] = text;
 		}
 		__result = text;
