@@ -8,7 +8,7 @@ namespace CastleStoryPlus.Invasion;
 // The scoreboard's waves (the enemies left of each wave, of as many as were seen) for the clients. They are counted
 // from the enemy faction's raid projects and their crews, which only the host has: a raid is an object of the enemy
 // faction that the game never sends to a player, so a client's scoreboard showed the kills but no wave. The host
-// sends its rows (nine numbers each: wave, then left and seen of minitrons, corruptrons, biftrons and magitrons)
+// sends its rows (eleven numbers each: wave, then left and seen of minitrons, corruptrons, healtrons, biftrons and magitrons)
 // when they change and every few seconds; a client shows the host's rows.
 internal static class WaveCountsSync
 {

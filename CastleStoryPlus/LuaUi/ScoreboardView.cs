@@ -80,21 +80,23 @@ if CastleStoryPlus_ScoreboardState == nil then
 					local labor = crew[c]
 					local wave = labor.waveNumber or raidWave
 					local t = counts[wave]
-					if t == nil then t = { 0, 0, 0, 0 } counts[wave] = t end
+					if t == nil then t = { 0, 0, 0, 0, 0 } counts[wave] = t end
 					local oc = labor:GetOccupation()
 					if oc == Occupations.Minitron then t[1] = t[1] + 1
-					elseif oc == Occupations.Corruptron then t[2] = t[2] + 1
-					elseif oc == Occupations.Biftron then t[3] = t[3] + 1
-					elseif oc == Occupations.Magitron then t[4] = t[4] + 1 end
+					elseif oc == Occupations.Corruptron then
+						-- A Healtron is a corruptron with a mod flag, counted as its own kind.
+						if CastleStoryPlus.IsHealtron(labor) then t[3] = t[3] + 1 else t[2] = t[2] + 1 end
+					elseif oc == Occupations.Biftron then t[4] = t[4] + 1
+					elseif oc == Occupations.Magitron then t[5] = t[5] + 1 end
 				end
 			end
 			local ids = {}
 			for wave, t in pairs(counts) do
-				if t[1] + t[2] + t[3] + t[4] > 0 then
+				if t[1] + t[2] + t[3] + t[4] + t[5] > 0 then
 					table.insert(ids, wave)
 					local total = _s.waveTotals[wave]
-					if total == nil then total = { 0, 0, 0, 0 } _s.waveTotals[wave] = total end
-					for i = 1, 4 do if t[i] > total[i] then total[i] = t[i] end end
+					if total == nil then total = { 0, 0, 0, 0, 0 } _s.waveTotals[wave] = total end
+					for i = 1, 5 do if t[i] > total[i] then total[i] = t[i] end end
 				end
 			end
 			table.sort(ids)
@@ -104,8 +106,8 @@ if CastleStoryPlus_ScoreboardState == nil then
 				local t = counts[wave]
 				local total = _s.waveTotals[wave]
 				table.insert(waves, wave)
-				for k = 1, 4 do table.insert(waves, t[k]) end
-				for k = 1, 4 do table.insert(waves, total[k]) end
+				for k = 1, 5 do table.insert(waves, t[k]) end
+				for k = 1, 5 do table.insert(waves, total[k]) end
 			end
 			d.waves = waves
 		end
@@ -131,6 +133,19 @@ end
 ";
 
 	private const float Width = 272f;
+
+	// The enemy kinds a wave row counts: minitrons, corruptrons, healtrons (the mod's), biftrons, magitrons. A wave row
+	// from the Lua side is its number, then what is left and what was seen of each kind.
+	private const int KindCount = 5;
+
+	private const int RowLength = 1 + KindCount * 2;
+
+	// Three counters side by side in a row of the block (its width less its padding), as wide as the largest "27/41".
+	private const float CellWidth = 86f;
+
+	private const float CellHeight = 28f;
+
+	private static readonly Color HealtronGreen = new Color(0.45f, 1f, 0.4f, 1f);
 
 	private const float RefreshSeconds = 0.25f;
 
@@ -196,6 +211,8 @@ end
 
 	private Text _timer;
 
+	private Text _waveTotal;
+
 	private GameObject _nextButton;
 
 	private string _waveName;
@@ -214,7 +231,12 @@ end
 
 		public Text Group;
 
-		public Text[] Kinds = new Text[4];
+		public Text[] Kinds = new Text[KindCount];
+
+		public GameObject[] Cells = new GameObject[KindCount];
+
+		// The second line of counters (the last two kinds): hidden when none of them was seen.
+		public GameObject SecondLine;
 	}
 
 	private static void Enable()
@@ -234,6 +256,11 @@ end
 		{
 			LuaDriver raid = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsGuardRaid", allowNil: true) : null;
 			return DynValue.NewBoolean(raid != null && Treasure.TreasureChests.IsGuardRaid(raid.gameObject));
+		});
+		LuaInjection.AddFunction("IsHealtron", (ScriptExecutionContext context, CallbackArguments args) =>
+		{
+			LuaDriver labor = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsHealtron", allowNil: true) : null;
+			return DynValue.NewBoolean(labor != null && Combat.Healtron.IsHealtron(labor.gameObject));
 		});
 		Patch("Gamemodes/invasion/invasion_ui.lua", "invasion");
 		Patch("Gamemodes/tutorial/invasion_ui.lua", "tutorial");
@@ -465,13 +492,17 @@ end
 		UiKit.Flexible(_survived.gameObject);
 		_kills = LuiWidgets.Label(title, string.Empty, 12, LuiStyle.Gray, TextAnchor.MiddleRight, null);
 
-		// Kills by kind: all corruptrons (minitrons, corruptrons, biftrons), then each kind.
-		Transform units = Row(enemy, 40f);
-		_groupKills = Counter(units, IconKeys._Corruptrons_Group, 48f);
-		_minitronKills = Counter(units, IconKeys._Minitron, 32f);
-		_corruptronKills = Counter(units, IconKeys._Corruptron, 32f);
-		_biftronKills = Counter(units, IconKeys._Biftron, 32f);
-		_magitronKills = Counter(units, IconKeys._Warlock, 32f);
+		// Kills by kind: all corruptrons (minitrons, corruptrons, biftrons), then each kind, on two lines.
+		RectTransform units = LuiWidgets.Vertical(enemy, 0f, 0);
+		Destroy(units.GetComponent<ContentSizeFitter>());
+		units.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
+		Transform first = KindLine(units);
+		Transform second = KindLine(units);
+		_groupKills = Cell(first, IconKeys._Corruptrons_Group, 36f, Color.white, out _);
+		_minitronKills = Cell(first, IconKeys._Minitron, 24f, Color.white, out _);
+		_corruptronKills = Cell(first, IconKeys._Corruptron, 24f, Color.white, out _);
+		_biftronKills = Cell(second, IconKeys._Biftron, 24f, Color.white, out _);
+		_magitronKills = Cell(second, IconKeys._Warlock, 24f, Color.white, out _);
 
 		// The waves still on the island: enemies left of each kind, of as many as were seen.
 		// As wide as the block (not as its rows want: "41/41" counters made it wider than the scoreboard).
@@ -488,6 +519,15 @@ end
 			UiKit.Flexible(times.gameObject);
 			LuiWidgets.Label(times, LuaBridge.Localized("##mode_invasion_nextwave"), 12, LuiStyle.Gray, TextAnchor.MiddleLeft, null);
 			_timer = LuiWidgets.Label(times, string.Empty, 24, LuiStyle.CastleYellow, TextAnchor.MiddleLeft, null);
+			// The enemies left of all the waves on the island, of as many as were seen, beside the timer.
+			RectTransform totals = LuiWidgets.Vertical(timer, 0f, 0);
+			Destroy(totals.GetComponent<ContentSizeFitter>());
+			totals.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
+			UiKit.Fixed(totals.gameObject, 84f, 44f);
+			Text totalName = LuiWidgets.Label(totals, "Enemies left", 12, LuiStyle.Gray, TextAnchor.MiddleRight, null);
+			totalName.horizontalOverflow = HorizontalWrapMode.Overflow;
+			_waveTotal = LuiWidgets.Label(totals, "0/0", 20, LuiStyle.White, TextAnchor.MiddleRight, null);
+			_waveTotal.horizontalOverflow = HorizontalWrapMode.Overflow;
 			LuiIconButton next = LuiWidgets.IconButton(timer, 44f);
 			next.SetIcon(IconKeys.UI_Right.Get64());
 			next.SetIconColor(LuiStyle.CastleYellow);
@@ -532,18 +572,35 @@ end
 		return row;
 	}
 
-	private static Text Counter(Transform parent, IconKey icon, float iconWidth)
+	// A line of counters, side by side.
+	private static Transform KindLine(Transform parent)
+	{
+		RectTransform line = LuiWidgets.Horizontal(parent, 2f, 0);
+		Destroy(line.GetComponent<ContentSizeFitter>());
+		UiKit.Fixed(line.gameObject, CellWidth * 3f + 4f, CellHeight);
+		line.GetComponent<LayoutElement>().flexibleWidth = 0f;
+		return line;
+	}
+
+	// An icon with its count on the right, right-aligned and on one line: the cell has a width of its own, so a
+	// "27/41" is never squeezed into a column of single digits.
+	private static Text Cell(Transform parent, IconKey icon, float iconWidth, Color tint, out GameObject root)
 	{
 		RectTransform cell = LuiWidgets.Horizontal(parent, 2f, 0);
 		Destroy(cell.GetComponent<ContentSizeFitter>());
-		UiKit.Flexible(cell.gameObject);
+		UiKit.Fixed(cell.gameObject, CellWidth, CellHeight);
+		root = cell.gameObject;
 		RectTransform image = UiKit.CreateRect("Icon", cell);
-		UiKit.Fixed(image.gameObject, iconWidth, 32f);
+		UiKit.Fixed(image.gameObject, iconWidth, 28f);
 		Image sprite = image.gameObject.AddComponent<Image>();
 		sprite.sprite = icon.Get64();
+		sprite.color = tint;
 		sprite.preserveAspect = true;
 		sprite.raycastTarget = false;
-		return LuiWidgets.Label(cell, "0", 12, LuiStyle.White, TextAnchor.MiddleLeft, null);
+		Text text = LuiWidgets.Label(cell, "0", 12, LuiStyle.White, TextAnchor.MiddleRight, null);
+		text.horizontalOverflow = HorizontalWrapMode.Overflow;
+		UiKit.Flexible(text.gameObject);
+		return text;
 	}
 
 	// The game's minimap prefab (what MinimapMenu.lua's Panels.Minimap puts there), 256 x 256. The holder has its
@@ -683,13 +740,14 @@ end
 				rows = Invasion.WaveCountsSync.Rows;
 			}
 			Waves(rows);
+			SetTotal(rows);
 		}
 	}
 
 	// The Lua side's rows as numbers.
 	private static int[] Rows(Table waves)
 	{
-		int count = (waves != null) ? waves.Length / 9 * 9 : 0;
+		int count = (waves != null) ? waves.Length / RowLength * RowLength : 0;
 		int[] rows = new int[count];
 		for (int i = 0; i < count; i++)
 		{
@@ -698,10 +756,11 @@ end
 		return rows;
 	}
 
-	// Rows of nine numbers: wave, then left and seen of minitrons, corruptrons, biftrons and magitrons.
+	// Rows of eleven numbers: wave, then left and seen of each kind (minitrons, corruptrons, healtrons, biftrons,
+	// magitrons); a kind that was never seen in the wave has no counter.
 	private void Waves(int[] waves)
 	{
-		int count = waves.Length / 9;
+		int count = waves.Length / RowLength;
 		for (int i = 0; i < count; i++)
 		{
 			if (i >= _waveRows.Count)
@@ -710,18 +769,20 @@ end
 			}
 			WaveRow row = _waveRows[i];
 			Active(row.Root, true);
-			int at = i * 9;
+			int at = i * RowLength;
 			int wave = waves[at];
 			int left = 0;
 			int seen = 0;
-			for (int k = 0; k < 4; k++)
+			for (int k = 0; k < KindCount; k++)
 			{
 				int kindLeft = waves[at + 1 + k];
-				int kindSeen = waves[at + 5 + k];
+				int kindSeen = waves[at + 1 + KindCount + k];
 				left += kindLeft;
 				seen += kindSeen;
 				Set(row.Kinds[k], kindLeft + "/" + kindSeen);
+				Active(row.Cells[k], kindSeen > 0);
 			}
+			Active(row.SecondLine, waves[at + 1 + KindCount + 3] > 0 || waves[at + 1 + KindCount + 4] > 0);
 			Set(row.Name, _waveName + " " + wave);
 			Set(row.Group, left + "/" + seen);
 		}
@@ -729,6 +790,22 @@ end
 		{
 			Active(_waveRows[i].Root, false);
 		}
+	}
+
+	// What is left of all the waves, of as many as were seen, beside the timer.
+	private void SetTotal(int[] waves)
+	{
+		int left = 0;
+		int seen = 0;
+		for (int at = 0; at + RowLength <= waves.Length; at += RowLength)
+		{
+			for (int k = 0; k < KindCount; k++)
+			{
+				left += waves[at + 1 + k];
+				seen += waves[at + 1 + KindCount + k];
+			}
+		}
+		Set(_waveTotal, left + "/" + seen);
 	}
 
 	private static WaveRow WaveRowFor(Transform parent)
@@ -740,14 +817,20 @@ end
 		UiKit.Flexible(root.gameObject);
 		row.Root = root.gameObject;
 		LuiWidgets.Divider(root, false);
-		row.Name = LuiWidgets.Label(root, string.Empty, 12, LuiStyle.Gray, TextAnchor.MiddleLeft, null);
-		Transform units = Row(root, 36f);
-		// Narrower icons than the kills' row: "left/seen" is longer than a kill count.
-		row.Group = Counter(units, IconKeys._Corruptrons_Group, 36f);
-		row.Kinds[0] = Counter(units, IconKeys._Minitron, 24f);
-		row.Kinds[1] = Counter(units, IconKeys._Corruptron, 24f);
-		row.Kinds[2] = Counter(units, IconKeys._Biftron, 24f);
-		row.Kinds[3] = Counter(units, IconKeys._Warlock, 24f);
+		// The wave's name on the left, what is left of it and what was seen on the right.
+		Transform title = Row(root, 18f);
+		row.Name = LuiWidgets.Label(title, string.Empty, 12, LuiStyle.Gray, TextAnchor.MiddleLeft, null);
+		UiKit.Flexible(row.Name.gameObject);
+		row.Group = LuiWidgets.Label(title, "0/0", 12, LuiStyle.White, TextAnchor.MiddleRight, null);
+		row.Group.horizontalOverflow = HorizontalWrapMode.Overflow;
+		Transform first = KindLine(root);
+		Transform second = KindLine(root);
+		row.SecondLine = second.gameObject;
+		IconKey[] icons = { IconKeys._Minitron, IconKeys._Corruptron, IconKeys._Corruptron, IconKeys._Biftron, IconKeys._Warlock };
+		for (int k = 0; k < KindCount; k++)
+		{
+			row.Kinds[k] = Cell((k < 3) ? first : second, icons[k], 24f, (k == 2) ? HealtronGreen : Color.white, out row.Cells[k]);
+		}
 		return row;
 	}
 
