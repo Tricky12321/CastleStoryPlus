@@ -127,7 +127,7 @@ def cut(fid, t0, t1, st=0.0, sub=0.0):
     x, off = clean_source(fid)
     i0 = max(0, int(round((t0 - off) * SR)))
     i1 = min(len(x), int(round((t1 - off) * SR)))
-    seg = fade(x[i0:i1], 0.008, 0.02)
+    seg = fade(gate(x[i0:i1]), 0.008, 0.02)
     out = pitch(seg, st)
     if sub > 0.0:
         low = pitch(seg, st - 12.0)
@@ -228,10 +228,10 @@ def ember_pop(rng, centre=2500.0):
 
 
 # ---------------------------------------------------------------- the clips
-# Source ids (Freesound): 69570 69571 69572 559600 270383 516829 lion; 397054 gorilla roar; 367821 chest beats;
+# Source ids (Freesound): 69570 69571 69572 270383 lion; 397054 gorilla roar; 367821 chest beats;
 # 535810 Indian rhinoceros; 693564 dromedary; 397236 horse snort; 852641 alpaca. Times are in the original recording.
 
-LION_A, LION_B, LION_C, LION_D, LION_E, LION_F = 69570, 69571, 69572, 559600, 270383, 516829
+LION_A, LION_B, LION_C, LION_E = 69570, 69571, 69572, 270383
 GORILLA, CHEST, RHINO, CAMEL, HORSE, ALPACA = 397054, 367821, 535810, 693564, 397236, 852641
 
 
@@ -302,7 +302,7 @@ def cinder_roar(rng, v):
         return track((seq(LION_A, [(20.0, 21.4), (21.9, 23.1), (23.6, 24.7)], -2.0, 0.3, 0.08), 0.0, 1.0))
     if v == 2:
         return track((cut(LION_A, 11.4, 12.9, -2.5, 0.35), 0.0, 1.0))
-    return track((seq(LION_D, [(0.4, 1.7), (5.0, 6.2)], -2.5, 0.3, 0.2), 0.0, 1.0))
+    return track((seq(LION_C, [(5.1, 6.4), (13.5, 15.3)], -2.5, 0.3, 0.2), 0.0, 1.0))
 
 
 def cinder_step(rng, v):
@@ -311,12 +311,12 @@ def cinder_step(rng, v):
 
 
 def cinder_attack(rng, v):
-    src = [(LION_D, 8.5, 9.7), (LION_D, 11.4, 12.9), (LION_E, 3.5, 4.5)][v]
+    src = [(LION_A, 9.2, 10.2), (LION_A, 18.1, 19.4), (LION_E, 3.5, 4.5)][v]
     return track((cut(src[0], src[1], src[2], -2.0, 0.2), 0.0, 1.0), *pops(rng, [0.05, 0.16, 0.3], 0.25))
 
 
 def cinder_hit(rng, v):
-    src = [(LION_F, 1.1, 1.9, -2.0), (LION_E, 0.5, 1.2, -2.0), (LION_E, 1.3, 2.1, -2.0)][v]
+    src = [(LION_C, 11.3, 12.1, -2.0), (LION_E, 0.5, 1.2, -2.0), (LION_E, 1.3, 2.1, -2.0)][v]
     return track((cut(src[0], src[1], src[2], src[3]), 0.0, 1.0), *pops(rng, [0.0, 0.07], 0.3))
 
 
