@@ -353,7 +353,7 @@ internal sealed class Sprint : MonoBehaviour
 		}
 	}
 
-	private static Faction TeamOf(NetworkConnection connection)
+	internal static Faction TeamOf(NetworkConnection connection)
 	{
 		if (connection == null || connection.playerControllers == null)
 		{

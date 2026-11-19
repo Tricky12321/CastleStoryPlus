@@ -5,6 +5,8 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Configuration;
+using CastleStoryPlus.Core;
+using CastleStoryPlus.WorkerAI;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -291,6 +293,11 @@ internal class AllSettingsPanel : MonoBehaviour
 		Text title = CreateText(header, "ALL SETTINGS", 18, Yellow, TextAnchor.MiddleLeft);
 		title.fontStyle = FontStyle.Bold;
 		Flexible(title.gameObject);
+		// Gets bricktrons out of a freeze (a task with nothing to do, a build out of material): host or, in multiplayer, the host for the player's own team (#121).
+		CreateButton(header, "Reset all bricktrons", 170f, () =>
+		{
+			_feedback.text = Plugin.IsEnabled(Features.StuckReset) ? BricktronRecovery.Request() : "Switch on the StuckReset feature (Features section) to reset the bricktrons.";
+		});
 		_search = CreateInputField(header, "Search all settings", 260f);
 		_search.onValueChanged.AddListener((string text) => ShowValues());
 		if (!_embedded)

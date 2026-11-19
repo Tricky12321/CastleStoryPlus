@@ -65,6 +65,13 @@ internal static class HoldAfterOrder
 		}
 	}
 
+	// The bricktron looks for work again at once (the reset of all bricktrons).
+	internal static void Release(Labor labor)
+	{
+		Until.Remove(labor);
+		AfterDig.Remove(labor);
+	}
+
 	internal static bool IsHeld(Labor labor)
 	{
 		if (Until.Count == 0 || !Until.TryGetValue(labor, out float until))

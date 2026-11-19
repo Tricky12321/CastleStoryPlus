@@ -535,7 +535,7 @@ internal static class AutoCleanup
 	// Not inside a stockpile, rack or crystal, not carried or worn by a unit.
 	private static bool IsLoose(GameObject go)
 	{
-		if (go.IsNullOrReleased() || !go.activeInHierarchy)
+		if (go.IsNullOrReleased() || !go.activeInHierarchy || RecoveryRules.InVoid(go.transform.position.y))
 		{
 			return false;
 		}
