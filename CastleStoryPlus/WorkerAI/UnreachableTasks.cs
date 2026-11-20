@@ -358,10 +358,12 @@ internal static class UnreachableTasks
 		return (goal != null && IsWalkJudged(goal)) ? goal : null;
 	}
 
-	// The kinds of task a failed walk can mark: those the map judges (IsJudged), whatever their state.
+	// The kinds of task a failed walk can mark: those the map judges (IsJudged), whatever their state. An item counts
+	// only while it lies loose: one in a stockpile or a bag is what a walk for material goes to, and a failed walk
+	// there is not the item's fault.
 	internal static bool IsWalkJudged(Goal goal)
 	{
-		return goal is BuildGoal || goal is DigGoal || goal is BuildStairsGoal || goal is TreeGoal || goal is NatureHarvestGoal || goal is RepairGoal || goal is CleanUpGoal;
+		return goal is BuildGoal || goal is DigGoal || goal is BuildStairsGoal || goal is TreeGoal || goal is NatureHarvestGoal || goal is RepairGoal || (goal is CleanUpGoal && PickUpAround.IsLoose(goal.gameObject));
 	}
 
 	// ---- The map ----

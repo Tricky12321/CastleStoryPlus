@@ -77,6 +77,14 @@ internal static class RecoveryRules
 		return (walk || severalTasks) ? seconds : longSeconds;
 	}
 
+	// StuckReset: whether a goal a worker stood still on over several failed tasks is marked unreachable. A walk that
+	// failed says so; a blueprint whose tasks failed otherwise (no material to be found) is not unreachable, other
+	// tasks (a dig, a tree...) that fail where the worker stands are taken to be out of its reach.
+	public static bool MarksStoodStillGoal(bool walkFailed, bool blueprint)
+	{
+		return walkFailed || !blueprint;
+	}
+
 	// The reset of all bricktrons waits while the game is paused (timeScale 0): the workers' behaviour does not run
 	// then, and a task let go of in a paused game was only half let go of (#142).
 	public static bool CanResetNow(float timeScale)

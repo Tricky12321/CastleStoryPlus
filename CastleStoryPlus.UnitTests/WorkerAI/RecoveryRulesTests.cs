@@ -91,6 +91,15 @@ public class RecoveryRulesTests
 		Assert.That(RecoveryRules.StuckLimit(walk, severalTasks, 10f, 60f), Is.EqualTo(expected));
 	}
 
+	[TestCase(true, true, true)]
+	[TestCase(true, false, true)]
+	[TestCase(false, false, true)]
+	[TestCase(false, true, false)]
+	public void ABlueprintIsOnlyMarkedUnreachableAfterAFailedWalk(bool walkFailed, bool blueprint, bool expected)
+	{
+		Assert.That(RecoveryRules.MarksStoodStillGoal(walkFailed, blueprint), Is.EqualTo(expected));
+	}
+
 	[TestCase(0f, false)]
 	[TestCase(1f, true)]
 	[TestCase(0.25f, true)]

@@ -16,9 +16,11 @@ namespace CastleStoryPlus.WorkerAI;
 // written to the log. Host only.
 // The watch is kept per task goal (the blueprint, dig voxel, tree... the task was made from), not per task object (#143): a
 // worker that cannot get to its task fails and takes a new task for the same goal again and again, standing where it
-// is, and each new task started the watch afresh, so it never fired. Short gaps between those tasks (no task for up to
-// RecoveryRules.TaskGapSeconds) keep the watch; a reset that ends such a run marks the goal unreachable
-// (UnreachableTasks), so the worker takes other work. A player's order to the worker starts the watch afresh.
+// is, and each new task started the watch afresh, so it never fired. Only a task that failed carries the watch over
+// to the next one; a task done starts it afresh (a builder storing kind after kind into one blueprint). Short gaps
+// between those tasks (no task for up to RecoveryRules.TaskGapSeconds) keep the watch; a reset that ends such a run
+// marks the goal unreachable (UnreachableTasks), so the worker takes other work. A player's order to the worker starts
+// the watch afresh.
 [Feature(Features.StuckReset, Features.StuckResetInfo)]
 internal sealed class StuckReset : MonoBehaviour
 {
@@ -38,8 +40,11 @@ internal sealed class StuckReset : MonoBehaviour
 
 		public Task Task;
 
-		// More than one task on the same goal stood still in.
+		// More than one task on the same goal stood still in, each one before the current having failed.
 		public bool SeveralTasks;
+
+		// One of those failed tasks failed on its walk (a way that cannot be found or followed).
+		public bool WalkFailed;
 
 		// When the worker last had a task (gaps between tasks of a retry loop keep the watch).
 		public float LastSeen;
@@ -119,6 +124,14 @@ internal sealed class StuckReset : MonoBehaviour
 		watch.LastSeen = Time.time;
 		if (watch.Task != task)
 		{
+			if (Succeeded(watch.Task))
+			{
+				// The task before was done: work goes on (a builder storing kind after kind into one blueprint), so
+				// the watch starts afresh with the new task.
+				Watches[labor] = new Watch { Anchor = at, Since = Time.time, Key = key, Task = task, LastSeen = Time.time };
+				return;
+			}
+			watch.WalkFailed |= WalkFailed(watch.Task);
 			watch.Task = task;
 			watch.SeveralTasks = true;
 		}
@@ -131,15 +144,30 @@ internal sealed class StuckReset : MonoBehaviour
 		Watches.Remove(labor);
 		if (watch.SeveralTasks && Plugin.IsEnabled(Features.UnreachableTasks))
 		{
-			// The worker kept going back to a task it never got to: it is passed by for a while.
+			// The worker kept going back to a task it never got to: it is passed by for a while. A blueprint whose
+			// tasks failed for another reason (no material to be found) is not drawn unreachable.
 			Goal goal = (key is GameObject giver && !giver.IsNullOrReleased()) ? giver.GetComponent<Goal>() : null;
-			UnreachableTasks.MarkWalkFailed(goal, "stood still " + Mathf.RoundToInt(Time.time - watch.Since) + " s trying it again and again (" + labor.name + ")", labor);
+			if (goal != null && RecoveryRules.MarksStoodStillGoal(watch.WalkFailed || WalkFailed(task), goal is BuildGoal))
+			{
+				UnreachableTasks.MarkWalkFailed(goal, "stood still " + Mathf.RoundToInt(Time.time - watch.Since) + " s trying it again and again (" + labor.name + ")", labor);
+			}
 		}
 		labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
 		if (!labor.recepteur.IsEmpty())
 		{
 			labor.recepteur.DropAll();
 		}
+	}
+
+	// A task that ended done (not failed, cancelled or still running).
+	private static bool Succeeded(Task task)
+	{
+		return task != null && task.Status == TaskProgression.Finished && task.result == TaskResult.Succes;
+	}
+
+	private static bool WalkFailed(Task task)
+	{
+		return task != null && (task.result == TaskResult.PathFailed || task.result == TaskResult.CouldNotReach);
 	}
 
 	private static bool Moved(Watch watch, Vector3 at)
