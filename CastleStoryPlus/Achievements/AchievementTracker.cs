@@ -26,8 +26,10 @@ namespace CastleStoryPlus.Achievements;
 // cheats (Cheated); nor in a multiplayer game where the host allows cheats (CheatGuard), as another player's cheats
 // cannot be seen from here. A game that was saved after a cheat stays cheated: the folder of the save is remembered
 // (in the achievements file), so loading it again does not count either; the save itself is not touched, so it loads
-// without the mod. Only what happens after a game is set up counts: a best value read from a loaded or joined game
-// (waves survived, research done) is the baseline, and only what goes beyond it counts.
+// without the mod. Only what happens after a game is set up counts (Add). A best value (waves survived, research done)
+// is the game's own: a save of the player's own game goes on where it was saved (a save loaded at wave 12 is at wave
+// 12 of that one game); in a joined game, what it reports while it is set up is the baseline and only what goes
+// beyond it counts (BestValues).
 //
 // Kept in the mod's own file (BepInEx/config/castlestoryplus_achievements.json): the counters, when each achievement
 // was unlocked and the cheated saves. Written whole to a temporary file and moved over the old one, so a crash never
@@ -49,8 +51,8 @@ internal sealed class AchievementTracker : MonoBehaviour
 	// The most one message may add to a counter.
 	private const int MostPerMessage = 100000;
 
-	// A loaded or joined game sets itself up as the level becomes ready: for this long (real seconds) the best values it
-	// reports are its baseline, and what the host sees done is not counted.
+	// A loaded or joined game sets itself up as the level becomes ready: for this long (real seconds) what the host sees
+	// done is not counted, and the best values a joined game reports are its baseline.
 	private const float BaselineSeconds = 5f;
 
 	private static readonly Dictionary<string, int> Counters = new Dictionary<string, int>();
@@ -63,8 +65,8 @@ internal sealed class AchievementTracker : MonoBehaviour
 	// What the host has seen done and not yet counted or told: team id and counter.
 	private static readonly Dictionary<KeyValuePair<int, string>, int> Pending = new Dictionary<KeyValuePair<int, string>, int>();
 
-	// The best values this game started with (waves survived, research done).
-	private static readonly Dictionary<string, int> Baseline = new Dictionary<string, int>();
+	// The best values this game reports (waves survived, research done): the baseline of a joined game.
+	private static readonly BestValues Best = new BestValues();
 
 	private static bool _loaded;
 
@@ -223,7 +225,8 @@ internal sealed class AchievementTracker : MonoBehaviour
 		_cheated = false;
 		_cheatReason = null;
 		Pending.Clear();
-		Baseline.Clear();
+		// A client is in someone else's game; the host plays his own (a new game or his own save).
+		Best.Start(joined: !NetworkServer.active);
 		Asset_Map map = GameParam.Map;
 		_saveFolder = (map != null && !map.IsNewGame()) ? map.path : null;
 		if (!string.IsNullOrEmpty(_saveFolder) && CheatedSaves.Contains(_saveFolder))
@@ -252,7 +255,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 		_cheated = false;
 		_cheatReason = null;
 		_saveFolder = null;
-		Baseline.Clear();
+		Best.Clear();
 		Save();
 	}
 
@@ -299,24 +302,13 @@ internal sealed class AchievementTracker : MonoBehaviour
 		Apply(counter, amount, max: false);
 	}
 
-	// Every peer: the best value the game shows now (waves survived, research done). What the game started with (a
-	// loaded or joined game) is its baseline; only a value beyond it counts.
+	// Every peer: the best value the game shows now (waves survived, research done). The player's own game counts as it
+	// stands, also when loaded from a save; a joined game's value counts only beyond what it reported while it was set
+	// up (BestValues).
 	internal static void LocalMax(string counter, int value)
 	{
-		if (!IgnoreRules && _levelActive)
-		{
-			Baseline.TryGetValue(counter, out int baseline);
-			if (Time.unscaledTime < _baselineUntil)
-			{
-				Baseline[counter] = Math.Max(baseline, value);
-				return;
-			}
-			if (value <= baseline)
-			{
-				return;
-			}
-		}
-		Apply(counter, value, max: true);
+		int counted = IgnoreRules ? value : Best.Report(counter, value, Time.unscaledTime < _baselineUntil);
+		Apply(counter, counted, max: true);
 	}
 
 	// Counts what was reported on the host, and tells the other players (while the host's own game counts).
@@ -579,7 +571,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 		Unlocked.Clear();
 		CheatedSaves.Clear();
 		Pending.Clear();
-		Baseline.Clear();
+		Best.Clear();
 		_dirty = true;
 		_loaded = true;
 		Save();
@@ -596,6 +588,12 @@ internal sealed class AchievementTracker : MonoBehaviour
 	internal static void SetBaselineOverForTest(bool over)
 	{
 		_baselineUntil = over ? 0f : Time.unscaledTime + BaselineSeconds;
+	}
+
+	// For the tests: the game is a joined one (a client's) or the player's own; its baselines are forgotten.
+	internal static void SetJoinedForTest(bool joined)
+	{
+		Best.Start(joined);
 	}
 
 	// Whether the folder is the save of a game cheats were used in.

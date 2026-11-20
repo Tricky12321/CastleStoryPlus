@@ -280,22 +280,33 @@ internal static class AchievementTests
 		yield return null;
 	}
 
-	[GameTest("Achievements", "A best value a game starts with is its baseline: only what goes beyond it counts", TimeoutSeconds = 30f)]
-	private static IEnumerator BaselineOfALoadedGame(TestContext t)
+	[GameTest("Achievements", "A loaded save goes on where it was (its best values count); a joined game's are its baseline", TimeoutSeconds = 30f)]
+	private static IEnumerator BestValuesOfALoadedOrJoinedGame(TestContext t)
 	{
 		Isolate(t, ignoreRules: false);
 		AchievementTracker.SandboxProbe = () => false;
 		AchievementTracker.ClearCheatedForTest();
-		// The first moments of a game: what it reports is where it stands (a loaded game at wave 12).
+		t.Cleanup(() => AchievementTracker.SetJoinedForTest(false));
+		// The player's own game loaded at wave 12, in its first moments: it is the same game, so it counts as it stands.
+		AchievementTracker.SetJoinedForTest(false);
 		AchievementTracker.SetBaselineOverForTest(false);
 		AchievementTracker.LocalMax(AchievementCounter.Wave, 12);
-		t.Equal(0, AchievementTracker.Value(AchievementCounter.Wave), "Wave counted from the start of a game");
-		t.False(AchievementTracker.IsUnlocked(AchievementList.Find("wave10")), "Holding the line from a loaded game");
+		t.Equal(12, AchievementTracker.Value(AchievementCounter.Wave), "Wave of a loaded save");
+		t.True(AchievementTracker.IsUnlocked(AchievementList.Find("wave10")), "Holding the line at wave 12 of a loaded save");
 		AchievementTracker.SetBaselineOverForTest(true);
-		AchievementTracker.LocalMax(AchievementCounter.Wave, 12);
-		t.Equal(0, AchievementTracker.Value(AchievementCounter.Wave), "The same wave again");
 		AchievementTracker.LocalMax(AchievementCounter.Wave, 13);
-		t.Equal(13, AchievementTracker.Value(AchievementCounter.Wave), "A wave survived after the start");
+		t.Equal(13, AchievementTracker.Value(AchievementCounter.Wave), "A wave survived after loading");
+		// A joined game at wave 20: what it reports while it is set up is its baseline.
+		AchievementTracker.ResetForTest();
+		AchievementTracker.SetJoinedForTest(true);
+		AchievementTracker.SetBaselineOverForTest(false);
+		AchievementTracker.LocalMax(AchievementCounter.Wave, 20);
+		t.Equal(0, AchievementTracker.Value(AchievementCounter.Wave), "Wave counted from the start of a joined game");
+		AchievementTracker.SetBaselineOverForTest(true);
+		AchievementTracker.LocalMax(AchievementCounter.Wave, 20);
+		t.Equal(0, AchievementTracker.Value(AchievementCounter.Wave), "The same wave again");
+		AchievementTracker.LocalMax(AchievementCounter.Wave, 21);
+		t.Equal(21, AchievementTracker.Value(AchievementCounter.Wave), "A wave survived after joining");
 		yield return null;
 	}
 
