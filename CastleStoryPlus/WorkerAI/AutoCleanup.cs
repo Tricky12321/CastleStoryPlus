@@ -150,6 +150,11 @@ internal static class AutoCleanup
 			{
 				continue;
 			}
+			// In the ruin of a treasure chest whose guardians are near: no walk out to it (#58).
+			if (Treasure.TreasureChests.InGuardedRuin(item.transform.position))
+			{
+				continue;
+			}
 			GameComponent component = item.GetComponent<GameComponent>();
 			if (component == null || OtherPlayers(component, labor.faction) || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null)
 			{
@@ -262,6 +267,10 @@ internal static class AutoCleanup
 			else if (BaseJobs.CoversCleanup(labor.faction, item.transform.position))
 			{
 				why = "inside the Auto cleanup task's zone: its crew picks it up";
+			}
+			else if (Treasure.TreasureChests.InGuardedRuin(item.transform.position))
+			{
+				why = "in the ruin of a treasure chest its guardians still guard";
 			}
 			else if (Claims.ContainsKey(item))
 			{

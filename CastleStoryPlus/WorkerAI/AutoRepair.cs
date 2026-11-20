@@ -115,7 +115,8 @@ internal static class AutoRepair
 				continue;
 			}
 			Vector3 at = voxel.ToVector3();
-			if (!Near(anchors, at, radius) || InZone(zones, voxel))
+			// Not in the ruin of a treasure chest whose guardians are near (#58).
+			if (!Near(anchors, at, radius) || InZone(zones, voxel) || Treasure.TreasureChests.InGuardedRuin(at))
 			{
 				continue;
 			}

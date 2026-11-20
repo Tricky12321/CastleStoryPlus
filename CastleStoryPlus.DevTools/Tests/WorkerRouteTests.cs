@@ -5,14 +5,17 @@ using Brix.Engine;
 using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.AI.KnowledgeSpace;
 using Brix.Game.AI.UI;
 using Brix.Game.Components;
 using Brix.Game.Semantique;
 using Brix.Input;
 using Brix.Utils;
 using CastleStoryPlus.Building;
+using CastleStoryPlus.Core;
 using CastleStoryPlus.DevTools.Pathing;
 using CastleStoryPlus.DevTools.Testing;
+using CastleStoryPlus.Treasure;
 using CastleStoryPlus.WorkerAI;
 using UnityEngine;
 
@@ -170,6 +173,146 @@ internal static class WorkerRouteTests
 			}
 		}
 		return (who.Count > 0) ? "; planned by " + string.Join(", ", who.ToArray()) : string.Empty;
+	}
+
+	// How close to the chest a bricktron counts as having walked up to it (it opens, or shows the hint, from 2.6).
+	private const float AtChest = 4f;
+
+	[GameTest("Tasks", "A treasure chest its guardians still guard sends no worker out: the loose item by it is neither fetched as material nor cleaned up, and an idle builder near it never walks up to it; once the guardians are gone the item is free again (#58)", TimeoutSeconds = 240f)]
+	private static IEnumerator GuardedChestIsNoErrand(TestContext t)
+	{
+		if (!Plugin.IsEnabled(Features.Treasure) || !TreasureChests.Active)
+		{
+			t.Skip("Treasure chests are off in this game");
+		}
+		Faction enemy = Scenario.EnemyFaction();
+		if (enemy == null)
+		{
+			t.Skip("No enemy faction in this game");
+		}
+		// West to east: the builder, 18 blocks of open ground, the chest. The stockpile stands in the chest's ruin (so
+		// the idle cleanup's reach covers the item by the chest), the guardians just east of the chest.
+		XYZ site = Scenario.Site(t, 31, 9, 4, away: 30);
+		XYZ chestAt = new XYZ(site.x + 9, site.y, site.z);
+		Recepteur stockpile = null;
+		BuildProject build = Scenario.BuildProject(t, site);
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x + 3, site.y, site.z - 2), build, made => stockpile = made.GetComponent<Recepteur>());
+		t.NotNull(stockpile, "The stockpile's storage");
+		GameObject chest = Brix.Transactions.Transactor.SpawnUNet(ObjetsDynamiques.Chest, Faction.DefaultNeutral, chestAt.ToVector3(), Quaternion.identity);
+		t.NotNull(chest, "The chest");
+		Vector3 chestPos = chest.transform.position;
+		TreasureChests.Watch(chest, 2);
+		t.Cleanup(() =>
+		{
+			TreasureChests.Forget(chestPos);
+			Scenario.Release(chest);
+		});
+		List<Labor> guardians = new List<Labor>();
+		for (int i = 0; i < 2; i++)
+		{
+			XYZ at = Scenario.Walkable(new XYZ(chestAt.x + 4, chestAt.y, chestAt.z + ((i == 0) ? -3 : 3)));
+			Labor beast = Beasts.Spawn(BeastKind.Boulderback, enemy, at.ToVector3(), 1);
+			t.NotNull(beast, "Guardian " + (i + 1));
+			Scenario.Adopt(t, beast);
+			beast.Autonomy = AutonomyStatus.WaitForOrders;
+			guardians.Add(beast);
+		}
+		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 9, site.y, site.z));
+		AutonomyStatus free = builder.Autonomy;
+		builder.Autonomy = AutonomyStatus.WaitForOrders;
+		GameObject ingot = Scenario.Items(t, BuildResources.IronIngot, 1, new XYZ(chestAt.x - 2, chestAt.y, chestAt.z + 2).ToVector3())[0];
+		GameComponent item = ingot.GetComponent<GameComponent>();
+		Ressource iron = Apparence.PrincipaleOf(ingot);
+		t.NotNull(item, "The iron ingot's game component");
+		t.NotNull(iron, "The iron ingot's resource");
+		// No player's, as the chest's loot and whatever else lies in a ruin (a player's own things there stay theirs).
+		item.faction = Faction.DefaultNeutral;
+		yield return TestWorld.WaitForGraph(t);
+		// The chests are looked at every second; the idle cleanup's item list is renewed every 5 s.
+		yield return t.Seconds(6f);
+		t.Log("Chest at " + chestPos + ", guardians at " + guardians[0].transform.position + " and " + guardians[1].transform.position + ", builder at " + Units.VoxelOf(builder) + ", iron ingot at " + ingot.transform.position);
+		t.True(TreasureChests.InGuardedRuin(chestPos), "The chest's ruin is not kept out although its guardians stand by it");
+		t.True(TreasureChests.InGuardedRuin(ingot.transform.position), "The iron ingot by the guarded chest is not in its ruin");
+		t.False(TreasureChests.InGuardedRuin(builder.transform.position), "The builder 18 blocks away is in the chest's ruin");
+		// No material is fetched from there (the game's map-wide search for the nearest thing holding a resource).
+		t.False(Knowledge._ClosestObjectToPickup_Test(item, iron), "The iron ingot by the guarded chest may be fetched as material");
+		// Nor is it the idle cleanup's.
+		GameObject planned = AutoCleanup.TryPlan(builder);
+		AutoCleanup.Release(builder);
+		t.Log("The idle cleanup chose " + ((planned != null) ? planned.name + " at " + planned.transform.position : "nothing"));
+		t.True(planned != ingot, "The idle cleanup chose the iron ingot by the guarded chest");
+		t.True(planned != chest, "The idle cleanup chose the guarded chest");
+		string why = CleanupReason(builder, ingot);
+		t.Log("The iron ingot, to the idle cleanup: " + (why ?? "would pick it up"));
+		if (why != null && why.StartsWith("inside the Auto cleanup", System.StringComparison.Ordinal))
+		{
+			t.Log("The base's cleanup task covers the site: its crew is not the idle cleanup");
+		}
+		else if (why != null && why != "not considered")
+		{
+			t.True(why.Contains("treasure chest"), "The idle cleanup left the iron ingot alone for another reason (" + why + ")");
+		}
+		// The builder left to its own devices for a while never walks up to the chest. Whatever sends it is named in
+		// the log: its task, activity and autonomy every 5 s.
+		builder.Autonomy = free;
+		Scenario.Idle(builder);
+		float closest = float.MaxValue;
+		float until = Time.time + 45f;
+		float noteAt = 0f;
+		while (Time.time < until)
+		{
+			float distance = Vector3.Distance(builder.transform.position, chestPos);
+			closest = Mathf.Min(closest, distance);
+			if (Time.time >= noteAt || distance <= AtChest)
+			{
+				t.Log(Time.time.ToString("F0") + " s: builder " + distance.ToString("F1") + " from the chest, " + Doing(builder));
+				noteAt = Time.time + 5f;
+			}
+			if (distance <= AtChest)
+			{
+				break;
+			}
+			yield return t.Seconds(0.5f);
+		}
+		t.Record("closest", closest.ToString("F1"));
+		t.True(closest > AtChest, "The idle builder walked up to the guarded chest (to " + closest.ToString("F1") + " blocks): " + Doing(builder));
+		t.True(chest.activeInHierarchy && !chest.IsNullOrReleased(), "The guarded chest was opened");
+		// The guardians gone (lured away or slain), the ruin is open again: the item may be fetched and cleaned up.
+		builder.Autonomy = AutonomyStatus.WaitForOrders;
+		Scenario.Idle(builder);
+		foreach (Labor guardian in guardians)
+		{
+			Scenario.Discard(guardian.gameObject);
+		}
+		yield return t.Seconds(6f);
+		t.False(TreasureChests.InGuardedRuin(chestPos), "The chest's ruin is still kept out with its guardians gone");
+		if (ingot.activeInHierarchy && PickUpAround.IsLoose(ingot))
+		{
+			t.True(Knowledge._ClosestObjectToPickup_Test(item, iron), "The iron ingot by the unguarded chest may not be fetched as material");
+			why = CleanupReason(builder, ingot);
+			t.Log("The iron ingot, to the idle cleanup now: " + (why ?? "would pick it up"));
+			t.True(why == null || !why.Contains("treasure chest"), "The idle cleanup still leaves the iron ingot alone for the chest (" + why + ")");
+		}
+	}
+
+	// Why the idle cleanup would leave the item alone (null: it would pick it up; "not considered": out of its reach).
+	private static string CleanupReason(Labor labor, GameObject item)
+	{
+		foreach (KeyValuePair<GameObject, string> entry in AutoCleanup.Explain(labor))
+		{
+			if (entry.Key == item)
+			{
+				return entry.Value;
+			}
+		}
+		return "not considered";
+	}
+
+	// What the bricktron is about, for the log.
+	private static string Doing(Labor labor)
+	{
+		Project project = labor.Project;
+		return "task " + ((project != null) ? project.name : "none") + ", activity " + labor.Activity + ", autonomy " + labor.Autonomy.Description + ", at " + Units.VoxelOf(labor);
 	}
 
 	[GameTest("Tasks", "A bricktron standing idle in a pit 4 deep digs its way out (#62)", TimeoutSeconds = 300f)]
