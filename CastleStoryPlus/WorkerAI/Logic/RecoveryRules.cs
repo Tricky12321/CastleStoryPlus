@@ -60,6 +60,38 @@ internal static class RecoveryRules
 		return hasTeam && (last < 0f || now - last >= MinResetGap);
 	}
 
+	// StuckReset: a worker without a task for longer than this (seconds) is not in a retry loop; its watch ends.
+	public const float TaskGapSeconds = 5f;
+
+	// StuckReset: whether a gap without a task since lastSeen (game time) ends the watch of a worker.
+	public static bool GapEndsWatch(float lastSeen, float now)
+	{
+		return now - lastSeen > TaskGapSeconds;
+	}
+
+	// StuckReset: how long a worker may stand still on a task goal (0: never reset). A walk, and a run of several tasks
+	// on the same goal (each failed before the worker moved: a retry loop, #143), get the short limit; any other task
+	// the long one.
+	public static float StuckLimit(bool walk, bool severalTasks, float seconds, float longSeconds)
+	{
+		return (walk || severalTasks) ? seconds : longSeconds;
+	}
+
+	// StuckReset: whether a goal a worker stood still on over several failed tasks is marked unreachable. A walk that
+	// failed says so; a blueprint whose tasks failed otherwise (no material to be found) is not unreachable, other
+	// tasks (a dig, a tree...) that fail where the worker stands are taken to be out of its reach.
+	public static bool MarksStoodStillGoal(bool walkFailed, bool blueprint)
+	{
+		return walkFailed || !blueprint;
+	}
+
+	// The reset of all bricktrons waits while the game is paused (timeScale 0): the workers' behaviour does not run
+	// then, and a task let go of in a paused game was only half let go of (#142).
+	public static bool CanResetNow(float timeScale)
+	{
+		return timeScale > 0f;
+	}
+
 	// Pieces carried that are not what a digger takes up (the stone, ore, crystals and coal of a quarry): they are put
 	// into a storage before the dig, as they take the bag's room and the dig's count of what fits does not see them.
 	public static int ForeignCount(int carriedTotal, int carriedDigYield)

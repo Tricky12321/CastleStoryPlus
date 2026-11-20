@@ -7,6 +7,7 @@ using Brix.Game.Semantique;
 using Brix.External.Factories;
 using Brix.Lifecycle.Pooling;
 using Brix.Network;
+using Brix.UI.Icons;
 using CastleStoryPlus.Army;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.Upgrades;
@@ -17,11 +18,14 @@ using UnityEngine.Networking;
 namespace CastleStoryPlus.WorkerAI;
 
 // Gets a bricktron out of work it cannot do (issue #121). Three ways in:
-// - "Reset all bricktrons" (the Castle Story Plus settings page): every bricktron of the player's team lets go of its
+// - "Reset bricktrons" (the in-game settings sidebar, #142, and the Castle Story Plus settings page): every bricktron
+//   of the player's team lets go of its
 //   task, its queued task, its reservations and its wait for an order, and looks for work afresh. What it carries stays
 //   in its hands, a bricktron put on a task stays on it, unless that task has no work for it (then it is free to help
 //   elsewhere, as a worker that has none always was). The host does it; a client's button sends a command (message
-//   214) and the host resets the sender's own team only.
+//   214) and the host resets the sender's own team only. Asked for while the game is paused (the Escape menu pauses a
+//   single player game), the reset waits until the game runs again: the workers' behaviour does not run while paused,
+//   so a task let go of then was only half let go of (#142).
 // - A loop of failed tasks: a worker whose tasks fail again and again (a block no one can get to, a build that has run
 //   out of planks, an item that fell off the map) lets go of what it holds, and when the loop comes back within two
 //   minutes it waits longer before it looks again. A worker locked to a task goes free (it stays a member of the task, so
@@ -30,6 +34,8 @@ namespace CastleStoryPlus.WorkerAI;
 //   (the failure came before a task was made, so nothing is counted) is freed by the reset button.
 // - A task whose target is gone: a log that rolled off the map (below the world) is taken out of the game, a destroyed
 //   target ends the task, so the worker does not walk to it for ever.
+// A player's order to a worker ends its run of failed tasks (and a loop found but not yet handled), so the loop's
+// handling never throws out the order (#143).
 // Host only; the player's workers (builders and the like), never soldiers or members of a raid.
 [Feature(Features.StuckReset, Features.StuckResetInfo)]
 internal sealed class BricktronRecovery : MonoBehaviour
@@ -66,6 +72,15 @@ internal sealed class BricktronRecovery : MonoBehaviour
 	// When each team asked for a reset last (host, the clients' commands).
 	private static readonly Dictionary<Faction, float> LastReset = new Dictionary<Faction, float>();
 
+	// Teams whose reset was asked for while the game was paused (host): reset once it runs again.
+	private static readonly HashSet<Faction> PendingResets = new HashSet<Faction>();
+
+	// What the last reset asked for from this game did (the settings sidebar button's tooltip).
+	internal static string LastResult;
+
+	// How many teams wait for the game to run again to be reset (DevTools tests).
+	internal static int PendingResetCount => PendingResets.Count;
+
 	private readonly List<Labor> _labors = new List<Labor>();
 
 	private float _next;
@@ -79,6 +94,21 @@ internal sealed class BricktronRecovery : MonoBehaviour
 			GoneSeen.Clear();
 			Loops.Clear();
 			LastReset.Clear();
+			PendingResets.Clear();
+			LastResult = null;
+		});
+		// The in-game settings sidebar (#142): the Escape menu, where the button was first, pauses a single player game.
+		GameUi.GameMenuItems.Extend((GameUi.GameMenuModel menu) =>
+		{
+			GameUi.UiSection section = menu.Settings.SectionAfter("buildtasks", "bricktrons", () => "Bricktrons");
+			section.Add(new GameUi.UiButton
+			{
+				Id = "resetBricktrons",
+				Label = () => "Reset bricktrons",
+				Icon = () => GameUi.GameUiState.Icon(IconKeys.UI_Reset),
+				Tooltip = () => "Every bricktron of your team lets go of its task, queued task and reservations and looks for work afresh (what it carries stays in its hands). Use it when bricktrons stand frozen." + (string.IsNullOrEmpty(LastResult) ? string.Empty : "\n" + LastResult),
+				OnClick = (bool shift, bool ctrl) => LastResult = Request()
+			});
 		});
 		GameSession.OnLevelReady(LevelReady);
 		Plugin.Root.AddComponent<BricktronRecovery>();
@@ -106,6 +136,12 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		}
 		if (NetworkServer.active)
 		{
+			if (!RecoveryRules.CanResetNow(Time.timeScale))
+			{
+				PendingResets.Add(team);
+				Plugin.Log.LogInfo("BricktronRecovery: reset of " + team.name + " asked for while paused: done when the game runs again");
+				return "The game is paused: your bricktrons are reset as soon as it runs again.";
+			}
 			return "Reset " + ResetTeam(team) + " bricktrons.";
 		}
 		NetworkClient client = (UNetManager.instance != null) ? UNetManager.instance.LocalNetworkClient : null;
@@ -131,7 +167,48 @@ internal sealed class BricktronRecovery : MonoBehaviour
 			return;
 		}
 		LastReset[team] = Time.time;
+		if (!RecoveryRules.CanResetNow(Time.timeScale))
+		{
+			PendingResets.Add(team);
+			return;
+		}
 		ResetTeam(team);
+	}
+
+	// Host: the resets asked for while the game was paused, on the first frame it runs again.
+	private static void RunPendingResets()
+	{
+		if (PendingResets.Count == 0 || !RecoveryRules.CanResetNow(Time.timeScale))
+		{
+			return;
+		}
+		List<Faction> teams = new List<Faction>(PendingResets);
+		PendingResets.Clear();
+		foreach (Faction team in teams)
+		{
+			if (team == null)
+			{
+				continue;
+			}
+			int count = ResetTeam(team);
+			if (User.LocalUser != null && User.LocalUser.faction == team)
+			{
+				LastResult = "Reset " + count + " bricktrons.";
+			}
+		}
+	}
+
+	// A player's order to the worker: its run of failed tasks and a loop found but not handled yet are dropped, so the
+	// loop's handling does not let go of the order, and the stuck watch starts afresh (#143).
+	internal static void OrderGiven(Labor labor)
+	{
+		if (!NetworkServer.active || labor == null)
+		{
+			return;
+		}
+		Failures.Remove(labor);
+		Loops.RemoveAll((KeyValuePair<Labor, bool> loop) => loop.Key == labor);
+		StuckReset.Forget(labor);
 	}
 
 	// Host: how many bricktrons of the team were reset.
@@ -314,6 +391,7 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		{
 			return;
 		}
+		RunPendingResets();
 		if (Loops.Count > 0)
 		{
 			List<KeyValuePair<Labor, bool>> loops = new List<KeyValuePair<Labor, bool>>(Loops);
@@ -490,6 +568,28 @@ internal static class BricktronRecoveryEndPatch
 	private static void Postfix(Labor __instance, Task t)
 	{
 		BricktronRecovery.TaskEnded(__instance, t);
+	}
+}
+
+// A player's order to a worker ends its loop of failed tasks (#143).
+[Feature(Features.StuckReset, Features.StuckResetInfo)]
+[HarmonyPatch(typeof(Labor), nameof(Labor.SendOrder))]
+internal static class BricktronRecoveryOrderPatch
+{
+	private static void Postfix(Labor __instance, Labor.DecisionSource source)
+	{
+		if (source != Labor.DecisionSource.User)
+		{
+			return;
+		}
+		try
+		{
+			BricktronRecovery.OrderGiven(__instance);
+		}
+		catch (System.Exception ex)
+		{
+			Plugin.Log.LogWarning("BricktronRecovery: " + ex.Message);
+		}
 	}
 }
 

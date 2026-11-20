@@ -77,8 +77,6 @@ internal static class Metallurgy
 	// Multiplies the item's material colours.
 	private static readonly Color CoalTint = new Color(0.2f, 0.2f, 0.22f);
 
-	private static readonly Color SteelTint = new Color(1.35f, 1.45f, 1.6f);
-
 	private static void Enable()
 	{
 		Enabled = true;
@@ -265,8 +263,8 @@ internal static class Metallurgy
 		Factory build = Ready("BuildResources", "IronIngot");
 		if (build != null && !build.cachedTemplates.ContainsKey(SteelName))
 		{
-			GameObject glass = build.cachedTemplates.ContainsKey(BuildResources.GlassIngot.Name) ? build.GetTemplate(BuildResources.GlassIngot.Name).gameObject : null;
-			AddItem(build, "IronIngot", SteelName, typeof(Iron), Steel, SteelTint, (GameObject item) => IngotLooks.SteelItem(item, glass));
+			// The iron ingot with the steel look (IngotLooks.SteelLook), not tinted again by AddItem.
+			AddItem(build, "IronIngot", SteelName, typeof(Iron), Steel, Color.white, IngotLooks.SteelItem);
 		}
 		if (build != null && build.cachedTemplates.ContainsKey(SteelName) && build.cachedTemplates.ContainsKey(BuildResources.GlassIngot.Name))
 		{
@@ -383,6 +381,10 @@ internal static class Metallurgy
 
 	private static void Tint(GameObject item, Color tint)
 	{
+		if (tint == Color.white)
+		{
+			return;
+		}
 		Dictionary<Material, Material> tinted = new Dictionary<Material, Material>();
 		foreach (Renderer renderer in item.GetComponentsInChildren<Renderer>(true))
 		{
