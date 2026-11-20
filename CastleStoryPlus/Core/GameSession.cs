@@ -24,6 +24,10 @@ internal static class GameSession
 	{
 		LevelReadyActions.Add(action);
 	}
+
+	// Whether the level of the scene that runs now is ready: the game's own state (its signals are cleared when a scene
+	// starts and ends), so it does not depend on the order in which the ready signal and the scene change arrive.
+	public static bool LevelIsReady => GameSignals.Received(GameSignals.LevelReady);
 }
 
 [Feature]

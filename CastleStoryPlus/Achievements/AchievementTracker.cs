@@ -26,8 +26,14 @@ namespace CastleStoryPlus.Achievements;
 // cheats (Cheated); nor in a multiplayer game where the host allows cheats (CheatGuard), as another player's cheats
 // cannot be seen from here. A game that was saved after a cheat stays cheated: the folder of the save is remembered
 // (in the achievements file), so loading it again does not count either; the save itself is not touched, so it loads
-// without the mod. Only what happens after a game is set up counts: a best value read from a loaded or joined game
-// (waves survived, research done) is the baseline, and only what goes beyond it counts.
+// without the mod. Only what happens after a game is set up counts (Add). A best value (waves survived, research done)
+// is the game's own: a save of the player's own game goes on where it was saved (a save loaded at wave 12 is at wave
+// 12 of that one game); in a joined game, what it reports while it is set up is the baseline and only what goes
+// beyond it counts (BestValues).
+//
+// A game runs (for the achievements) while the game's level-ready signal was given in the scene that runs now and the
+// game was set up (LevelPresence): a scene change that arrives after the level is ready no longer stops the counting
+// (issue #144).
 //
 // Kept in the mod's own file (BepInEx/config/castlestoryplus_achievements.json): the counters, when each achievement
 // was unlocked and the cheated saves. Written whole to a temporary file and moved over the old one, so a crash never
@@ -49,8 +55,8 @@ internal sealed class AchievementTracker : MonoBehaviour
 	// The most one message may add to a counter.
 	private const int MostPerMessage = 100000;
 
-	// A loaded or joined game sets itself up as the level becomes ready: for this long (real seconds) the best values it
-	// reports are its baseline, and what the host sees done is not counted.
+	// A loaded or joined game sets itself up as the level becomes ready: for this long (real seconds) what the host sees
+	// done is not counted, and the best values a joined game reports are its baseline.
 	private const float BaselineSeconds = 5f;
 
 	private static readonly Dictionary<string, int> Counters = new Dictionary<string, int>();
@@ -63,14 +69,15 @@ internal sealed class AchievementTracker : MonoBehaviour
 	// What the host has seen done and not yet counted or told: team id and counter.
 	private static readonly Dictionary<KeyValuePair<int, string>, int> Pending = new Dictionary<KeyValuePair<int, string>, int>();
 
-	// The best values this game started with (waves survived, research done).
-	private static readonly Dictionary<string, int> Baseline = new Dictionary<string, int>();
+	// The best values this game reports (waves survived, research done): the baseline of a joined game.
+	private static readonly BestValues Best = new BestValues();
+
+	// Whether the game running now was set up.
+	private static readonly LevelPresence Level = new LevelPresence();
 
 	private static bool _loaded;
 
 	private static bool _dirty;
-
-	private static bool _levelActive;
 
 	private static bool _cheated;
 
@@ -151,7 +158,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 		{
 			return null;
 		}
-		if (!_levelActive || GameParam.Map == null)
+		if (!LevelRunning || GameParam.Map == null)
 		{
 			return "no game is running";
 		}
@@ -185,6 +192,9 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	internal static bool Counting => Why() == null;
 
+	// A game runs and was set up.
+	private static bool LevelRunning => Level.Running(GameSession.LevelIsReady);
+
 	internal static bool IsCheated => _cheated;
 
 	// For the tests: the cheated state of the game running, to put back afterwards.
@@ -202,7 +212,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 	// from now on is remembered as cheated (Saved), so it does not count when loaded again either.
 	internal static void Cheated(string reason)
 	{
-		if (!_levelActive || _cheated || !Plugin.IsEnabled(Features.Achievements))
+		if (!LevelRunning || _cheated || !Plugin.IsEnabled(Features.Achievements))
 		{
 			return;
 		}
@@ -217,13 +227,14 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	private static void LevelReady()
 	{
-		_levelActive = true;
+		Level.Ready();
 		_leaving = false;
 		_baselineUntil = Time.unscaledTime + BaselineSeconds;
 		_cheated = false;
 		_cheatReason = null;
 		Pending.Clear();
-		Baseline.Clear();
+		// A client is in someone else's game; the host plays his own (a new game or his own save).
+		Best.Start(joined: !NetworkServer.active);
 		Asset_Map map = GameParam.Map;
 		_saveFolder = (map != null && !map.IsNewGame()) ? map.path : null;
 		if (!string.IsNullOrEmpty(_saveFolder) && CheatedSaves.Contains(_saveFolder))
@@ -248,18 +259,18 @@ internal sealed class AchievementTracker : MonoBehaviour
 		_leaving = true;
 		Flush();
 		_leaving = false;
-		_levelActive = false;
+		Level.Left();
 		_cheated = false;
 		_cheatReason = null;
 		_saveFolder = null;
-		Baseline.Clear();
+		Best.Clear();
 		Save();
 	}
 
 	// The game was saved into the folder (its final one): a game saved after a cheat is remembered as cheated.
 	internal static void Saved(string folder)
 	{
-		if (!_levelActive || string.IsNullOrEmpty(folder))
+		if (!LevelRunning || string.IsNullOrEmpty(folder))
 		{
 			return;
 		}
@@ -299,24 +310,13 @@ internal sealed class AchievementTracker : MonoBehaviour
 		Apply(counter, amount, max: false);
 	}
 
-	// Every peer: the best value the game shows now (waves survived, research done). What the game started with (a
-	// loaded or joined game) is its baseline; only a value beyond it counts.
+	// Every peer: the best value the game shows now (waves survived, research done). The player's own game counts as it
+	// stands, also when loaded from a save; a joined game's value counts only beyond what it reported while it was set
+	// up (BestValues).
 	internal static void LocalMax(string counter, int value)
 	{
-		if (!IgnoreRules && _levelActive)
-		{
-			Baseline.TryGetValue(counter, out int baseline);
-			if (Time.unscaledTime < _baselineUntil)
-			{
-				Baseline[counter] = Math.Max(baseline, value);
-				return;
-			}
-			if (value <= baseline)
-			{
-				return;
-			}
-		}
-		Apply(counter, value, max: true);
+		int counted = IgnoreRules ? value : Best.Report(counter, value, Time.unscaledTime < _baselineUntil);
+		Apply(counter, counted, max: true);
 	}
 
 	// Counts what was reported on the host, and tells the other players (while the host's own game counts).
@@ -579,7 +579,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 		Unlocked.Clear();
 		CheatedSaves.Clear();
 		Pending.Clear();
-		Baseline.Clear();
+		Best.Clear();
 		_dirty = true;
 		_loaded = true;
 		Save();
@@ -598,6 +598,28 @@ internal sealed class AchievementTracker : MonoBehaviour
 		_baselineUntil = over ? 0f : Time.unscaledTime + BaselineSeconds;
 	}
 
+	// For the tests: the game is a joined one (a client's) or the player's own; its baselines are forgotten.
+	internal static void SetJoinedForTest(bool joined)
+	{
+		Best.Start(joined);
+	}
+
+	// For the tests: the game is set up again as when its level became ready, or forgotten as when a scene change came.
+	internal static void SetLevelSetUpForTest(bool setUp)
+	{
+		if (setUp)
+		{
+			Level.Ready();
+		}
+		else
+		{
+			Level.Left();
+		}
+	}
+
+	// For the tests: whether the game running now counts as set up.
+	internal static bool LevelSetUp => Level.SetUp;
+
 	// Whether the folder is the save of a game cheats were used in.
 	internal static bool IsCheatedSave(string folder)
 	{
@@ -614,7 +636,13 @@ internal sealed class AchievementTracker : MonoBehaviour
 
 	private void Update()
 	{
-		if (_levelActive && !_leaving)
+		if (Level.NeedsSetUp(GameSession.LevelIsReady, _leaving))
+		{
+			// The level is ready, but a scene change came after its ready signal and the game was forgotten.
+			Plugin.Log.LogInfo("Achievements: the game is ready but was not set up (a scene change came after it was ready); setting it up");
+			LevelReady();
+		}
+		if (LevelRunning && !_leaving)
 		{
 			_lastCounting = Why() == null;
 			Faction local = LocalFaction;
@@ -623,7 +651,7 @@ internal sealed class AchievementTracker : MonoBehaviour
 				_lastTeam = local.ID;
 			}
 		}
-		if (_levelActive && !_cheated && Architecte.editorMode && InputModeController.DefaultMode != InputMode.worldEditor && !IgnoreRules)
+		if (LevelRunning && !_cheated && Architecte.editorMode && InputModeController.DefaultMode != InputMode.worldEditor && !IgnoreRules)
 		{
 			// The game's own instant build (its debug sidebar's, or the editor mode).
 			Cheated("instant build");
