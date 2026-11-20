@@ -39,7 +39,7 @@ if CastleStoryPlus_ScoreboardState == nil then
 	if fy_Corruptron ~= nil and fy_Corruptron.hk_OnKilled ~= nil then
 		Hooks.Connect(fy_Corruptron.hk_OnKilled, function(ld)
 			if type(ld) == ""table"" then ld = ld[1] end
-			if ld ~= nil and IsServer() and CastleStoryPlus.IsHealtron(ld) then
+			if ld ~= nil and Registry ~= nil and IsServer() and CastleStoryPlus.IsHealtron(ld) then
 				Registry.cspHealtronKillCount = (Registry.cspHealtronKillCount or 0) + 1
 			end
 		end)

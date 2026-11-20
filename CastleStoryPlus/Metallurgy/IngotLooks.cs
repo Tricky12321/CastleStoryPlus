@@ -32,6 +32,8 @@ internal static class IngotLooks
 
 	private static readonly string[] ColorProperties = { "_Color", "_BaseColor", "_TintColor" };
 
+	private static readonly string[] GlossProperties = { "_Gloss", "_Glossiness" };
+
 	internal static Material Original(Material material)
 	{
 		return (material != null && Originals.TryGetValue(material, out Material original)) ? original : material;
@@ -174,9 +176,13 @@ internal static class IngotLooks
 		{
 			Plugin.Log.LogWarning("Metallurgy: the material " + original.name + " (shader " + original.shader.name + ") has no colour to tint; steel keeps it");
 		}
-		if (steel.HasProperty("_Glossiness"))
+		// The iron ingot's shader (Shader Forge/Metal) calls it _Gloss; Unity's standard shader _Glossiness.
+		foreach (string property in GlossProperties)
 		{
-			steel.SetFloat("_Glossiness", Mathf.Max(steel.GetFloat("_Glossiness"), SteelGlossiness));
+			if (steel.HasProperty(property))
+			{
+				steel.SetFloat(property, Mathf.Max(steel.GetFloat(property), SteelGlossiness));
+			}
 		}
 		Steely[original] = steel;
 		SteelMaterials.Add(steel);
