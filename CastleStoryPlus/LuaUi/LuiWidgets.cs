@@ -536,6 +536,41 @@ internal class LuiCounter : MonoBehaviour
 	}
 }
 
+// A tooltip on anything that takes the pointer (an image with raycastTarget on, say).
+internal class LuiHoverTip : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+{
+	public string Text;
+
+	public static LuiHoverTip Add(GameObject go, string text)
+	{
+		LuiHoverTip tip = go.GetComponent<LuiHoverTip>();
+		if (tip == null)
+		{
+			tip = go.AddComponent<LuiHoverTip>();
+		}
+		tip.Text = text;
+		return tip;
+	}
+
+	public void OnPointerEnter(PointerEventData eventData)
+	{
+		if (!string.IsNullOrEmpty(Text))
+		{
+			LuiTooltip.Show(Text, (RectTransform)transform);
+		}
+	}
+
+	public void OnPointerExit(PointerEventData eventData)
+	{
+		LuiTooltip.Hide((RectTransform)transform);
+	}
+
+	private void OnDisable()
+	{
+		LuiTooltip.Hide((RectTransform)transform);
+	}
+}
+
 // One tooltip at a time, on the canvas' tooltip layer, beside the thing it explains and kept on screen.
 internal static class LuiTooltip
 {
