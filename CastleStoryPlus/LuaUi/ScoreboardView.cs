@@ -34,6 +34,16 @@ if CastleStoryPlus_ScoreboardState == nil then
 	Hooks.Connect(UIGame.hk_SetSidebarSpacer, function(flag) if type(flag) == ""table"" then flag = flag[1] end _s.spacer = flag and true or false end)
 	Hooks.Connect(FactionStorage.hk_OnSetContent, function() Data.Storage:OnSetContent() end)
 	Data.Storage:OnSetContent()
+	-- The host counts the Healtrons killed (the game counts them as corruptrons) in the saved Registry; clients get
+	-- the host's count with the wave rows (WaveCountsSync).
+	if fy_Corruptron ~= nil and fy_Corruptron.hk_OnKilled ~= nil then
+		Hooks.Connect(fy_Corruptron.hk_OnKilled, function(ld)
+			if type(ld) == ""table"" then ld = ld[1] end
+			if ld ~= nil and IsServer() and CastleStoryPlus.IsHealtron(ld) then
+				Registry.cspHealtronKillCount = (Registry.cspHealtronKillCount or 0) + 1
+			end
+		end)
+	end
 
 	function CastleStoryPlus_ScoreboardNext()
 		if IsServer() then
@@ -62,6 +72,7 @@ if CastleStoryPlus_ScoreboardState == nil then
 		d.corruptrons = Registry.corruptronKillCount or 0
 		d.biftrons = Registry.biftronKillCount or 0
 		d.magitrons = Registry.magitronKillCount or 0
+		d.healtrons = Registry.cspHealtronKillCount or 0
 		d.survived = Registry.waveSurvived or 0
 		if Registry.waveTimer ~= nil then
 			d.timer = Registry.waveTimer:FormatedRemainingSeconds()
@@ -145,7 +156,15 @@ end
 
 	private const float CellHeight = 28f;
 
+	// A Healtron is drawn as a corruptron in this green with a green plus on it.
 	private static readonly Color HealtronGreen = new Color(0.45f, 1f, 0.4f, 1f);
+
+	private static readonly Color HealtronBadge = new Color(0.35f, 1f, 0.3f, 1f);
+
+	private const float BadgeSize = 13f;
+
+	// Each kind's name, shown when the pointer is over its counter (the wave rows' order).
+	private static readonly string[] KindNames = { "Minitrons", "Corruptrons", "Healtrons (corruptrons that heal their allies)", "Biftrons", "Warlocks" };
 
 	private const float RefreshSeconds = 0.25f;
 
@@ -204,6 +223,8 @@ end
 	private Text _biftronKills;
 
 	private Text _magitronKills;
+
+	private Text _healtronKills;
 
 	private RectTransform _waveList;
 
@@ -495,17 +516,18 @@ end
 		UiKit.Flexible(_survived.gameObject);
 		_kills = LuiWidgets.Label(title, string.Empty, 12, LuiStyle.Gray, TextAnchor.MiddleRight, null);
 
-		// Kills by kind: all corruptrons (minitrons, corruptrons, biftrons), then each kind, on two lines.
+		// Kills by kind: all corruptrons (minitrons, corruptrons, healtrons, biftrons), then each kind, on two lines.
 		RectTransform units = LuiWidgets.Vertical(enemy, 0f, 0);
 		Destroy(units.GetComponent<ContentSizeFitter>());
 		units.GetComponent<VerticalLayoutGroup>().childForceExpandWidth = true;
 		Transform first = KindLine(units);
 		Transform second = KindLine(units);
-		_groupKills = Cell(first, IconKeys._Corruptrons_Group, 36f, Color.white, out _);
-		_minitronKills = Cell(first, IconKeys._Minitron, 24f, Color.white, out _);
-		_corruptronKills = Cell(first, IconKeys._Corruptron, 24f, Color.white, out _);
-		_biftronKills = Cell(second, IconKeys._Biftron, 24f, Color.white, out _);
-		_magitronKills = Cell(second, IconKeys._Warlock, 24f, Color.white, out _);
+		_groupKills = Cell(first, IconKeys._Corruptrons_Group, 36f, Color.white, false, "Corrupted units killed (minitrons, corruptrons, healtrons and biftrons)", out _);
+		_minitronKills = KindCell(first, 0, "Minitrons killed", out _);
+		_corruptronKills = KindCell(first, 1, "Corruptrons killed", out _);
+		_biftronKills = KindCell(second, 3, "Biftrons killed", out _);
+		_magitronKills = KindCell(second, 4, "Warlocks killed", out _);
+		_healtronKills = KindCell(second, 2, "Healtrons killed", out _);
 
 		// The waves still on the island: enemies left of each kind, of as many as were seen.
 		// As wide as the block (not as its rows want: "41/41" counters made it wider than the scoreboard).
@@ -585,9 +607,44 @@ end
 		return line;
 	}
 
+	// The icon of an enemy kind (the wave rows' order: minitron, corruptron, healtron, biftron, warlock).
+	internal static IconKey KindIcon(int kind)
+	{
+		switch (kind)
+		{
+			case 0:
+				return IconKeys._Minitron;
+			case 1:
+			case 2:
+				return IconKeys._Corruptron;
+			case 3:
+				return IconKeys._Biftron;
+			default:
+				return IconKeys._Warlock;
+		}
+	}
+
+	// The icon's 64-pixel sprite, or its 32-pixel one where the game has no larger one.
+	internal static Sprite IconSprite(IconKey icon)
+	{
+		if (icon == null)
+		{
+			return null;
+		}
+		Sprite sprite = icon.Get64();
+		return (sprite != null) ? sprite : icon.Get32();
+	}
+
+	// A counter of an enemy kind: its icon (a Healtron's green, with a plus) and its name when pointed at.
+	private static Text KindCell(Transform parent, int kind, string tooltip, out GameObject root)
+	{
+		bool healtron = kind == 2;
+		return Cell(parent, KindIcon(kind), 24f, healtron ? HealtronGreen : Color.white, healtron, tooltip, out root);
+	}
+
 	// An icon with its count right beside it, right-aligned within a width of its own and on one line, so a "27/41" is
 	// never squeezed into a column of single digits.
-	private static Text Cell(Transform parent, IconKey icon, float iconWidth, Color tint, out GameObject root)
+	private static Text Cell(Transform parent, IconKey icon, float iconWidth, Color tint, bool healBadge, string tooltip, out GameObject root)
 	{
 		RectTransform cell = LuiWidgets.Horizontal(parent, 4f, 0);
 		Destroy(cell.GetComponent<ContentSizeFitter>());
@@ -597,10 +654,29 @@ end
 		RectTransform image = UiKit.CreateRect("Icon", cell);
 		UiKit.Fixed(image.gameObject, iconWidth, 28f);
 		Image sprite = image.gameObject.AddComponent<Image>();
-		sprite.sprite = icon.Get64();
+		sprite.sprite = IconSprite(icon);
 		sprite.color = tint;
 		sprite.preserveAspect = true;
-		sprite.raycastTarget = false;
+		sprite.raycastTarget = tooltip != null;
+		if (healBadge)
+		{
+			// A green plus on the icon's lower right corner, so a Healtron is not just a corruptron of another colour.
+			RectTransform badge = UiKit.CreateRect("Heal", image);
+			badge.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+			badge.anchorMin = badge.anchorMax = new Vector2(1f, 0f);
+			badge.pivot = new Vector2(1f, 0f);
+			badge.sizeDelta = new Vector2(BadgeSize, BadgeSize);
+			badge.anchoredPosition = new Vector2(2f, 0f);
+			Image plus = badge.gameObject.AddComponent<Image>();
+			plus.sprite = IconSprite(IconKeys.UI_Plus);
+			plus.color = HealtronBadge;
+			plus.preserveAspect = true;
+			plus.raycastTarget = false;
+		}
+		if (tooltip != null)
+		{
+			LuiHoverTip.Add(image.gameObject, tooltip);
+		}
 		Text text = LuiWidgets.Label(cell, "0", 12, LuiStyle.White, TextAnchor.MiddleRight, null);
 		text.horizontalOverflow = HorizontalWrapMode.Overflow;
 		UiKit.Fixed(text.gameObject, CellWidth - iconWidth - 8f, CellHeight);
@@ -715,12 +791,20 @@ end
 		int corruptrons = (int)LuaBridge.Number(LuaBridge.Get(data, "corruptrons"), 0f);
 		int biftrons = (int)LuaBridge.Number(LuaBridge.Get(data, "biftrons"), 0f);
 		int magitrons = (int)LuaBridge.Number(LuaBridge.Get(data, "magitrons"), 0f);
+		// The game counts a Healtron as a corruptron; a client has the host's count of them.
+		int healtrons = (int)LuaBridge.Number(LuaBridge.Get(data, "healtrons"), 0f);
+		if (!UnityEngine.Networking.NetworkServer.active && Invasion.WaveCountsSync.HealtronKills >= 0)
+		{
+			healtrons = Invasion.WaveCountsSync.HealtronKills;
+		}
+		healtrons = Mathf.Clamp(healtrons, 0, corruptrons);
 		int survived = (int)LuaBridge.Number(LuaBridge.Get(data, "survived"), 0f);
 		Set(_survived, ((survived > 1) ? _survivedMany : _survivedOne).Replace("#waves_survived", survived.ToString()));
 		Set(_kills, _killLabel + " " + (minitrons + corruptrons + biftrons + magitrons));
 		Set(_groupKills, (minitrons + corruptrons + biftrons).ToString());
 		Set(_minitronKills, minitrons.ToString());
-		Set(_corruptronKills, corruptrons.ToString());
+		Set(_corruptronKills, (corruptrons - healtrons).ToString());
+		Set(_healtronKills, healtrons.ToString());
 		Set(_biftronKills, biftrons.ToString());
 		Set(_magitronKills, magitrons.ToString());
 		if (_timer != null)
@@ -737,7 +821,7 @@ end
 			Invasion.WaveCountsSync.Listen();
 			if (UnityEngine.Networking.NetworkServer.active)
 			{
-				Invasion.WaveCountsSync.Send(rows);
+				Invasion.WaveCountsSync.Send(rows, healtrons);
 			}
 			else if (Invasion.WaveCountsSync.Rows != null)
 			{
@@ -785,7 +869,9 @@ end
 				seen += kindSeen;
 				Set(row.Kinds[k], kindLeft + "/" + kindSeen);
 				// An unseen kind keeps its place, so the columns of the waves line up.
-				row.Cells[k].GetComponent<CanvasGroup>().alpha = (kindSeen > 0) ? 1f : 0f;
+				CanvasGroup group = row.Cells[k].GetComponent<CanvasGroup>();
+				group.alpha = (kindSeen > 0) ? 1f : 0f;
+				group.blocksRaycasts = kindSeen > 0;
 			}
 			Active(row.FirstLine, waves[at + 1 + KindCount] > 0 || waves[at + 2 + KindCount] > 0 || waves[at + 3 + KindCount] > 0);
 			Active(row.SecondLine, waves[at + 1 + KindCount + 3] > 0 || waves[at + 1 + KindCount + 4] > 0);
@@ -833,10 +919,9 @@ end
 		Transform second = KindLine(root);
 		row.FirstLine = first.gameObject;
 		row.SecondLine = second.gameObject;
-		IconKey[] icons = { IconKeys._Minitron, IconKeys._Corruptron, IconKeys._Corruptron, IconKeys._Biftron, IconKeys._Warlock };
 		for (int k = 0; k < KindCount; k++)
 		{
-			row.Kinds[k] = Cell((k < 3) ? first : second, icons[k], 24f, (k == 2) ? HealtronGreen : Color.white, out row.Cells[k]);
+			row.Kinds[k] = KindCell((k < 3) ? first : second, k, KindNames[k] + " left in the wave, of all that came", out row.Cells[k]);
 		}
 		return row;
 	}
