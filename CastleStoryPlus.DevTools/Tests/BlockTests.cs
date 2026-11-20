@@ -149,6 +149,75 @@ internal static class BlockTests
 		t.True(dragger is VerticalDragger, "The ladder blueprint's dragger is " + ((dragger != null) ? dragger.GetType().Name : "missing") + ", not the vertical one");
 	}
 
+	private static readonly Factory.AssetKey LongBrickBlueprint = new Factory.AssetKey("Blueprints", "Stone_Brick1x4");
+
+	private static readonly Factory.AssetKey LongSlabBlueprint = new Factory.AssetKey("Blueprints", "Wood_Slab1x5");
+
+	[GameTest("Blocks", "A 1x4 brick blueprint in the air touching a stone pillar with one end only: not valid (#145)", Exclusive = true)]
+	private static IEnumerator LongBrickOnOneEndIsInvalid(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 3, 9, 4);
+		XYZ root = new XYZ(site.x, site.y + 1, site.z - 3);
+		XYZ near = new XYZ(site.x, site.y, site.z - 4);
+		TestWorld.PlaceBlocks(t, new List<XYZ> { near, near + XYZ.up });
+		yield return t.Until(() => Engine.IsBlock(near + XYZ.up), 5f, "the pillar to be registered");
+		yield return t.Frames(3);
+		BlueprintPlacer.Fit fit = TryAtCorner(t, LongBrickBlueprint, root);
+		t.True((fit.Check & (ValidationResult.Valid | ValidationResult.Buildable)) == 0, "A 1x4 brick held by one end only is placeable: " + fit.Check);
+	}
+
+	[GameTest("Blocks", "A 1x4 brick blueprint bridging the gap between two stone pillars: valid (#145)", Exclusive = true)]
+	private static IEnumerator LongBrickBridgingAGapIsValid(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 3, 9, 4);
+		XYZ root = new XYZ(site.x, site.y + 1, site.z - 3);
+		XYZ near = new XYZ(site.x, site.y, site.z - 4);
+		XYZ far = new XYZ(site.x, site.y, site.z + 1);
+		TestWorld.PlaceBlocks(t, new List<XYZ> { near, near + XYZ.up, far, far + XYZ.up });
+		yield return t.Until(() => Engine.IsBlock(near + XYZ.up) && Engine.IsBlock(far + XYZ.up), 5f, "the pillars to be registered");
+		yield return t.Frames(3);
+		BlueprintPlacer.Fit fit = TryAtCorner(t, LongBrickBlueprint, root);
+		t.True((fit.Check & ValidationResult.Obstructed) == 0, "The bridging brick is obstructed: " + fit.Check);
+		t.True((fit.Check & (ValidationResult.Valid | ValidationResult.Buildable)) != 0, "A 1x4 brick resting on both its ends is not valid: " + fit.Check);
+	}
+
+	[GameTest("Blocks", "A 1x5 slab blueprint in the air touching a stone pillar with one end only: not valid (#141)", Exclusive = true)]
+	private static IEnumerator LongSlabOnOneEndIsInvalid(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 3, 9, 4);
+		XYZ root = new XYZ(site.x, site.y + 1, site.z - 3);
+		XYZ near = new XYZ(site.x, site.y, site.z - 4);
+		TestWorld.PlaceBlocks(t, new List<XYZ> { near, near + XYZ.up });
+		yield return t.Until(() => Engine.IsBlock(near + XYZ.up), 5f, "the pillar to be registered");
+		yield return t.Frames(3);
+		BlueprintPlacer.Fit fit = TryAtCorner(t, LongSlabBlueprint, root);
+		t.True((fit.Check & (ValidationResult.Valid | ValidationResult.Buildable)) == 0, "A 1x5 slab held by one end only is placeable: " + fit.Check);
+	}
+
+	// One of the mod's blocks fitted with its first corner on the voxel, unturned (its length along +z); the cells it
+	// takes are checked, so a fitter that put it elsewhere fails the test instead of testing another spot. The fitter
+	// reads the shared CustomBlocks.Anchor (the player's chosen corner), set here for the fit and put back: the tests
+	// using this are Exclusive, so no other test fits one of the mod's blocks meanwhile.
+	private static BlueprintPlacer.Fit TryAtCorner(TestContext t, Factory.AssetKey key, XYZ root)
+	{
+		int anchor = CastleStoryPlus.Building.CustomBlocks.Anchor;
+		CastleStoryPlus.Building.CustomBlocks.Anchor = 0;
+		BlueprintPlacer.Fit fit;
+		try
+		{
+			fit = BlueprintPlacer.Try(key, root, 0);
+		}
+		finally
+		{
+			CastleStoryPlus.Building.CustomBlocks.Anchor = anchor;
+		}
+		t.NotNull(fit, "The fitted " + key.Name);
+		t.Record("cells", fit.Min + " to " + fit.Max);
+		t.Record("check", fit.Check.ToString());
+		t.True(fit.HasCells && fit.Min.Equals(root), "The " + key.Name + " was fitted at " + fit.Min + ", not at " + root);
+		return fit;
+	}
+
 	// The player's delete of a blueprint not yet built (UNetBlueprint.CmdDestroyBluePrint).
 	private static void RemoveAfter(TestContext t, Blueprint blueprint)
 	{
