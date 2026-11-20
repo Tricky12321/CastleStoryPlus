@@ -310,27 +310,6 @@ internal static class AchievementTests
 		yield return null;
 	}
 
-	[GameTest("Achievements", "A scene change after the level is ready does not stop the counting (#144)", TimeoutSeconds = 30f)]
-	private static IEnumerator LateSceneChangeKeepsCounting(TestContext t)
-	{
-		Isolate(t, ignoreRules: false);
-		AchievementTracker.SandboxProbe = () => false;
-		AchievementTracker.ClearCheatedForTest();
-		AchievementTracker.SetBaselineOverForTest(true);
-		t.True(CastleStoryPlus.Core.GameSession.LevelIsReady, "The test world's level is not ready");
-		t.True(AchievementTracker.Why() == null, "The test world does not count: " + AchievementTracker.Why());
-		// The game forgotten as a scene change does, while its level stays ready (a save loaded, the change coming late).
-		AchievementTracker.SetLevelSetUpForTest(false);
-		t.True(AchievementTracker.Why() != null, "A game that was not set up counts");
-		yield return t.Frames(3);
-		t.True(AchievementTracker.LevelSetUp, "The ready game was not set up again");
-		AchievementTracker.ClearCheatedForTest();
-		AchievementTracker.SetBaselineOverForTest(true);
-		t.True(AchievementTracker.Why() == null, "The game does not count after it was set up again: " + AchievementTracker.Why());
-		AchievementTracker.LocalMax(AchievementCounter.Wave, 4);
-		t.Equal(4, AchievementTracker.Value(AchievementCounter.Wave), "Wave after the late scene change");
-	}
-
 	[GameTest("Achievements", "A block counts when its blueprint is built, once", TimeoutSeconds = 60f)]
 	private static IEnumerator BuiltBlockCounts(TestContext t)
 	{
