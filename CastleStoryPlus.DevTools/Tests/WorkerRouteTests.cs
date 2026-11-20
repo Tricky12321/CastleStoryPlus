@@ -190,13 +190,17 @@ internal static class WorkerRouteTests
 		{
 			t.Skip("No enemy faction in this game");
 		}
-		// West to east: the builder, 18 blocks of open ground, the chest. The stockpile stands in the chest's ruin (so
-		// the idle cleanup's reach covers the item by the chest), the guardians just east of the chest.
+		// Along x, from the home crystal's side out: the builder, 18 blocks of open ground, the chest, the guardians just
+		// beyond it. The chest lies away from home, so the builder's own walks (to the gather point by the home crystal)
+		// do not pass it: a walk past the chest is not an errand to it (the builder that stood west of an east chest,
+		// with the crystal further east, walked past it on its way home). The stockpile stands in the chest's ruin (so the
+		// idle cleanup's reach covers the item by the chest).
 		XYZ site = Scenario.Site(t, 31, 9, 4, away: 30);
-		XYZ chestAt = new XYZ(site.x + 9, site.y, site.z);
+		int home = (Scenario.Home().x >= site.x) ? 1 : -1;
+		XYZ chestAt = new XYZ(site.x - home * 9, site.y, site.z);
 		Recepteur stockpile = null;
 		BuildProject build = Scenario.BuildProject(t, site);
-		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(site.x + 3, site.y, site.z - 2), build, made => stockpile = made.GetComponent<Recepteur>());
+		yield return Scenario.Building(t, TaskTests.Pallet, new XYZ(chestAt.x + home * 6, site.y, site.z - 2), build, made => stockpile = made.GetComponent<Recepteur>());
 		t.NotNull(stockpile, "The stockpile's storage");
 		GameObject chest = Brix.Transactions.Transactor.SpawnUNet(ObjetsDynamiques.Chest, Faction.DefaultNeutral, chestAt.ToVector3(), Quaternion.identity);
 		t.NotNull(chest, "The chest");
@@ -210,17 +214,18 @@ internal static class WorkerRouteTests
 		List<Labor> guardians = new List<Labor>();
 		for (int i = 0; i < 2; i++)
 		{
-			XYZ at = Scenario.Walkable(new XYZ(chestAt.x + 4, chestAt.y, chestAt.z + ((i == 0) ? -3 : 3)));
+			XYZ at = Scenario.Walkable(new XYZ(chestAt.x - home * 4, chestAt.y, chestAt.z + ((i == 0) ? -3 : 3)));
 			Labor beast = Beasts.Spawn(BeastKind.Boulderback, enemy, at.ToVector3(), 1);
 			t.NotNull(beast, "Guardian " + (i + 1));
 			Scenario.Adopt(t, beast);
-			beast.Autonomy = AutonomyStatus.WaitForOrders;
+			// Held where they stand. Not WaitForOrders: with WorkerAI any task that ends turns that into FreeAgent
+			// (FasterWorkers), and the unit goes about its own business.
+			beast.Autonomy = AutonomyStatus.HoldingPosition;
 			guardians.Add(beast);
 		}
-		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x - 9, site.y, site.z));
-		AutonomyStatus free = builder.Autonomy;
-		builder.Autonomy = AutonomyStatus.WaitForOrders;
-		GameObject ingot = Scenario.Items(t, BuildResources.IronIngot, 1, new XYZ(chestAt.x - 2, chestAt.y, chestAt.z + 2).ToVector3())[0];
+		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(site.x + home * 9, site.y, site.z));
+		builder.Autonomy = AutonomyStatus.HoldingPosition;
+		GameObject ingot = Scenario.Items(t, BuildResources.IronIngot, 1, new XYZ(chestAt.x + home * 2, chestAt.y, chestAt.z + 2).ToVector3())[0];
 		GameComponent item = ingot.GetComponent<GameComponent>();
 		Ressource iron = Apparence.PrincipaleOf(ingot);
 		t.NotNull(item, "The iron ingot's game component");
@@ -230,7 +235,7 @@ internal static class WorkerRouteTests
 		yield return TestWorld.WaitForGraph(t);
 		// The chests are looked at every second; the idle cleanup's item list is renewed every 5 s.
 		yield return t.Seconds(6f);
-		t.Log("Chest at " + chestPos + ", guardians at " + guardians[0].transform.position + " and " + guardians[1].transform.position + ", builder at " + Units.VoxelOf(builder) + ", iron ingot at " + ingot.transform.position);
+		t.Log("Chest at " + chestPos + ", guardians at " + guardians[0].transform.position + " and " + guardians[1].transform.position + ", builder at " + Units.VoxelOf(builder) + " (" + builder.Autonomy.Description + "), iron ingot at " + ingot.transform.position);
 		t.True(TreasureChests.InGuardedRuin(chestPos), "The chest's ruin is not kept out although its guardians stand by it");
 		t.True(TreasureChests.InGuardedRuin(ingot.transform.position), "The iron ingot by the guarded chest is not in its ruin");
 		t.False(TreasureChests.InGuardedRuin(builder.transform.position), "The builder 18 blocks away is in the chest's ruin");
@@ -254,7 +259,7 @@ internal static class WorkerRouteTests
 		}
 		// The builder left to its own devices for a while never walks up to the chest. Whatever sends it is named in
 		// the log: its task, activity and autonomy every 5 s.
-		builder.Autonomy = free;
+		builder.Autonomy = AutonomyStatus.FreeAgent;
 		Scenario.Idle(builder);
 		float closest = float.MaxValue;
 		float until = Time.time + 45f;
@@ -278,7 +283,7 @@ internal static class WorkerRouteTests
 		t.True(closest > AtChest, "The idle builder walked up to the guarded chest (to " + closest.ToString("F1") + " blocks): " + Doing(builder));
 		t.True(chest.activeInHierarchy && !chest.IsNullOrReleased(), "The guarded chest was opened");
 		// The guardians gone (lured away or slain), the ruin is open again: the item may be fetched and cleaned up.
-		builder.Autonomy = AutonomyStatus.WaitForOrders;
+		builder.Autonomy = AutonomyStatus.HoldingPosition;
 		Scenario.Idle(builder);
 		foreach (Labor guardian in guardians)
 		{
