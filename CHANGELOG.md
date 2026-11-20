@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [ADD] **Credits:** CREDITS.md thanks everyone whose issues were fixed or built, with links to their GitHub profiles and issues; linked from the top of the README.
+
 ## 0.9.1 — 2026-11-20
 
 - [FIX] **Wave achievements did not count the waves of a loaded save (#144):** "Survive 10/20/40 invasion waves in one game" stayed at the count of an earlier game while the wave panel showed more waves survived. The waves (and research tiers) a game already had when it was loaded were taken as its baseline, and only a wave beyond them counted, so a save loaded at wave 12 showed 3/10 (from another game) until wave 13 was survived. A save of the player's own game (loaded as host) now goes on where it was saved: loaded at wave 12, it counts as 12 waves survived in that one game. In a joined game (a client) what the game reports while it is set up is still the baseline, and only what goes beyond it counts. Cheated saves still do not count. Part of `Achievements`.
