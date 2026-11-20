@@ -4,6 +4,7 @@
   <a href="https://github.com/Tricky12321/CastleStoryPlus/releases/latest">Download</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
   <a href="docs/Gallery.md">Gallery</a> ·
+  <a href="CREDITS.md">Credits</a> ·
   <a href="https://github.com/Tricky12321/CastleStoryPlus/issues">Report a bug</a>
 </p>
 
