@@ -21,6 +21,15 @@ internal static class BlockSupportRules
 		return Math.Max(0, supportCells - RequiredSupport(width, depth));
 	}
 
+	// The MaxMissingSupport a placed (built) block of the mod is held to: one supported cell is enough, the rule every
+	// block of the mod was placed under before RequiredSupport. Only blueprints (placing and building) need
+	// RequiredSupport; a built block keeps the old rule, so the castles of existing saves, which the game validates
+	// again when a save is loaded, do not collapse. A built block with none of its support cells holding still falls.
+	internal static int PlacedMaxMissingSupport(int supportCells)
+	{
+		return Math.Max(0, supportCells - 1);
+	}
+
 	// The game's own test: enough of the support cells hold the block.
 	internal static bool EnoughSupport(int supported, int supportCells, int maxMissingSupport)
 	{

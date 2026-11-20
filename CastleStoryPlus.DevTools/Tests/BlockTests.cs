@@ -153,7 +153,7 @@ internal static class BlockTests
 
 	private static readonly Factory.AssetKey LongSlabBlueprint = new Factory.AssetKey("Blueprints", "Wood_Slab1x5");
 
-	[GameTest("Blocks", "A 1x4 brick blueprint in the air touching a stone pillar with one end only: not valid (#145)")]
+	[GameTest("Blocks", "A 1x4 brick blueprint in the air touching a stone pillar with one end only: not valid (#145)", Exclusive = true)]
 	private static IEnumerator LongBrickOnOneEndIsInvalid(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 3, 9, 4);
@@ -166,7 +166,7 @@ internal static class BlockTests
 		t.True((fit.Check & (ValidationResult.Valid | ValidationResult.Buildable)) == 0, "A 1x4 brick held by one end only is placeable: " + fit.Check);
 	}
 
-	[GameTest("Blocks", "A 1x4 brick blueprint bridging the gap between two stone pillars: valid (#145)")]
+	[GameTest("Blocks", "A 1x4 brick blueprint bridging the gap between two stone pillars: valid (#145)", Exclusive = true)]
 	private static IEnumerator LongBrickBridgingAGapIsValid(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 3, 9, 4);
@@ -181,7 +181,7 @@ internal static class BlockTests
 		t.True((fit.Check & (ValidationResult.Valid | ValidationResult.Buildable)) != 0, "A 1x4 brick resting on both its ends is not valid: " + fit.Check);
 	}
 
-	[GameTest("Blocks", "A 1x5 slab blueprint in the air touching a stone pillar with one end only: not valid (#141)")]
+	[GameTest("Blocks", "A 1x5 slab blueprint in the air touching a stone pillar with one end only: not valid (#141)", Exclusive = true)]
 	private static IEnumerator LongSlabOnOneEndIsInvalid(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 3, 9, 4);
@@ -195,7 +195,9 @@ internal static class BlockTests
 	}
 
 	// One of the mod's blocks fitted with its first corner on the voxel, unturned (its length along +z); the cells it
-	// takes are checked, so a fitter that put it elsewhere fails the test instead of testing another spot.
+	// takes are checked, so a fitter that put it elsewhere fails the test instead of testing another spot. The fitter
+	// reads the shared CustomBlocks.Anchor (the player's chosen corner), set here for the fit and put back: the tests
+	// using this are Exclusive, so no other test fits one of the mod's blocks meanwhile.
 	private static BlueprintPlacer.Fit TryAtCorner(TestContext t, Factory.AssetKey key, XYZ root)
 	{
 		int anchor = CastleStoryPlus.Building.CustomBlocks.Anchor;

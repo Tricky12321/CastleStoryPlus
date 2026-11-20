@@ -37,8 +37,11 @@ namespace CastleStoryPlus.Building;
 // cannot hang from one end. A long brick (1 x 3, 1 x 4) also rests on a stone block or the terrain right beyond either
 // end, so it can bridge a gap between two walls (both ends are two cells). A slab also holds on to the side of a stone
 // block or the terrain: its support cells are the blocks below it and the blocks round it at its own height, and as
-// many of them as half its footprint must hold it (a slab along a wall, not one touching it with an end). The IDs are
-// kept in saves and must never change; saves with these blocks need the mod.
+// many of them as half its footprint must hold it (a slab along a wall, not one touching it with an end). That need is
+// checked for blueprints (placing and building them); a placed block stays up while one of its support cells holds, the
+// rule all of them were placed under before (CustomBlocksPlacedSupportPatch), so existing saves do not collapse when
+// the game validates every block on load. The IDs are kept in saves and must never change; saves with these blocks
+// need the mod.
 // The wood ladder (Ladders) is a slab-like wood block with a ladder mesh against its front face; Ladders makes it
 // climbable.
 [Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
@@ -234,6 +237,24 @@ internal static class CustomBlocks
 		foreach (Shape shape in Shapes)
 		{
 			if (shape.Wood && !shape.Ladder && shape.Name == name)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// One of the mod's blocks (any shape), as a blueprint or placed.
+	internal static bool IsShape(Brix.Game.Components.Volumes.IVolume volume)
+	{
+		string name = (volume != null) ? volume.AssetKey.Name : null;
+		if (name == null)
+		{
+			return false;
+		}
+		foreach (Shape shape in Shapes)
+		{
+			if (shape.Name == name)
 			{
 				return true;
 			}
@@ -1120,6 +1141,28 @@ internal static class CustomBlocksDragPatch
 			}
 		}
 		__result = result;
+	}
+}
+
+// A placed block of the mod is held to the rule it was placed under before blueprints needed half the footprint
+// (BlockSupportRules.PlacedMaxMissingSupport): one support cell holding is enough. The placed block's MaxMissingSupport
+// is the blueprint's (the game copies it into the block info and the placed block's validator), so the game's own test
+// is the blueprints' stricter one; a placed block failing only that is kept. The game validates every block when a
+// save is loaded (VolumeRegistryComponent.RevalidateAllRegisteredObjects), so without this the bricks and slabs of
+// existing castles that do not meet the new need would fall. Placed blocks are validated on the host only
+// (ConcreteValidator), and the rule depends on the world alone, so host and clients agree.
+[Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
+[HarmonyPatch(typeof(AbstractValidator), "IsValid")]
+internal static class CustomBlocksPlacedSupportPatch
+{
+	private static void Postfix(AbstractValidator __instance, ref ValidationData vData, Dictionary<XYZ, SupportState> supportStates, ref bool __result)
+	{
+		if (__result || __instance is BlueprintValidator || supportStates == null || supportStates.Count == 0 || !CustomBlocks.IsShape(vData.Volume))
+		{
+			return;
+		}
+		int supported = __instance.AnySupportedCount(supportStates, __instance.AcceptedSupportState, vData);
+		__result = BlockSupportRules.EnoughSupport(supported, supportStates.Count, BlockSupportRules.PlacedMaxMissingSupport(supportStates.Count));
 	}
 }
 

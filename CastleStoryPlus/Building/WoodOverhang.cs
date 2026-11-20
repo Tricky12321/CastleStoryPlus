@@ -16,10 +16,12 @@ namespace CastleStoryPlus.Building;
 // in line with a walkway reaches those 5 blocks by itself. The distance was counted in pieces of wood before, so long
 // slabs in a row hung far out into the air (#141). Blueprints follow the same rule (a hanging blueprint is valid next
 // to a wood blueprint, and buildable once the wood it hangs from is built), so workers build such a row outward from
-// its supported end. The wood a block hangs from is not one of its support cells, so the game did not look at the
-// block again when that wood went: when wood is removed or falls, the logs and slabs within MaxOverhang of it are
-// validated again (WoodOverhangRemovedPatch, WoodOverhangRevalidatePatch), and what no longer holds falls (a
-// blueprint turns red).
+// its supported end. Placed wood keeps the rule it was placed under, MaxOverhang pieces of wood (HangsFromPlacedWood):
+// the game validates every block when a save is loaded, and wood of existing saves must not fall then; whatever meets
+// the count in blocks meets the count in pieces, so wood built now is never dropped by it. The wood a block hangs from
+// is not one of its support cells, so the game did not look at the block again when that wood went: when wood is
+// removed or falls, the logs and slabs connected to it through at most MaxOverhang pieces of wood are validated again
+// (WoodOverhangRemovedPatch, WoodOverhangRevalidatePatch), and what no longer holds falls (a blueprint turns red).
 [Feature(Features.WoodOverhang, Features.WoodOverhangInfo)]
 internal static class WoodOverhang
 {
@@ -39,7 +41,7 @@ internal static class WoodOverhang
 	// The cells of wood removed since the last check (WoodOverhangRevalidatePatch).
 	private static readonly HashSet<XYZ> Removed = new HashSet<XYZ>();
 
-	// More removed cells than this at once (a large collapse, a world unloading): only these are looked round.
+	// More removed cells than this at once (a large collapse): only these are looked round.
 	private const int MaxRemovedCells = 4096;
 
 	private static void Enable()
@@ -60,8 +62,8 @@ internal static class WoodOverhang
 		return IsWood(validator) || CustomBlocks.IsWoodSlab(volume);
 	}
 
-	// Whether the block hangs from supported wood within MaxOverhang blocks. built: only placed wood counts (a blueprint
-	// becomes buildable); otherwise wood blueprints count as well (a blueprint is valid). The wood at the end must
+	// Whether a blueprint hangs from supported wood within MaxOverhang blocks. built: only placed wood counts (the
+	// blueprint becomes buildable); otherwise wood blueprints count as well (it is valid). The wood at the end must
 	// stand by the game's rule (asked afresh, without this one), so hanging wood never holds other hanging wood up.
 	internal static bool HangsFromWood(ref ValidationData vData, bool built)
 	{
@@ -92,6 +94,44 @@ internal static class WoodOverhang
 			}
 			return standing;
 		}, Max);
+	}
+
+	// Whether a placed log or slab hangs from placed wood that stands, within MaxOverhang pieces of wood (the rule
+	// before the count in blocks, kept for placed wood so existing saves stand when loaded).
+	internal static bool HangsFromPlacedWood(ref ValidationData vData)
+	{
+		if (_inner || vData.Volume == null)
+		{
+			return false;
+		}
+		IVolume self = vData.Volume;
+		HashSet<IVolume> seen = new HashSet<IVolume> { self };
+		List<IVolume> frontier = new List<IVolume> { self };
+		for (int depth = 1; depth <= Max && frontier.Count > 0; depth++)
+		{
+			List<IVolume> next = new List<IVolume>();
+			foreach (IVolume volume in frontier)
+			{
+				foreach (XYZ cell in Cells(volume))
+				{
+					foreach (XYZ side in Sides)
+					{
+						IVolume wood = WoodAt(cell + side, true, null);
+						if (wood == null || !seen.Add(wood))
+						{
+							continue;
+						}
+						if (StandsOnItsOwn(wood))
+						{
+							return true;
+						}
+						next.Add(wood);
+					}
+				}
+			}
+			frontier = next;
+		}
+		return false;
 	}
 
 	private static IEnumerable<XYZ> Neighbours(XYZ cell)
@@ -173,6 +213,24 @@ internal static class WoodOverhang
 		}
 	}
 
+	// Every log and slab, placed or a blueprint of any team, at the cell, not seen before.
+	private static void AddWoodAt(XYZ cell, HashSet<IVolume> found, List<IVolume> added)
+	{
+		foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(cell, VPropertyMask.occupy | VPropertyMask.fantome))
+		{
+			if (IsWoodVolume(volume, null) && found.Add(volume))
+			{
+				added.Add(volume);
+			}
+		}
+	}
+
+	// A new world: what was removed from the last one is not looked round in it.
+	internal static void ClearRemoved()
+	{
+		Removed.Clear();
+	}
+
 	// A volume is being unregistered: if it is wood (a log, plank or slab, placed or a blueprint), its cells are looked
 	// round at the next check.
 	internal static void OnRemoved(IVolume volume)
@@ -197,9 +255,11 @@ internal static class WoodOverhang
 		}
 	}
 
-	// The logs and slabs within MaxOverhang blocks (sideways, at the same level) of the removed wood are validated
-	// again: the game's validation drops a placed one that no longer holds (its fall is a removal too, so the wood
-	// beyond it follows a frame later) and turns a blueprint red.
+	// The logs and slabs connected sideways (at the same level) to the removed wood through at most MaxOverhang pieces
+	// of wood are validated again: those are all that could have hung from it, by the count in pieces (placed wood) and
+	// the count in blocks (blueprints, never further than the pieces). The game's validation drops a placed one that no
+	// longer holds (its fall is a removal too, so the wood beyond it follows a frame later) and turns a blueprint red.
+	// A fall only ever removes wood, so the cascade ends.
 	internal static void RevalidateRemoved()
 	{
 		if (Removed.Count == 0)
@@ -208,25 +268,29 @@ internal static class WoodOverhang
 		}
 		List<XYZ> cells = new List<XYZ>(Removed);
 		Removed.Clear();
-		int max = Max;
 		HashSet<IVolume> found = new HashSet<IVolume>();
+		List<IVolume> frontier = new List<IVolume>();
 		foreach (XYZ cell in cells)
 		{
-			for (int dx = -max; dx <= max; dx++)
+			foreach (XYZ side in Sides)
 			{
-				int reach = max - System.Math.Abs(dx);
-				for (int dz = -reach; dz <= reach; dz++)
+				AddWoodAt(cell + side, found, frontier);
+			}
+		}
+		for (int depth = 2; depth <= Max && frontier.Count > 0; depth++)
+		{
+			List<IVolume> next = new List<IVolume>();
+			foreach (IVolume volume in frontier)
+			{
+				foreach (XYZ cell in Cells(volume))
 				{
-					XYZ near = new XYZ(cell.x + dx, cell.y, cell.z + dz);
-					foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(near, VPropertyMask.occupy | VPropertyMask.fantome))
+					foreach (XYZ side in Sides)
 					{
-						if (IsWoodVolume(volume, null))
-						{
-							found.Add(volume);
-						}
+						AddWoodAt(cell + side, found, next);
 					}
 				}
 			}
+			frontier = next;
 		}
 		if (found.Count == 0)
 		{
@@ -264,8 +328,16 @@ internal static class WoodOverhangValidPatch
 		{
 			return;
 		}
-		// A placed block hangs only from placed wood; a blueprint may hang from wood blueprints too.
-		__result = WoodOverhang.HangsFromWood(ref vData, built: !(__instance is BlueprintValidator));
+		// A placed block hangs from placed wood within MaxOverhang pieces (the rule it was placed under); a blueprint
+		// within MaxOverhang blocks, from wood blueprints too.
+		if (__instance is BlueprintValidator)
+		{
+			__result = WoodOverhang.HangsFromWood(ref vData, built: false);
+		}
+		else
+		{
+			__result = WoodOverhang.HangsFromPlacedWood(ref vData);
+		}
 	}
 }
 
@@ -307,5 +379,16 @@ internal static class WoodOverhangRevalidatePatch
 	private static void Postfix()
 	{
 		WoodOverhang.RevalidateRemoved();
+	}
+}
+
+// A world is loaded (the registry starts validating): wood removed from the world before is forgotten.
+[Feature(Features.WoodOverhang, Features.WoodOverhangInfo)]
+[HarmonyPatch(typeof(VolumeRegistryComponent), "GetVoxelEngine")]
+internal static class WoodOverhangWorldPatch
+{
+	private static void Postfix()
+	{
+		WoodOverhang.ClearRemoved();
 	}
 }

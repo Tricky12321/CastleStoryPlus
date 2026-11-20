@@ -65,6 +65,32 @@ public class BlockSupportRulesTests
 		Assert.That(BlockSupportRules.MaxMissingSupport(1, 2, 4), Is.EqualTo(0));
 	}
 
+	// A placed block keeps the old rule (one supported cell), so castles of existing saves stand when loaded; a placed
+	// block with no supported cell still falls.
+	[Test]
+	public void APlacedBlockHoldsOnOneSupportedCell()
+	{
+		Assert.That(BlockSupportRules.EnoughSupport(1, 6, BlockSupportRules.PlacedMaxMissingSupport(6)), Is.True);
+		Assert.That(BlockSupportRules.EnoughSupport(0, 6, BlockSupportRules.PlacedMaxMissingSupport(6)), Is.False);
+		Assert.That(BlockSupportRules.PlacedMaxMissingSupport(0), Is.EqualTo(0));
+	}
+
+	// The blueprint's need is never weaker than the placed block's rule: a block placed now still stands when built.
+	[Test]
+	public void ABlueprintNeedsAtLeastWhatAPlacedBlockNeeds()
+	{
+		for (int width = 1; width <= 2; width++)
+		{
+			for (int depth = 1; depth <= 5; depth++)
+			{
+				for (int cells = 1; cells <= 20; cells++)
+				{
+					Assert.That(BlockSupportRules.MaxMissingSupport(cells, width, depth), Is.LessThanOrEqualTo(BlockSupportRules.PlacedMaxMissingSupport(cells)));
+				}
+			}
+		}
+	}
+
 	// ---- hanging wood: cells on a line along x (z = 0), coded as x.
 
 	private static IEnumerable<int> Line(int x)
