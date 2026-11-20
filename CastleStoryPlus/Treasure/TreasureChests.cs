@@ -30,7 +30,8 @@ namespace CastleStoryPlus.Treasure;
 // pack, the more and the better the loot
 // hired into a raid whose beacon is on the chest, so they stay near it and attack bricktrons that come close. Once no
 // living beast is within GuardRadius of a chest, a bricktron of a player that walks up to it opens it: the chest goes
-// and its loot spills out. The guards are peaceful until attacked (BeastTemper): then the whole pack fights.
+// and its loot spills out. The guards are peaceful until attacked (BeastTemper): then the whole pack fights. While
+// its guards are near, the chest's ruin is no place for the workers' own work (InGuardedRuin).
 // The host places them the first time a world is played (a new world, or a save from before this feature); the
 // chests and their state are kept in a file next to the save (the guards are ordinary units the game saves).
 [Feature(Features.Treasure, Features.TreasureInfo)]
@@ -93,6 +94,7 @@ internal class TreasureChests : MonoBehaviour
 		GameSession.OnLeave(() =>
 		{
 			Chests.Clear();
+			GuardedNow.Clear();
 			BeastTemper.Clear();
 			SentBackAt.Clear();
 			TreasureRuins.Clear();
@@ -146,6 +148,7 @@ internal class TreasureChests : MonoBehaviour
 			client.RegisterHandler(HintMessage, HintReceived);
 		}
 		Chests.Clear();
+		GuardedNow.Clear();
 		_active = false;
 		Asset_Map map = GameParam.Map;
 		if (!NetworkServer.active || map == null || !Playable())
@@ -551,6 +554,7 @@ internal class TreasureChests : MonoBehaviour
 	{
 		Live<Labor>.Active(Units);
 		Leash();
+		GuardedNow.Clear();
 		foreach (Chest chest in Chests)
 		{
 			if (chest.Opened)
@@ -583,7 +587,14 @@ internal class TreasureChests : MonoBehaviour
 				Hold(chest.Go);
 			}
 			Vector3 at = chest.Go.transform.position;
-			if (Guarded(at))
+			bool guarded = Guarded(at);
+			if (TreasureRules.KeepsOut(chest.Opened, guarded))
+			{
+				GuardedNow.Add(at.x);
+				GuardedNow.Add(at.y);
+				GuardedNow.Add(at.z);
+			}
+			if (guarded)
 			{
 				HintGuarded(chest, at);
 				continue;
@@ -716,6 +727,41 @@ internal class TreasureChests : MonoBehaviour
 				loot.Add(go);
 			}
 		}
+	}
+
+	// ---- keeping the workers out (host)
+
+	// The chests whose guardians are near them now (x, y, z three by three), from the last Check (every second).
+	private static readonly List<float> GuardedNow = new List<float>();
+
+	// Whether the place lies in the ruin of a chest its guardians still guard (TreasureRules.KeepOutRadius round it).
+	// The players' workers take no work there of their own accord: a loose item there is not fetched as material nor
+	// picked up by the idle cleanup, and the idle repair leaves its blocks alone, so no worker walks out to a guarded
+	// chest and back (#58). A player's order still
+	// sends them, and once the guardians are dead or lured away the ruin is open again (within a second). Host only:
+	// a client's list is empty, as the host decides the workers' work.
+	internal static bool InGuardedRuin(Vector3 at)
+	{
+		return GuardedNow.Count > 0 && TreasureRules.InAnyKeepOut(at.x, at.y, at.z, GuardedNow);
+	}
+
+	// For the DevTools' tests: whether the chests are watched in this game (host, a mode with chests).
+	internal static bool Active => _active;
+
+	// For the DevTools' tests: a chest the test made itself (Test Island gets none) is watched like a placed one (its
+	// guardians, the hint, opening) until Forget is given the place it was watched at (opened or not).
+	internal static void Watch(GameObject go, int guards)
+	{
+		if (go != null)
+		{
+			Chests.Add(new Chest { Position = go.transform.position, Guards = guards, Go = go });
+		}
+	}
+
+	internal static void Forget(Vector3 at)
+	{
+		Chests.RemoveAll((Chest chest) => (chest.Position - at).sqrMagnitude < 0.25f);
+		GuardedNow.Clear();
 	}
 
 	// ---- the save
@@ -920,5 +966,27 @@ internal static class TreasureGuardZonePatch
 		}
 		__result = Brix.Game.AI.Nodes.NavigationNodes.WalkToExactly(labor, Location.RandomAround(__instance.BalisePosition, RoamRadius - 1f, labor));
 		return false;
+	}
+}
+
+// A loose item (or a storage) in the ruin of a guarded chest is no material to fetch: the game's search for the nearest
+// thing holding a resource (Knowledge.ClosestObjectToPickup, map-wide, neutral things too; also the faster search of
+// FasterTaskSearch, which asks the same test) passes it over while the chest's guardians are near (#58). Host: the
+// workers' decisions run there.
+[Feature(Features.Treasure, Features.TreasureInfo)]
+[HarmonyPatch(typeof(Brix.Game.AI.KnowledgeSpace.Knowledge), nameof(Brix.Game.AI.KnowledgeSpace.Knowledge._ClosestObjectToPickup_Test))]
+internal static class TreasureKeepOutPickupPatch
+{
+	private static void Postfix(Brix.Game.Components.IGameComponent gc, ref bool __result)
+	{
+		if (!__result || !NetworkServer.active || gc == null)
+		{
+			return;
+		}
+		GameObject go = gc.GameObject;
+		if (go != null && TreasureChests.InGuardedRuin(go.transform.position))
+		{
+			__result = false;
+		}
 	}
 }

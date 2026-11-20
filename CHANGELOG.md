@@ -5,6 +5,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [FIX] **Treasure, workers walking out to a guarded chest (#58):** a bricktron now and then ran out to a treasure ruin whose guardians were still alive, stood by the chest for a few seconds ("Defeat the animals guarding this chest first") and ran back. While a living guardian is within 22 blocks of an unopened chest, its ruin (12 blocks round the chest) is now out of bounds for the workers' own work: nothing lying there is fetched as building or workshop material (the game's search for the nearest thing holding a resource looks across the whole map, neutral things included), and the idle cleanup and idle repair leave it alone. Within a second of the last guardian dying or being lured away the ruin is open again, and walking a bricktron up to the chest opens it as before (the host decides, also in multiplayer). A player's order still sends a bricktron there. Part of `Treasure`.
 - [ADD] **Credits:** CREDITS.md thanks everyone whose issues were fixed or built, with links to their GitHub profiles and issues; linked from the top of the README.
 
 ## 0.9.1 — 2026-11-20

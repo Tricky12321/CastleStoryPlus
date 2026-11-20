@@ -71,6 +71,9 @@ defines each kind, `BeastMesh` loads the model, `BeastBody` animates it and `Bea
   break objects or the ruin's blocks to get through (`TreasureChests`, `TreasureRuins`).
 - Guardians are calm until a player's unit hits one. They fight only the players' units, never corruptrons or each
   other (`BeastTemper`).
+- While a living guardian is within 22 blocks of its chest, the ruin (12 blocks round the chest) is out of bounds for
+  the players' workers' own work: no material is fetched from it, and the idle cleanup and repair leave it alone
+  (`TreasureChests.InGuardedRuin`, `TreasureRules`). A player's order still sends a bricktron there.
 
 ## Sounds
 
