@@ -73,4 +73,30 @@ public class RecoveryRulesTests
 	{
 		Assert.That(RecoveryRules.ForeignCount(total, dug), Is.EqualTo(expected));
 	}
+
+	[TestCase(10f, 12f, false)]
+	[TestCase(10f, 15f, false)]
+	[TestCase(10f, 15.5f, true)]
+	public void ALongGapWithoutATaskEndsTheStuckWatch(float lastSeen, float now, bool expected)
+	{
+		Assert.That(RecoveryRules.GapEndsWatch(lastSeen, now), Is.EqualTo(expected));
+	}
+
+	[TestCase(true, false, 10f)]
+	[TestCase(false, true, 10f)]
+	[TestCase(true, true, 10f)]
+	[TestCase(false, false, 60f)]
+	public void ARetryLoopGetsTheShortStuckLimit(bool walk, bool severalTasks, float expected)
+	{
+		Assert.That(RecoveryRules.StuckLimit(walk, severalTasks, 10f, 60f), Is.EqualTo(expected));
+	}
+
+	[TestCase(0f, false)]
+	[TestCase(1f, true)]
+	[TestCase(0.25f, true)]
+	[TestCase(20f, true)]
+	public void TheResetWaitsWhileThePauseLasts(float timeScale, bool expected)
+	{
+		Assert.That(RecoveryRules.CanResetNow(timeScale), Is.EqualTo(expected));
+	}
 }
