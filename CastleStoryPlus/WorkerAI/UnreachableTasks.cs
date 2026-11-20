@@ -29,8 +29,9 @@ namespace CastleStoryPlus.WorkerAI;
 //   blueprint ready to build, every dig voxel open to the air, every tree, plant or boulder to harvest and every
 //   repair whose working places all lie off that map is marked; so is a loose item with no place to stand by it,
 //   for the idle workers' cleanup and in a cleanup zone.
-// - A walk to a blueprint that cannot be found, or fails twice within 2 minutes, marks it as well (a demolition walks
-//   to a spot beside the block: the blueprint is the one of the worker's task).
+// - A walk to a task that cannot be found, or fails twice within 2 minutes, marks it as well, for 2 minutes or until
+//   something changes near it: blueprints, dig voxels, stair steps, trees, plants, repairs and loose items (#143; a
+//   demolition or a dig walks to a spot beside the block: the task is the one the worker is on).
 // - A marked task goes 10 places down the list a worker picks its next task from and is only taken when none before
 //   it can be ("Can't reach my destination" otherwise); the idle workers' cleanup skips a marked item.
 // - A marked blueprint is drawn red; other marked tasks get a red ring while their task is selected (Rings: also
@@ -291,7 +292,7 @@ internal static class UnreachableTasks
 		{
 			return;
 		}
-		BuildGoal goal = GoalOf(labor, e);
+		Goal goal = GoalOf(labor, e);
 		if (goal == null || goal.IsNullOrReleased() || Marked.ContainsKey(goal.gameObject))
 		{
 			return;
@@ -311,27 +312,58 @@ internal static class UnreachableTasks
 				return;
 			}
 		}
-		Add(goal.gameObject, BoxOf(goal.gameObject, goal.volume), blueprint: true, "walk failed: " + e.GetType().Name + " (" + labor.name + ")", labor);
+		MarkWalkFailed(goal, "walk failed: " + e.GetType().Name + " (" + labor.name + ")", labor);
+	}
+
+	// A task a worker could not get to by walking (a failed walk, or a worker that stood still on it over several tasks,
+	// StuckReset): passed by for WalkMarkSeconds, or until something changes near it.
+	internal static void MarkWalkFailed(Goal goal, string why, Labor labor)
+	{
+		if (!_enabled || goal == null || goal.IsNullOrReleased() || Marked.ContainsKey(goal.gameObject) || !IsWalkJudged(goal))
+		{
+			return;
+		}
+		Add(goal.gameObject, BoxOf(goal.gameObject, goal.volume), goal is BuildGoal, why, labor, goal.project);
 		if (Marked.TryGetValue(goal.gameObject, out Mark mark))
 		{
 			mark.FromWalk = true;
 		}
 	}
 
-	// The blueprint the failed walk was for: the walk's target when that is the blueprint (bringing material), else
-	// the blueprint whose task the worker is on. A demolition walks to a voxel next to the block (a SpaceLocation, no
-	// object); a walk to a stockpile for material is not the blueprint's fault and does not count.
-	private static BuildGoal GoalOf(Labor labor, Exceptions.PathException e)
+	// The task the failed walk was for: the walk's target when that is a task (a blueprint material is brought to, a dig
+	// voxel, a tree, a plant, a repair, a loose item to clean up), else the task the worker is on when its walk went to a
+	// place beside it (a demolition or a dig walks to a voxel next to the block: a SpaceLocation, no object). A walk to
+	// a stockpile for material (or to store a load) is not the task's fault and does not count. Before #143 only
+	// blueprints were marked: a worker sent to a dig or a log whose way had been dug away tried it again and again.
+	private static Goal GoalOf(Labor labor, Exceptions.PathException e)
 	{
+		Task task = labor.CurrentTask;
+		GameObject giver = (task != null) ? task.Giver : null;
+		Goal goal = !giver.IsNullOrReleased() ? giver.GetComponent<Goal>() : null;
 		GameObject target = (e.Location != null) ? e.Location.Object : null;
 		if (!target.IsNullOrReleased())
 		{
-			return target.GetComponent<BuildGoal>() ?? target.GetComponentInParent<BuildGoal>();
+			Goal at = target.GetComponent<Goal>() ?? target.GetComponentInParent<Goal>();
+			if (at == null && task != null && task.Target == target && !(goal is BuildGoal))
+			{
+				// The task's own target without a goal of its own (a tree, a plant): the task's goal.
+				at = goal;
+			}
+			return (at != null && IsWalkJudged(at)) ? at : null;
 		}
-		Task task = labor.CurrentTask;
-		GameObject giver = (task != null) ? task.Giver : null;
-		BuildGoal goal = !giver.IsNullOrReleased() ? giver.GetComponent<BuildGoal>() : null;
-		return (goal != null && goal.IsAnti) ? goal : null;
+		if (goal is BuildGoal build)
+		{
+			return build.IsAnti ? goal : null;
+		}
+		return (goal != null && IsWalkJudged(goal)) ? goal : null;
+	}
+
+	// The kinds of task a failed walk can mark: those the map judges (IsJudged), whatever their state. An item counts
+	// only while it lies loose: one in a stockpile or a bag is what a walk for material goes to, and a failed walk
+	// there is not the item's fault.
+	internal static bool IsWalkJudged(Goal goal)
+	{
+		return goal is BuildGoal || goal is DigGoal || goal is BuildStairsGoal || goal is TreeGoal || goal is NatureHarvestGoal || goal is RepairGoal || (goal is CleanUpGoal && PickUpAround.IsLoose(goal.gameObject));
 	}
 
 	// ---- The map ----
@@ -846,7 +878,7 @@ internal static class UnreachableTasks
 	}
 }
 
-// A failed walk to a blueprint counts against it.
+// A failed walk to a task counts against it.
 [Feature(Features.UnreachableTasks, Features.UnreachableTasksInfo)]
 [HarmonyPatch(typeof(Labor), nameof(Labor.HandlePathFail))]
 internal static class UnreachableTasksPathFailPatch

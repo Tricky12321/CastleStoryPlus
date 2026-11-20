@@ -9,7 +9,8 @@ namespace CastleStoryPlus.Invasion;
 // from the enemy faction's raid projects and their crews, which only the host has: a raid is an object of the enemy
 // faction that the game never sends to a player, so a client's scoreboard showed the kills but no wave. The host
 // sends its rows (eleven numbers each: wave, then left and seen of minitrons, corruptrons, healtrons, biftrons and magitrons)
-// when they change and every few seconds; a client shows the host's rows.
+// when they change and every few seconds; a client shows the host's rows. The Healtrons killed (counted by the host
+// only, the game counts them as corruptrons) go with them.
 internal static class WaveCountsSync
 {
 	// The game's own messages end at 63; Castle Story Plus uses 200-205.
@@ -20,9 +21,12 @@ internal static class WaveCountsSync
 	// Numbers in a row: the wave, then what is left and what was seen of each of the five enemy kinds.
 	internal const int RowLength = 11;
 
-	// The first number of a payload, with the row length in it: a payload without it is from a version with other rows
-	// and is ignored (its rows would show as wrong numbers).
-	private const int Marker = 0x40000000 | RowLength;
+	// The payload's layout: 1 = the Healtrons killed before the rows.
+	private const int Layout = 1;
+
+	// The first number of a payload, with the row length and layout in it: a payload without it is from a version with
+	// other rows and is ignored (its rows would show as wrong numbers).
+	private const int Marker = 0x40000000 | (Layout << 8) | RowLength;
 
 	private static NetworkClient _client;
 
@@ -32,6 +36,11 @@ internal static class WaveCountsSync
 
 	// The host's rows as last received on a client; null before any (or on the host).
 	internal static int[] Rows { get; private set; }
+
+	// The host's count of Healtrons killed as last received on a client; -1 before any (or on the host).
+	internal static int HealtronKills { get; private set; } = -1;
+
+	private static int _sentKills;
 
 	private sealed class WavesNetMessage : MessageBase
 	{
@@ -74,27 +83,31 @@ internal static class WaveCountsSync
 	}
 
 	// The host: its rows to the other players, when they changed or once in a while (for a player who joined).
-	internal static void Send(int[] rows)
+	internal static void Send(int[] rows, int healtronKills)
 	{
 		if (!NetworkServer.active || !Brix.Engine.Neo.multiplayer)
 		{
 			return;
 		}
-		if (_sent != null && Same(_sent, rows) && Time.unscaledTime < _nextSend)
+		if (_sent != null && Same(_sent, rows) && _sentKills == healtronKills && Time.unscaledTime < _nextSend)
 		{
 			return;
 		}
 		_sent = rows;
+		_sentKills = healtronKills;
 		_nextSend = Time.unscaledTime + ResendSeconds;
-		int[] payload = new int[rows.Length + 1];
+		int[] payload = new int[rows.Length + 2];
 		payload[0] = Marker;
-		rows.CopyTo(payload, 1);
+		payload[1] = healtronKills;
+		rows.CopyTo(payload, 2);
 		NetworkServer.SendToAll(WavesMessage, new WavesNetMessage { Rows = payload });
 	}
 
 	internal static void Forget()
 	{
 		Rows = null;
+		HealtronKills = -1;
+		_sentKills = 0;
 		_sent = null;
 		_client = null;
 	}
@@ -106,12 +119,13 @@ internal static class WaveCountsSync
 		{
 			return;
 		}
-		if (message.Rows.Length == 0 || message.Rows[0] != Marker)
+		if (message.Rows.Length < 2 || message.Rows[0] != Marker)
 		{
 			return;
 		}
-		int[] rows = new int[message.Rows.Length - 1];
-		System.Array.Copy(message.Rows, 1, rows, 0, rows.Length);
+		int[] rows = new int[message.Rows.Length - 2];
+		System.Array.Copy(message.Rows, 2, rows, 0, rows.Length);
+		HealtronKills = message.Rows[1];
 		Rows = rows;
 	}
 

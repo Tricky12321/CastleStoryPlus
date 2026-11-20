@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using BepInEx.Configuration;
 using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.Components;
 using CastleStoryPlus.Core;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -13,6 +14,13 @@ namespace CastleStoryPlus.WorkerAI;
 // task, has the task cancelled and puts down what it carries where it stands, then looks for work (or follows a
 // waiting order) afresh. Workshop workers (who stand at their station) and fighters are left alone. Each reset is
 // written to the log. Host only.
+// The watch is kept per task goal (the blueprint, dig voxel, tree... the task was made from), not per task object (#143): a
+// worker that cannot get to its task fails and takes a new task for the same goal again and again, standing where it
+// is, and each new task started the watch afresh, so it never fired. Only a task that failed carries the watch over
+// to the next one; a task done starts it afresh (a builder storing kind after kind into one blueprint). Short gaps
+// between those tasks (no task for up to RecoveryRules.TaskGapSeconds) keep the watch; a reset that ends such a run
+// marks the goal unreachable (UnreachableTasks), so the worker takes other work. A player's order to the worker starts
+// the watch afresh.
 [Feature(Features.StuckReset, Features.StuckResetInfo)]
 internal sealed class StuckReset : MonoBehaviour
 {
@@ -27,7 +35,19 @@ internal sealed class StuckReset : MonoBehaviour
 
 		public float Since;
 
-		public object Task;
+		// The task's goal (or target, or the task itself when it has neither).
+		public object Key;
+
+		public Task Task;
+
+		// More than one task on the same goal stood still in, each one before the current having failed.
+		public bool SeveralTasks;
+
+		// One of those failed tasks failed on its walk (a way that cannot be found or followed).
+		public bool WalkFailed;
+
+		// When the worker last had a task (gaps between tasks of a retry loop keep the watch).
+		public float LastSeen;
 	}
 
 	private static ConfigEntry<float> _seconds;
@@ -70,32 +90,101 @@ internal sealed class StuckReset : MonoBehaviour
 		}
 	}
 
+	// A player's order: the watch starts afresh.
+	internal static void Forget(Labor labor)
+	{
+		Watches.Remove(labor);
+	}
+
 	private static void Check(Labor labor)
 	{
-		Task task = (labor != null) ? labor.CurrentTask : null;
-		if (task == null || labor.IsPhasedOut || labor.Operable != null || labor.Activity == Activity.Fighting || !Watched(labor))
+		if (labor == null || labor.IsPhasedOut || labor.Operable != null || labor.Activity == Activity.Fighting || !Watched(labor))
 		{
 			Watches.Remove(labor);
 			return;
 		}
+		Task task = labor.CurrentTask;
 		Vector3 at = labor.transform.position;
-		if (!Watches.TryGetValue(labor, out Watch watch) || watch.Task != task || (at - watch.Anchor).sqrMagnitude > MoveTolerance * MoveTolerance)
+		Watches.TryGetValue(labor, out Watch watch);
+		if (task == null)
 		{
-			Watches[labor] = new Watch { Anchor = at, Since = Time.time, Task = task };
+			// Between two tasks: a short gap keeps the watch (a retry loop), a longer one (the worker idles) ends it.
+			if (watch != null && (RecoveryRules.GapEndsWatch(watch.LastSeen, Time.time) || Moved(watch, at)))
+			{
+				Watches.Remove(labor);
+			}
 			return;
 		}
-		float limit = IsWalk(task) ? _seconds.Value : _longSeconds.Value;
+		object key = KeyOf(task);
+		if (watch == null || watch.Key != key || Moved(watch, at))
+		{
+			Watches[labor] = new Watch { Anchor = at, Since = Time.time, Key = key, Task = task, LastSeen = Time.time };
+			return;
+		}
+		watch.LastSeen = Time.time;
+		if (watch.Task != task)
+		{
+			if (Succeeded(watch.Task))
+			{
+				// The task before was done: work goes on (a builder storing kind after kind into one blueprint), so
+				// the watch starts afresh with the new task.
+				Watches[labor] = new Watch { Anchor = at, Since = Time.time, Key = key, Task = task, LastSeen = Time.time };
+				return;
+			}
+			watch.WalkFailed |= WalkFailed(watch.Task);
+			watch.Task = task;
+			watch.SeveralTasks = true;
+		}
+		float limit = RecoveryRules.StuckLimit(IsWalk(task), watch.SeveralTasks, _seconds.Value, _longSeconds.Value);
 		if (limit <= 0f || Time.time - watch.Since < limit)
 		{
 			return;
 		}
-		Plugin.Log.LogInfo("StuckReset: " + labor.name + " stood still " + Mathf.RoundToInt(Time.time - watch.Since) + " s at " + Mathf.FloorToInt(at.x) + "," + Mathf.FloorToInt(at.y) + "," + Mathf.FloorToInt(at.z) + " in '" + task.Description + "'" + (labor.recepteur.IsEmpty() ? string.Empty : (" carrying " + labor.recepteur.ContentString())) + ": task cancelled, load put down");
+		Plugin.Log.LogInfo("StuckReset: " + labor.name + " stood still " + Mathf.RoundToInt(Time.time - watch.Since) + " s at " + Mathf.FloorToInt(at.x) + "," + Mathf.FloorToInt(at.y) + "," + Mathf.FloorToInt(at.z) + " in '" + task.Description + "'" + (watch.SeveralTasks ? " (tried again and again)" : string.Empty) + (labor.recepteur.IsEmpty() ? string.Empty : (" carrying " + labor.recepteur.ContentString())) + ": task cancelled, load put down");
 		Watches.Remove(labor);
+		if (watch.SeveralTasks && Plugin.IsEnabled(Features.UnreachableTasks))
+		{
+			// The worker kept going back to a task it never got to: it is passed by for a while. A blueprint whose
+			// tasks failed for another reason (no material to be found) is not drawn unreachable.
+			Goal goal = (key is GameObject giver && !giver.IsNullOrReleased()) ? giver.GetComponent<Goal>() : null;
+			if (goal != null && RecoveryRules.MarksStoodStillGoal(watch.WalkFailed || WalkFailed(task), goal is BuildGoal))
+			{
+				UnreachableTasks.MarkWalkFailed(goal, "stood still " + Mathf.RoundToInt(Time.time - watch.Since) + " s trying it again and again (" + labor.name + ")", labor);
+			}
+		}
 		labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
 		if (!labor.recepteur.IsEmpty())
 		{
 			labor.recepteur.DropAll();
 		}
+	}
+
+	// A task that ended done (not failed, cancelled or still running).
+	private static bool Succeeded(Task task)
+	{
+		return task != null && task.Status == TaskProgression.Finished && task.result == TaskResult.Succes;
+	}
+
+	private static bool WalkFailed(Task task)
+	{
+		return task != null && (task.result == TaskResult.PathFailed || task.result == TaskResult.CouldNotReach);
+	}
+
+	private static bool Moved(Watch watch, Vector3 at)
+	{
+		return (at - watch.Anchor).sqrMagnitude > MoveTolerance * MoveTolerance;
+	}
+
+	// What a task is for: the goal it was made from (a blueprint, a dig voxel, a tree...), else the task itself. Tasks
+	// given by a project or the idle round (no goal: wander, store, wait) are watched one by one, as before.
+	private static object KeyOf(Task task)
+	{
+		GameObject giver = task.Giver;
+		if (!giver.IsNullOrReleased() && giver.GetComponent<Goal>() != null)
+		{
+			return giver;
+		}
+		return task;
 	}
 
 	// The player's workers only.
