@@ -93,4 +93,10 @@ Castle Story Plus is better because players took the time to report bugs and sug
 - [#15 UI Fixes](https://github.com/Tricky12321/CastleStoryPlus/issues/15) (fixed with [#17](https://github.com/Tricky12321/CastleStoryPlus/issues/17))
 - [#16 archers wander when wave begins](https://github.com/Tricky12321/CastleStoryPlus/issues/16) (fixed with [#18](https://github.com/Tricky12321/CastleStoryPlus/issues/18))
 
+## [@Pabloks-png](https://github.com/Pabloks-png)
+
+1 issue:
+
+- [#1 Thank you, and a suggestion: announce the mod on the Castle Story Discord](https://github.com/Tricky12321/CastleStoryPlus/issues/1)
+
 Found a bug or have an idea? [Open an issue](https://github.com/Tricky12321/CastleStoryPlus/issues) and you will be listed here once it is fixed.
