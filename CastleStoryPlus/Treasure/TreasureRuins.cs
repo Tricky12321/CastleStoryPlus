@@ -605,18 +605,50 @@ internal static class TreasureRuins
 	}
 
 	// A ruin block that loses its support is taken away instead of falling as a loose block: loose blocks are building
-	// material, and the workers walked across the map to fetch the fallen ruin blocks for their blueprints.
+	// material, and the workers walked across the map to fetch the fallen ruin blocks for their blueprints. Built knows
+	// only the blocks made in this game, so in a world loaded from a save a ruin block is known by its faction and place
+	// instead: a neutral block near a chest (#58).
 	[Feature(Features.Treasure, Features.TreasureInfo)]
 	[HarmonyPatch(typeof(RootBlockData), nameof(RootBlockData.Physicalize))]
 	private static class NoLooseBlocks
 	{
+		// How far from its chest (across) a ruin's block can be: the walls' corners and the rubble outside them.
+		private const float Reach = 10f;
+
+		private const float ReachHeight = 8f;
+
+		private static readonly List<Vector3> ChestsNear = new List<Vector3>();
+
 		private static bool Prefix(RootBlockData __instance)
 		{
-			if (!NetworkServer.active || !Built.Remove(__instance.Position))
+			if (!NetworkServer.active || (!Built.Remove(__instance.Position) && !InLoadedRuin(__instance)))
 			{
 				return true;
 			}
 			__instance.DeBlockClient(__instance.BlockInfo.ID);
+			return false;
+		}
+
+		private static bool InLoadedRuin(RootBlockData block)
+		{
+			GameObject go = block.PlacedBlock;
+			Faction neutral = Faction.DefaultNeutral;
+			if (go == null || neutral == null || Faction.GetFaction(go) != neutral)
+			{
+				return false;
+			}
+			Vector3 at = go.transform.position;
+			ChestsNear.Clear();
+			TreasureChests.ChestPositions(ChestsNear);
+			foreach (Vector3 chest in ChestsNear)
+			{
+				float dx = at.x - chest.x;
+				float dz = at.z - chest.z;
+				if (dx * dx + dz * dz <= Reach * Reach && Mathf.Abs(at.y - chest.y) <= ReachHeight)
+				{
+					return true;
+				}
+			}
 			return false;
 		}
 	}

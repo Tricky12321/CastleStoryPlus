@@ -969,10 +969,11 @@ internal static class TreasureGuardZonePatch
 	}
 }
 
-// A loose item (or a storage) in the ruin of a guarded chest is no material to fetch: the game's search for the nearest
-// thing holding a resource (Knowledge.ClosestObjectToPickup, map-wide, neutral things too; also the faster search of
-// FasterTaskSearch, which asks the same test) passes it over while the chest's guardians are near (#58). Host: the
-// workers' decisions run there.
+// A loose item in the ruin of a guarded chest is no material to fetch: the game's search for the nearest thing holding a
+// resource (Knowledge.ClosestObjectToPickup, map-wide, neutral things too, and RuinsInFog shows the neutral things
+// through the fog; also the faster search of FasterTaskSearch, which asks the same test) passes it over while the
+// chest's guardians are near (#58). Only what no player owns: a player's own stockpile or workshop built there stays a
+// source. Host: the workers' decisions run there.
 [Feature(Features.Treasure, Features.TreasureInfo)]
 [HarmonyPatch(typeof(Brix.Game.AI.KnowledgeSpace.Knowledge), nameof(Brix.Game.AI.KnowledgeSpace.Knowledge._ClosestObjectToPickup_Test))]
 internal static class TreasureKeepOutPickupPatch
@@ -980,6 +981,11 @@ internal static class TreasureKeepOutPickupPatch
 	private static void Postfix(Brix.Game.Components.IGameComponent gc, ref bool __result)
 	{
 		if (!__result || !NetworkServer.active || gc == null)
+		{
+			return;
+		}
+		Faction owner = gc.faction;
+		if (owner != null && owner != Faction.DefaultNeutral)
 		{
 			return;
 		}

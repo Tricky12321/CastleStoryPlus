@@ -225,6 +225,8 @@ internal static class WorkerRouteTests
 		Ressource iron = Apparence.PrincipaleOf(ingot);
 		t.NotNull(item, "The iron ingot's game component");
 		t.NotNull(iron, "The iron ingot's resource");
+		// No player's, as the chest's loot and whatever else lies in a ruin (a player's own things there stay theirs).
+		item.faction = Faction.DefaultNeutral;
 		yield return TestWorld.WaitForGraph(t);
 		// The chests are looked at every second; the idle cleanup's item list is renewed every 5 s.
 		yield return t.Seconds(6f);
