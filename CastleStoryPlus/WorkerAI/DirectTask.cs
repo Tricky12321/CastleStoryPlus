@@ -267,21 +267,28 @@ internal static class DirectTask
 	}
 
 	// A blueprint is shown while any of its renderers is on; the game hides one by switching them all off
-	// (StateRenderer.Show(false)) and leaves its colliders in place.
+	// (StateRenderer.Show(false)) and leaves its colliders in place. A blueprint without any mesh renderer (drawn some
+	// other way) cannot be hidden like that, so it counts as shown.
 	internal static bool IsShown(Blueprint blueprint)
 	{
 		if (blueprint == null)
 		{
 			return false;
 		}
+		bool any = false;
 		foreach (MeshRenderer renderer in blueprint.GetComponentsInChildren<MeshRenderer>())
 		{
-			if (renderer != null && renderer.enabled)
+			if (renderer == null)
+			{
+				continue;
+			}
+			if (renderer.enabled)
 			{
 				return true;
 			}
+			any = true;
 		}
-		return false;
+		return !any;
 	}
 
 	// Whether the host gives this unit's right-click order to a BuilderActor (ContextualAction): only those take a
