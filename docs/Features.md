@@ -202,6 +202,7 @@ New blocks, new buildings and faster ways to build.
 | Invasion: a big warning before the next wave at 1 minute, 30 and 15 seconds, and a countdown from 5. | `WaveWarning` |
 | Invasion: an arrow on the screen points where the next wave will come from, 30 seconds before it. | `WaveDirection` |
 | Invasion: corruptron waves spawn at least 60 blocks from the nearest block a player has built, when the map has a spawn point that far (`[SpawnDistance] MinBlocks`), and the farther a spawn point is from the players' blocks the likelier it is picked; otherwise a random one. | `SpawnDistance` |
+| Invasion: the units a warlock summons join its wave (its raid), so the wave is not over while they live, and the scoreboard counts them among the enemies left (#161). | `WarlockSummons` |
 | Respawn status under a dead worker's firefly (time left, missing energy). | `RespawnStatus` |
 | Energy hint above your home crystal when the firefly of a killed enemy or worker arrives ("+N energy"). | `EnergyHint` |
 | Wild plants: young plants (fibre) seed themselves thinly in open grass, where a 5x5 square is free of blocks, trees and paths (`[WildPlants] Tries`); every plant smaller than full size grows to full size in 10 minutes (`GrowMinutes`). | `WildPlants` |

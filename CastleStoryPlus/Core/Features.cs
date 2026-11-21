@@ -247,6 +247,10 @@ internal static class Features
 
 	public const string WaveDirectionInfo = "Invasion: the next wave's spawn point is picked ahead, and from 30 seconds before the wave an arrow on the screen points where it will come from.";
 
+	public const string WarlockSummons = "WarlockSummons";
+
+	public const string WarlockSummonsInfo = "Invasion: the units a warlock summons join its wave (its raid), so the wave is not over while they live, and the scoreboard counts them among the enemies left (#161).";
+
 	public const string AutoCleanup = "AutoCleanup";
 
 	public const string AutoCleanupInfo = "Idle workers pick up loose items near the base or near themselves and store them, without a cleanup zone (see [AutoCleanup] Radius). Items on top of a building or stockpile are taken from its foot. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a blue ring around the crystal, shown or hidden with \"Show ranges\" / \"Hide ranges\" on the crystal's context wheel ([BaseRanges] ShowRings).";
