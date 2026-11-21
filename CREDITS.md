@@ -4,8 +4,10 @@ Castle Story Plus is better because players took the time to report bugs and sug
 
 ## [@WinterBandit1](https://github.com/WinterBandit1)
 
-79 issues:
+81 issues:
 
+- [#15 UI Fixes](https://github.com/Tricky12321/CastleStoryPlus/issues/15)
+- [#16 archers wander when wave begins](https://github.com/Tricky12321/CastleStoryPlus/issues/16)
 - [#17 UI Fixes](https://github.com/Tricky12321/CastleStoryPlus/issues/17)
 - [#18 archers wander when wave begins](https://github.com/Tricky12321/CastleStoryPlus/issues/18)
 - [#19 default buttons](https://github.com/Tricky12321/CastleStoryPlus/issues/19)
@@ -85,13 +87,6 @@ Castle Story Plus is better because players took the time to report bugs and sug
 - [#145 Custom brick placement](https://github.com/Tricky12321/CastleStoryPlus/issues/145)
 - [#146 Steel Texture](https://github.com/Tricky12321/CastleStoryPlus/issues/146)
 - [#147 Combat move](https://github.com/Tricky12321/CastleStoryPlus/issues/147)
-
-## [@Derek-Scheuerman](https://github.com/Derek-Scheuerman)
-
-2 issues:
-
-- [#15 UI Fixes](https://github.com/Tricky12321/CastleStoryPlus/issues/15) (fixed with [#17](https://github.com/Tricky12321/CastleStoryPlus/issues/17))
-- [#16 archers wander when wave begins](https://github.com/Tricky12321/CastleStoryPlus/issues/16) (fixed with [#18](https://github.com/Tricky12321/CastleStoryPlus/issues/18))
 
 ## [@Pabloks-png](https://github.com/Pabloks-png)
 
