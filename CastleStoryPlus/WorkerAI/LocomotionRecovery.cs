@@ -89,7 +89,16 @@ internal sealed class LocomotionRecovery : MonoBehaviour
 			// The next try (if this one is refused or does not take) after another full wait.
 			Since = Time.time;
 			string task = (labor.CurrentTask != null) ? labor.CurrentTask.Description : "a task";
-			return ResetLegs(labor, "'" + task + "' waited " + Mathf.RoundToInt(waited) + " s for its legs") && legs.CanMove();
+			try
+			{
+				return ResetLegs(labor, "'" + task + "' waited " + Mathf.RoundToInt(waited) + " s for its legs") && legs.CanMove();
+			}
+			catch (System.Exception ex)
+			{
+				// Never into the task's behaviour tree: the task waits on, as the game's did.
+				Plugin.Log.LogWarning("LocomotionRecovery: " + labor.name + ": " + ex.Message);
+				return false;
+			}
 		}
 	}
 
@@ -126,13 +135,6 @@ internal sealed class LocomotionRecovery : MonoBehaviour
 		{
 			wait.Begin(self);
 		}, labor).Do(Node.WaitFor.Condition((Labor self) => wait.Ready(self), labor));
-	}
-
-	// Whether the bricktron's legs cannot move although nothing that takes its time holds them.
-	internal static bool LegsStuck(Labor labor)
-	{
-		Locomotion4 legs = LegsOf(labor);
-		return legs != null && !legs.CanMove() && MayReset(labor, legs);
 	}
 
 	private static bool MayReset(Labor labor, Locomotion4 legs)
