@@ -6,6 +6,9 @@ using Brix.Engine.Blocks;
 using Brix.External.Factories;
 using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.Components;
+using Brix.Game.Components.Volumes;
+using Brix.Game.Network;
 using Brix.Game.Semantique;
 using Brix.Pathfinding.Test;
 using CastleStoryPlus.DevTools.Building;
@@ -18,11 +21,14 @@ namespace CastleStoryPlus.DevTools.Tests;
 
 // Stone roads (Roads): a road tile costs one stone block and becomes a block that does not fill its voxel; a bricktron
 // walks a road faster than plain ground over the same distance; and a route takes a road that is longer than the
-// straight line when the road is quicker overall.
+// straight line when the road is quicker overall; a road can be laid on every free cell right beside a building.
 [ParallelTests]
 internal static class RoadTests
 {
 	private static readonly Factory.AssetKey RoadBlueprint = new Factory.AssetKey("Blueprints", Roads.Name);
+
+	// A workshop that claims the spot in front of it where its worker stands (WorkSpotReserve).
+	private static readonly Factory.AssetKey ForgeBlueprint = new Factory.AssetKey("Blueprints", "Forge");
 
 	private static BlockEngine Engine => BrixSingleton<BlockEngine>.Instance;
 
@@ -336,6 +342,131 @@ internal static class RoadTests
 		yield return RemoveRoads(t);
 	}
 #endif
+
+	[GameTest("Roads", "The cell bits the road's placement rule (RoadRules.MayLieOn) looks at are the game's")]
+	private static IEnumerator RoadRuleBitsAreTheGames(TestContext t)
+	{
+		t.Equal((long)VPropertyMask.access, RoadRules.AccessBit, "access");
+		t.Equal((long)VPropertyMask.obstacle, RoadRules.ObstacleBit, "obstacle");
+		t.Equal((long)VPropertyMask.occupy, RoadRules.OccupyBit, "occupy");
+		t.Equal((long)VPropertyMask.walkable, RoadRules.WalkableBit, "walkable");
+		t.Equal((long)VPropertyMask.operation, RoadRules.OperationBit, "operation");
+		t.Equal((long)VPropertyMask.fantome, RoadRules.FantomeBit, "fantome");
+		t.Equal((long)VPropertyMask.debloc, RoadRules.DeblocBit, "debloc");
+		yield break;
+	}
+
+	// The cells right beside a volume's body (its bottom layer, cells of bodyMask), on all four sides.
+	private static List<XYZ> Beside(IVolume volume, VPropertyMask bodyMask, out List<XYZ> body)
+	{
+		body = new List<XYZ>();
+		int bottom = int.MaxValue;
+		foreach (XYZ cell in volume.GetCases(bodyMask))
+		{
+			body.Add(cell);
+			bottom = Mathf.Min(bottom, cell.y);
+		}
+		body.RemoveAll(cell => cell.y != bottom);
+		HashSet<XYZ> inside = new HashSet<XYZ>(body);
+		List<XYZ> ring = new List<XYZ>();
+		foreach (XYZ cell in body)
+		{
+			foreach (XYZ side in new XYZ[4] { new XYZ(cell.x + 1, cell.y, cell.z), new XYZ(cell.x - 1, cell.y, cell.z), new XYZ(cell.x, cell.y, cell.z + 1), new XYZ(cell.x, cell.y, cell.z - 1) })
+			{
+				if (!inside.Contains(side) && !ring.Contains(side))
+				{
+					ring.Add(side);
+				}
+			}
+		}
+		return ring;
+	}
+
+	// A road fitted on every cell beside the building is in the way of nothing, the building's work spot (which it
+	// claims) included; one on the building's body is in the way.
+	private static void RoadsFitBeside(TestContext t, IVolume building, VPropertyMask bodyMask, string what, bool mustClaim)
+	{
+		List<XYZ> ring = Beside(building, bodyMask, out List<XYZ> body);
+		t.True(body.Count > 0, "The " + what + " has no body cells");
+		int claimed = 0;
+		foreach (XYZ cell in ring)
+		{
+			if (building.HasAnyPropertiesAt(VPropertyMask.occupy, cell))
+			{
+				claimed++;
+			}
+			BlueprintPlacer.Fit fit = BlueprintPlacer.Try(RoadBlueprint, cell, 0);
+			t.NotNull(fit, "The road fitted at " + cell);
+			t.True(fit.HasCells && fit.Min.Equals(cell) && fit.Max.Equals(cell), "The road fitted at " + cell + " lies at " + fit.Min + " to " + fit.Max);
+			t.True((fit.Check & ValidationResult.Obstructed) == 0, "A road right beside the " + what + " at " + cell + " is in the way of something: " + fit.Check);
+		}
+		t.Record(what + " beside", ring.Count);
+		t.Record(what + " claimed", claimed);
+		// Without a claimed work spot beside it the test would not look at what used to be refused. The built forge always
+		// claims its worker's spot; its blueprint only with WorkSpotReserve.
+		if (mustClaim)
+		{
+			t.True(claimed > 0, "The " + what + " claims no cell beside it");
+		}
+		BlueprintPlacer.Fit inside = BlueprintPlacer.Try(RoadBlueprint, body[0], 0);
+		t.NotNull(inside, "The road fitted on the " + what);
+		t.True((inside.Check & ValidationResult.Obstructed) != 0, "A road on the " + what + "'s body at " + body[0] + " is not in the way: " + inside.Check);
+	}
+
+	// The built forge whose body takes the cell.
+	private static IVolume BuiltForgeAt(XYZ cell)
+	{
+		foreach (IVolume volume in VolumeRegistry.VolumesWithPropertyAt(cell, VPropertyMask.obstacle))
+		{
+			if (!(volume is BlueprintVolume) && volume.AssetKey != null && volume.AssetKey.Name == "Forge")
+			{
+				return volume;
+			}
+		}
+		return null;
+	}
+
+	private static void DestroyAfter(TestContext t, Blueprint blueprint)
+	{
+		t.Cleanup(() =>
+		{
+			if (blueprint != null && !blueprint.Released)
+			{
+				User.LocalUser.GetComponent<UNetBlueprint>().CmdDestroyBluePrint(blueprint.gameObject);
+			}
+		});
+	}
+
+	[GameTest("Roads", "A road can be laid on every free cell right beside a building (a forge, planned and built), its worker's spot in front included, but not on the building")]
+	private static IEnumerator RoadBesideBuilding(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 7, 7, 4);
+		BuildProject project = Scenario.BuildProject(t, site);
+		BlueprintPlacer.Result forge = BlueprintPlacer.Place(ForgeBlueprint, site, 0, project, force: false);
+		t.True(forge.Placed, "The forge blueprint: " + forge.Outcome + " " + forge.Detail);
+		Blueprint planned = forge.Blueprint;
+		DestroyAfter(t, planned);
+		yield return t.Frames(3);
+		IVolume plannedVolume = planned.GetComponent<IVolume>();
+		t.NotNull(plannedVolume, "The forge blueprint's volume");
+		RoadsFitBeside(t, plannedVolume, VPropertyMask.fantome, "forge blueprint", false);
+		Beside(plannedVolume, VPropertyMask.fantome, out List<XYZ> plannedBody);
+		XYZ bodyCell = plannedBody[0];
+		InstantBuild.Complete(new[] { planned });
+		IVolume built = null;
+		yield return t.Until(() => (built = BuiltForgeAt(bodyCell)) != null, 10f, "the forge to be built");
+		GameObject building = built.GameObject;
+		t.Cleanup(() => Scenario.Release(building));
+		yield return t.Frames(3);
+		RoadsFitBeside(t, built, VPropertyMask.obstacle, "forge", true);
+		// And placed for real: the host checks again when it spawns them.
+		foreach (XYZ cell in Beside(built, VPropertyMask.obstacle, out List<XYZ> _))
+		{
+			BlueprintPlacer.Result road = BlueprintPlacer.Place(RoadBlueprint, cell, 0, project, force: false);
+			t.True(road.Placed, "The road beside the forge at " + cell + ": " + road.Outcome + " " + road.Detail);
+			DestroyAfter(t, road.Blueprint);
+		}
+	}
 
 	[GameTest("Roads", "A route takes a road that is longer than the straight line when the road is quicker overall", TimeoutSeconds = 150f)]
 	private static IEnumerator RoutePrefersLongerRoad(TestContext t)

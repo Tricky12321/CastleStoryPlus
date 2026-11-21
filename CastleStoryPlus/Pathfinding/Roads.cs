@@ -4,8 +4,12 @@ using BepInEx.Configuration;
 using Brix.Components;
 using Brix.Engine;
 using Brix.Engine.Blocks;
+using Brix.Game;
 using Brix.Game.AI;
+using Brix.Game.Components;
+using Brix.Game.Components.Volumes;
 using Brix.Game.Locomotion;
+using Brix.Legacy;
 using Brix.Pathfinding;
 using Brix.Pathfinding.Test;
 using CastleStoryPlus.Building;
@@ -132,6 +136,95 @@ internal static class RoadsNiveauxPatch
 		{
 			__result = 0;
 		}
+	}
+}
+
+// A road can be laid right in front of a workshop. The forge, workbench, lab, loom, altar (and the mod's smithy, armoury,
+// market and research station) claim the spot their worker stands on in front of them (occupy, also on their
+// blueprints: WorkSpotReserve), and the game's obstruction check (VUtil.IsObstructed) refuses every blueprint on a
+// claimed cell, so a road could be laid along a building's other sides but not along its front ("something is in the
+// way"). A road is a floor the worker stands on as on the ground, so for a road blueprint such a work spot is not in the
+// way (RoadRules.MayLieOn); everything else the game checks still is: the ground, a tree, a stockpile's goods, a
+// building's body, a walk-in building's floor and another blueprint of the same team.
+[Feature(Features.Roads, Features.RoadsInfo)]
+[HarmonyPatch(typeof(VUtil), nameof(VUtil.IsObstructed), typeof(XYZ), typeof(VPropertyMask), typeof(Faction), typeof(IVolume))]
+internal static class RoadsWorkSpotPatch
+{
+	// The bits of another volume's cell MayLieOn looks at.
+	private static readonly VPropertyMask[] Bits = new VPropertyMask[7]
+	{
+		VPropertyMask.access,
+		VPropertyMask.obstacle,
+		VPropertyMask.occupy,
+		VPropertyMask.walkable,
+		VPropertyMask.operation,
+		VPropertyMask.fantome,
+		VPropertyMask.debloc
+	};
+
+	private static void Postfix(XYZ i, VPropertyMask obstructions, Faction faction, IVolume excludedVolume, ref bool __result)
+	{
+		if (!__result || !IsRoadBlueprint(excludedVolume))
+		{
+			return;
+		}
+		__result = Obstructed(i, obstructions, faction, excludedVolume);
+	}
+
+	private static bool IsRoadBlueprint(IVolume volume)
+	{
+		if (volume == null)
+		{
+			return false;
+		}
+		Brix.External.Factories.Factory.AssetKey key = volume.AssetKey;
+		return key != null && key.Name == Roads.Name && volume.GameObject != null && volume.GameObject.GetComponent<Blueprint>() != null;
+	}
+
+	// The game's check (VUtil.IsObstructed) with a workshop's work spot left out.
+	private static bool Obstructed(XYZ cell, VPropertyMask obstructions, Faction faction, IVolume self)
+	{
+		using (IVoxel voxel = Voxel.GetVoxel(cell))
+		{
+			if (!voxel.IsNull && !voxel.IsCrust && voxel.IsTerrain)
+			{
+				return true;
+			}
+		}
+		if (TreeRegistry.Instance != null && TreeRegistry.Instance.IsNearATree(cell))
+		{
+			return true;
+		}
+		if (StockpileHeadroom.Blocks(cell, self.GameObject))
+		{
+			return true;
+		}
+		XYZ up = new XYZ(cell.x, cell.y + 1, cell.z);
+		foreach (IVolume other in VolumeRegistry.VolumesWithPropertyAtExcluding(cell, obstructions, self))
+		{
+			if (other is BlueprintVolume && other.Faction != faction)
+			{
+				continue;
+			}
+			if (!RoadRules.MayLieOn(MaskAt(other, cell), MaskAt(other, up)))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static long MaskAt(IVolume volume, XYZ cell)
+	{
+		long mask = 0L;
+		foreach (VPropertyMask bit in Bits)
+		{
+			if (volume.HasAnyPropertiesAt(bit, cell))
+			{
+				mask |= (long)bit;
+			}
+		}
+		return mask;
 	}
 }
 
