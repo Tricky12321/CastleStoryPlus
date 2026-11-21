@@ -105,7 +105,9 @@ internal static class ArcherTargetTests
 	// Stays where it is put (the archer comes to no harm and the line of fire stays as set).
 	private static Labor Still(Labor corruptron)
 	{
-		corruptron.Autonomy = AutonomyStatus.WaitForOrders;
+		// Held in place: WaitForOrders turns into a free agent once a task ends, and a corruptron left free walks up to the
+		// archer and kills it before the test is done.
+		corruptron.Autonomy = AutonomyStatus.HoldingPosition;
 		return corruptron;
 	}
 
