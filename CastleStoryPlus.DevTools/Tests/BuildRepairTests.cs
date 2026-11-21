@@ -262,7 +262,7 @@ internal static class BuildRepairTests
 
 	// A committed quarry over the site, depth blocks deep from top down, keeping nothing (the dug ground is broken up
 	// and needs no storage).
-	private static MineProject NewQuarry(TestContext t, XYZ site, int top, int depth, out QuarryData data)
+	internal static MineProject NewQuarry(TestContext t, XYZ site, int top, int depth, out QuarryData data)
 	{
 		Vector3 min = new Vector3(site.x - 2, top - depth + 1, site.z - 2);
 		Vector3 max = new Vector3(site.x + 2, top + 2, site.z + 2);

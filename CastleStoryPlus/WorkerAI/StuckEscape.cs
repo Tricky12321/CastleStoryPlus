@@ -22,6 +22,14 @@ namespace CastleStoryPlus.WorkerAI;
 // and fails on in its pocket, keep a task on it nearly all the time, and an escape waited for it to be free between
 // two blocks until it ran out of time. A busy worker is now found as well (still shut in at the same place over
 // BusySeconds), and an escaping worker's other tasks are broken off so it digs on.
+// A plan walked by its own step rules, not the route graph's: open ground beside the pocket the graph did not join to it
+// was taken as a walk, and the worker was sent to dig a block it could never get to (the walk failed again and again,
+// it stood there 100 s). Now a plan walks only through the pocket before its first dug block, each block is sent only
+// when the worker can dig it from where the route graph lets it stand, and a block it is sent to again and again
+// without it going (EscapeRules.MaxDigSends), or cannot get to, has the way planned again from where the worker stands,
+// round that block. The tunnel is dug two wide where the ground lets it, so several workers shut in together do not
+// jam in it one behind the other, and a worker that got out walks on a few blocks (EscapeRules.ExitDistance) to a free
+// place instead of stopping on the tunnel's top step in the way of the others.
 [Feature(Features.StuckEscape, Features.StuckEscapeInfo)]
 internal class StuckEscape : MonoBehaviour
 {
@@ -65,18 +73,43 @@ internal class StuckEscape : MonoBehaviour
 
 		public XYZ Start;
 
+		public XYZ Exit;
+
 		public readonly List<XYZ> Blocks = new List<XYZ>();
+
+		// The blocks that only make the tunnel wider: skipped when they cannot be dug, never a reason to plan again.
+		public readonly HashSet<XYZ> Wide = new HashSet<XYZ>();
+
+		// Blocks the worker could not get to: planned round from then on.
+		public readonly HashSet<XYZ> Avoid = new HashSet<XYZ>();
 
 		public int Next;
 
 		public DigGoal Goal;
+
+		// How often the current block's dig was sent to the worker.
+		public int Sends;
+
+		public int Replans;
+
+		// The worker stands on the route graph outside any pocket: it is out.
+		public bool Out;
 
 		public float Until;
 
 		public float LastAbort;
 	}
 
-	private readonly Dictionary<Labor, Escape> _escapes = new Dictionary<Labor, Escape>();
+	private static readonly Dictionary<Labor, Escape> Escapes = new Dictionary<Labor, Escape>();
+
+	// The escapes' dig goals (the quarry's floor limit does not hold them back, QuarryStairs.TooDeep).
+	private static readonly HashSet<DigGoal> EscapeDigs = new HashSet<DigGoal>();
+
+	// Places workers that dug their way out were just sent to, and until when they are kept for them.
+	private static readonly Dictionary<XYZ, float> ExitSpots = new Dictionary<XYZ, float>();
+
+	// Each worker's last tunnel mouth (the escape's last block), for the tests.
+	private static readonly Dictionary<Labor, XYZ> LastMouths = new Dictionary<Labor, XYZ>();
 
 	// Where each worker's last escape started. A worker still shut in at the same place after digging is shut in by
 	// something digging does not open (stockpiles all round): it is not sent to dig again there, or it would eat away
@@ -99,10 +132,13 @@ internal class StuckEscape : MonoBehaviour
 	{
 		if (!NetworkServer.active)
 		{
-			if (_escapes.Count > 0)
+			if (Escapes.Count > 0)
 			{
-				_escapes.Clear();
+				Escapes.Clear();
 			}
+			EscapeDigs.Clear();
+			ExitSpots.Clear();
+			LastMouths.Clear();
 			_triedFrom.Clear();
 			_busyShutIn.Clear();
 			return;
@@ -125,7 +161,7 @@ internal class StuckEscape : MonoBehaviour
 		}
 		foreach (Labor labor in Live<Labor>.Active())
 		{
-			if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI || _escapes.ContainsKey(labor) || labor.IsPhasedOut || labor.Activity == Activity.Fighting)
+			if (labor.IsNullOrReleased() || labor.faction == null || labor.faction.isAI || Escapes.ContainsKey(labor) || labor.IsPhasedOut || labor.Activity == Activity.Fighting)
 			{
 				_busyShutIn.Remove(labor);
 				continue;
@@ -139,6 +175,23 @@ internal class StuckEscape : MonoBehaviour
 				Plugin.Log.LogWarning("StuckEscape: " + ex.Message);
 			}
 		}
+	}
+
+	// Whether the worker is digging its way out of a pit (StuckReset leaves it alone: the escape has its own limits).
+	internal static bool IsEscaping(Labor labor)
+	{
+		return labor != null && Escapes.ContainsKey(labor);
+	}
+
+	// Where the worker's last escape came out (its last block); false when it never dug its way out.
+	internal static bool LastMouth(Labor labor, out XYZ mouth)
+	{
+		return LastMouths.TryGetValue(labor, out mouth);
+	}
+
+	internal static bool IsEscapeDig(DigGoal goal)
+	{
+		return goal != null && EscapeDigs.Contains(goal);
 	}
 
 	private void Check(Labor labor)
@@ -180,17 +233,68 @@ internal class StuckEscape : MonoBehaviour
 			}
 			_triedFrom.Remove(labor);
 		}
-		List<XYZ> blocks = WayOut(labor.gameObject, labor.faction, start, pocket, out XYZ exit);
-		if (blocks == null || blocks.Count == 0)
+		Escape escape = new Escape { Labor = labor, Start = start, Until = Time.time + EscapeSeconds };
+		if (!Plan(escape, start, pocket))
 		{
 			// Nothing to dig: an open way the route graph does not have is no way out by digging.
 			return;
 		}
 		_busyShutIn.Remove(labor);
-		Escape escape = new Escape { Labor = labor, Start = start, Until = Time.time + EscapeSeconds };
+		Escapes[labor] = escape;
+		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " is shut in at " + start + " (" + pocket.Count + " places" + (busy ? ", busy with '" + Describe(labor) + "'" : string.Empty) + "), digging " + escape.Blocks.Count + " blocks out to " + escape.Exit + " (" + escape.Wide.Count + " of them to make it two wide)");
+	}
+
+	// The escape's blocks planned from start (the worker's place) in its pocket, round the blocks it could not get to.
+	// False when there is no way out to dig.
+	private static bool Plan(Escape escape, XYZ start, HashSet<XYZ> pocket)
+	{
+		Labor labor = escape.Labor;
+		List<XYZ> path = WayOut(labor.gameObject, labor.faction, start, pocket, escape.Avoid, out XYZ exit);
+		if (path == null)
+		{
+			return false;
+		}
+		List<XYZ> blocks = Blocks(labor.gameObject, start, path, escape.Avoid, escape.Wide);
+		if (blocks.Count == 0)
+		{
+			return false;
+		}
+		escape.Start = start;
+		escape.Exit = exit;
+		escape.Blocks.Clear();
 		escape.Blocks.AddRange(blocks);
-		_escapes[labor] = escape;
-		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " is shut in at " + start + " (" + pocket.Count + " places" + (busy ? ", busy with '" + Describe(labor) + "'" : string.Empty) + "), digging " + blocks.Count + " blocks out to " + exit);
+		escape.Next = 0;
+		escape.Sends = 0;
+		return true;
+	}
+
+	// The escape's block could not be dug from where the worker can stand, or its walk failed again and again: the way
+	// is planned again from where the worker stands now, round that block. True when the escape is over (given up, or
+	// the worker is out after all).
+	private static bool Replan(Escape escape, XYZ block, string why)
+	{
+		Release(escape);
+		escape.Avoid.Add(block);
+		Labor labor = escape.Labor;
+		PathNode node = (labor.presence != null) ? labor.presence.CurrentPathNode : null;
+		if (node == null || node.IsEmpty || node.Lod != 0)
+		{
+			return true;
+		}
+		HashSet<XYZ> pocket = Pocket(labor, node);
+		if (pocket == null)
+		{
+			escape.Out = true;
+			return true;
+		}
+		escape.Replans++;
+		if (escape.Replans > EscapeRules.MaxReplans || !Plan(escape, node.RepresentativePosition, pocket))
+		{
+			Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " cannot dig " + block + " (" + why + ") and finds no other way out");
+			return true;
+		}
+		Plugin.Log.LogInfo("StuckEscape: " + labor.gameObject.name + " cannot dig " + block + " (" + why + "): planned again from " + node.RepresentativePosition + ", " + escape.Blocks.Count + " blocks out to " + escape.Exit);
+		return false;
 	}
 
 	// SmartTransfer orders that have left their worker standing still for too long: the game's stockpile order has
@@ -263,7 +367,9 @@ internal class StuckEscape : MonoBehaviour
 	// pocket: steps one block up or down at most, always on solid ground, through terrain only (not buildings or
 	// what cannot be broken), and never through an obstacle such as a stockpile (a worker walled in by stockpiles
 	// digs round them).
-	private static List<XYZ> WayOut(GameObject self, Faction faction, XYZ start, HashSet<XYZ> pocket, out XYZ exit)
+	// Before its first dug block the walk keeps to the pocket (EscapeRules.MayWalk): open ground beside it that the
+	// route graph does not join to it cannot be walked to. Returns the walk's places (start not included).
+	private static List<XYZ> WayOut(GameObject self, Faction faction, XYZ start, HashSet<XYZ> pocket, HashSet<XYZ> avoid, out XYZ exit)
 	{
 		exit = start;
 		Dictionary<XYZ, int> cost = new Dictionary<XYZ, int> { [start] = 0 };
@@ -286,7 +392,7 @@ internal class StuckEscape : MonoBehaviour
 			if (!pocket.Contains(cell) && ReachMap.Contains(faction, cell))
 			{
 				exit = cell;
-				return Blocks(start, cell, from);
+				return Path(start, cell, from);
 			}
 			foreach (XYZ side in Sides)
 			{
@@ -297,8 +403,12 @@ internal class StuckEscape : MonoBehaviour
 					{
 						continue;
 					}
-					int step = StepCost(self, cell, next, dy);
+					int step = StepCost(self, cell, next, dy, avoid);
 					if (step < 0)
+					{
+						continue;
+					}
+					if (step == 0 && !EscapeRules.MayWalk(pocket.Contains(cell), pocket.Contains(next), !pocket.Contains(next) && ReachMap.Contains(faction, next)))
 					{
 						continue;
 					}
@@ -321,7 +431,7 @@ internal class StuckEscape : MonoBehaviour
 	}
 
 	// Blocks to dig for the step from cell to next (dy up or down), or -1 when it cannot be made.
-	private static int StepCost(GameObject self, XYZ cell, XYZ next, int dy)
+	private static int StepCost(GameObject self, XYZ cell, XYZ next, int dy, HashSet<XYZ> avoid)
 	{
 		if (!Solid(next - XYZ.up))
 		{
@@ -340,7 +450,7 @@ internal class StuckEscape : MonoBehaviour
 			{
 				continue;
 			}
-			if (!Diggable(room))
+			if (!Diggable(room) || avoid.Contains(room))
 			{
 				return -1;
 			}
@@ -377,7 +487,7 @@ internal class StuckEscape : MonoBehaviour
 		return Voxel.IsTerrain(cell) && !Voxel.IsInvincible(cell) && !Voxel.IsBlock(cell) && !QuarryStairs.Keeps(cell);
 	}
 
-	private static List<XYZ> Blocks(XYZ start, XYZ end, Dictionary<XYZ, XYZ> from)
+	private static List<XYZ> Path(XYZ start, XYZ end, Dictionary<XYZ, XYZ> from)
 	{
 		List<XYZ> path = new List<XYZ>();
 		XYZ at = end;
@@ -387,15 +497,37 @@ internal class StuckEscape : MonoBehaviour
 			at = from[at];
 		}
 		path.Reverse();
+		return path;
+	}
+
+	// The blocks to dig along the walk, in order: each step's own room, then the same room beside it (to the left of the
+	// way) where that can be dug and has ground under it, so the tunnel is two wide (wide: those blocks).
+	private static List<XYZ> Blocks(GameObject self, XYZ start, List<XYZ> path, HashSet<XYZ> avoid, HashSet<XYZ> wide)
+	{
+		wide.Clear();
 		List<XYZ> blocks = new List<XYZ>();
 		XYZ previous = start;
 		foreach (XYZ cell in path)
 		{
-			foreach (XYZ room in StepRoom(previous, cell, cell.y - previous.y))
+			int dy = cell.y - previous.y;
+			foreach (XYZ room in StepRoom(previous, cell, dy))
 			{
 				if (!Voxel.IsEmpty(room) && !blocks.Contains(room))
 				{
 					blocks.Add(room);
+				}
+			}
+			EscapeRules.Side(cell.x - previous.x, cell.z - previous.z, out int sx, out int sz);
+			XYZ side = new XYZ(sx, 0, sz);
+			if (StepCost(self, previous + side, cell + side, dy, avoid) > 0)
+			{
+				foreach (XYZ room in StepRoom(previous + side, cell + side, dy))
+				{
+					if (!Voxel.IsEmpty(room) && !blocks.Contains(room))
+					{
+						blocks.Add(room);
+						wide.Add(room);
+					}
 				}
 			}
 			previous = cell;
@@ -406,12 +538,12 @@ internal class StuckEscape : MonoBehaviour
 	// Gives each escaping worker its next block once the last is gone.
 	private void Advance()
 	{
-		if (_escapes.Count == 0)
+		if (Escapes.Count == 0)
 		{
 			return;
 		}
 		List<Labor> done = null;
-		foreach (Escape escape in _escapes.Values)
+		foreach (Escape escape in Escapes.Values)
 		{
 			if (Step(escape))
 			{
@@ -424,17 +556,24 @@ internal class StuckEscape : MonoBehaviour
 		}
 		foreach (Labor labor in done)
 		{
-			Escape escape = _escapes[labor];
+			Escape escape = Escapes[labor];
 			Finish(escape);
-			_escapes.Remove(labor);
+			Escapes.Remove(labor);
 			// Only an escape that dug its whole way: one given up (the worker was kept from it) is tried again.
-			if (!labor.IsNullOrReleased() && escape.Next >= escape.Blocks.Count)
+			if (!labor.IsNullOrReleased() && Done(escape))
 			{
 				_triedFrom[labor] = escape.Start;
 			}
 		}
 		List<Labor> gone = null;
 		foreach (Labor labor in _triedFrom.Keys)
+		{
+			if (labor.IsNullOrReleased())
+			{
+				(gone ?? (gone = new List<Labor>())).Add(labor);
+			}
+		}
+		foreach (Labor labor in LastMouths.Keys)
 		{
 			if (labor.IsNullOrReleased())
 			{
@@ -454,8 +593,14 @@ internal class StuckEscape : MonoBehaviour
 			{
 				_triedFrom.Remove(labor);
 				_busyShutIn.Remove(labor);
+				LastMouths.Remove(labor);
 			}
 		}
+	}
+
+	private static bool Done(Escape escape)
+	{
+		return escape.Out || escape.Next >= escape.Blocks.Count;
 	}
 
 	// True when the escape is over (out, given up, the worker gone).
@@ -470,7 +615,22 @@ internal class StuckEscape : MonoBehaviour
 			// Still digging it; a worker that dropped the task gets it again, one busy with another breaks it off.
 			if (escape.Labor.IsAvailable() && escape.Labor.CurrentTask == null)
 			{
+				XYZ at = escape.Goal.voxel.position;
+				if (escape.Sends >= EscapeRules.MaxDigSends)
+				{
+					// Sent again and again and still there: the worker cannot get to it (its walk failed, or the task
+					// was taken off it each time).
+					if (escape.Wide.Contains(at))
+					{
+						Release(escape);
+						escape.Next++;
+						escape.Sends = 0;
+						return false;
+					}
+					return Replan(escape, at, "sent " + escape.Sends + " times");
+				}
 				Send(escape.Labor, escape.Goal);
+				escape.Sends++;
 			}
 			else
 			{
@@ -498,6 +658,27 @@ internal class StuckEscape : MonoBehaviour
 			// A quarry's stair step (or the ground under one) since the way was planned: given up, planned again later.
 			return true;
 		}
+		// Only a block the worker can dig from a place the route graph lets it stand on (its pocket now).
+		PathNode node = (escape.Labor.presence != null) ? escape.Labor.presence.CurrentPathNode : null;
+		if (node != null && !node.IsEmpty && node.Lod == 0)
+		{
+			HashSet<XYZ> pocket = Pocket(escape.Labor, node);
+			if (pocket == null)
+			{
+				// The worker's part of the graph is no pocket any more: it is out.
+				escape.Out = true;
+				return true;
+			}
+			if (!CanDigFromPocket(pocket, block))
+			{
+				if (escape.Wide.Contains(block))
+				{
+					escape.Next++;
+					return false;
+				}
+				return Replan(escape, block, "out of reach of where it can stand");
+			}
+		}
 		if (!ObjectPoolSingleton.RequestComponent<DigGoal>(out DigGoal goal, Brix.External.Factories.Test.DigGoal, block.ToVector3(), Quaternion.identity) || goal == null)
 		{
 			return true;
@@ -506,7 +687,21 @@ internal class StuckEscape : MonoBehaviour
 		goal.ResourceSetting = KeepNothing;
 		goal.UseHeightAdjustment = false;
 		escape.Goal = goal;
+		EscapeDigs.Add(goal);
 		Send(escape.Labor, goal);
+		escape.Sends = 1;
+		return false;
+	}
+
+	private static bool CanDigFromPocket(HashSet<XYZ> pocket, XYZ block)
+	{
+		foreach (XYZ place in pocket)
+		{
+			if (EscapeRules.CanDigFrom(place.x, place.y, place.z, block.x, block.y, block.z))
+			{
+				return true;
+			}
+		}
 		return false;
 	}
 
@@ -545,9 +740,13 @@ internal class StuckEscape : MonoBehaviour
 
 	private static void Release(Escape escape)
 	{
-		if (escape.Goal != null && !escape.Goal.IsNullOrReleased())
+		if (escape.Goal != null)
 		{
-			ObjectPoolSingleton.Release(escape.Goal.gameObject);
+			EscapeDigs.Remove(escape.Goal);
+			if (!escape.Goal.IsNullOrReleased())
+			{
+				ObjectPoolSingleton.Release(escape.Goal.gameObject);
+			}
 		}
 		escape.Goal = null;
 	}
@@ -555,9 +754,109 @@ internal class StuckEscape : MonoBehaviour
 	private static void Finish(Escape escape)
 	{
 		Release(escape);
-		if (!escape.Labor.IsNullOrReleased())
+		if (escape.Labor.IsNullOrReleased())
 		{
-			Plugin.Log.LogInfo("StuckEscape: " + escape.Labor.gameObject.name + (escape.Next >= escape.Blocks.Count ? " dug its way out" : " gave up digging out"));
+			return;
 		}
+		if (!Done(escape))
+		{
+			Plugin.Log.LogInfo("StuckEscape: " + escape.Labor.gameObject.name + " gave up digging out");
+			return;
+		}
+		LastMouths[escape.Labor] = Mouth(escape);
+		XYZ? spot = ExitSpot(escape);
+		Plugin.Log.LogInfo("StuckEscape: " + escape.Labor.gameObject.name + " dug its way out" + (spot.HasValue ? ", walks on to " + spot.Value : string.Empty));
+		if (spot.HasValue)
+		{
+			Order.Package.OfLocation(Order.Move.RunToward, Location.Of(spot.Value), Labor.DecisionSource.Project).Send(escape.Labor);
+		}
+	}
+
+	// A free place on the faction's routes a few blocks on from the tunnel's mouth (EscapeRules.ExitDistance from the
+	// way out and from the tunnel's last block), not one another worker stands on or was just sent to; null when there
+	// is none near.
+	private static XYZ? ExitSpot(Escape escape)
+	{
+		Faction faction = escape.Labor.faction;
+		if (faction == null || !ReachMap.Has(faction))
+		{
+			return null;
+		}
+		float now = Time.time;
+		List<XYZ> stale = null;
+		foreach (KeyValuePair<XYZ, float> taken in ExitSpots)
+		{
+			if (taken.Value < now)
+			{
+				(stale ?? (stale = new List<XYZ>())).Add(taken.Key);
+			}
+		}
+		if (stale != null)
+		{
+			foreach (XYZ old in stale)
+			{
+				ExitSpots.Remove(old);
+			}
+		}
+		List<XYZ> standing = new List<XYZ>();
+		foreach (Labor other in Live<Labor>.Active())
+		{
+			if (other != escape.Labor && !other.IsNullOrReleased())
+			{
+				standing.Add(XYZ.FromVector3(other.transform.position));
+			}
+		}
+		XYZ mouth = Mouth(escape);
+		HashSet<XYZ> seen = new HashSet<XYZ> { escape.Exit };
+		Queue<XYZ> open = new Queue<XYZ>();
+		open.Enqueue(escape.Exit);
+		while (open.Count > 0 && seen.Count < 400)
+		{
+			XYZ cell = open.Dequeue();
+			if (EscapeRules.FarFrom(cell.x, cell.z, escape.Exit.x, escape.Exit.z, EscapeRules.ExitDistance) && EscapeRules.FarFrom(cell.x, cell.z, mouth.x, mouth.z, EscapeRules.ExitDistance) && Free(cell, standing))
+			{
+				ExitSpots[cell] = now + 15f;
+				return cell;
+			}
+			foreach (XYZ side in Sides)
+			{
+				for (int dy = -1; dy <= 1; dy++)
+				{
+					XYZ next = cell + side + new XYZ(0, dy, 0);
+					if (seen.Contains(next) || !ReachMap.Contains(faction, next))
+					{
+						continue;
+					}
+					seen.Add(next);
+					open.Enqueue(next);
+				}
+			}
+		}
+		return null;
+	}
+
+	private static XYZ Mouth(Escape escape)
+	{
+		return (escape.Blocks.Count > 0) ? escape.Blocks[escape.Blocks.Count - 1] : escape.Exit;
+	}
+
+	// No worker stands within a block of the place, and none was just sent there.
+	private static bool Free(XYZ cell, List<XYZ> standing)
+	{
+		foreach (XYZ taken in ExitSpots.Keys)
+		{
+			if (!EscapeRules.FarFrom(cell.x, cell.z, taken.x, taken.z, 2) && Mathf.Abs(cell.y - taken.y) <= 2)
+			{
+				return false;
+			}
+		}
+		foreach (XYZ at in standing)
+		{
+			if (!EscapeRules.FarFrom(cell.x, cell.z, at.x, at.z, 2) && Mathf.Abs(cell.y - at.y) <= 2)
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 }
