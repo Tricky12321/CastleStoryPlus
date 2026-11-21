@@ -15,7 +15,7 @@ namespace CastleStoryPlus.DevTools.Tests;
 [ParallelTests("Combat")]
 internal static class ArcherTargetTests
 {
-	[GameTest("Combat", "An archer with a corruptron behind another in its line of fire shoots within 20 s and keeps shooting until both are dead (#165)", TimeoutSeconds = 240f)]
+	[GameTest("Combat", "An archer with a corruptron behind another in its line of fire shoots within 20 s and goes on to hit both (#165)", TimeoutSeconds = 240f)]
 	private static IEnumerator ShootsIntoACrowd(TestContext t)
 	{
 		XYZ site = Scenario.Site(t, 16, 6);
@@ -28,9 +28,14 @@ internal static class ArcherTargetTests
 		float started = Time.time;
 		yield return t.UntilGame(() => Scenario.Hp(front) < frontMax || Scenario.Hp(back) < backMax, 20f, "the archer to hit one of the corruptrons", 5f, () => Note(t, archer));
 		t.Record("firstHitAfter", Mathf.Round(Time.time - started));
-		yield return t.UntilGame(() => !Scenario.Alive(front) && !Scenario.Alive(back), 150f, "both corruptrons to die", 10f, () => Note(t, archer));
-		t.Record("bothDeadAfter", Mathf.Round(Time.time - started));
-		t.True(Scenario.Alive(archer), "The archer died");
+		// It goes on to the second one: both are hit (or dead). The corruptrons hit back once shot, so the archer may die
+		// before it is done; that is recorded, and only counts against it when it had not shot both by then.
+		yield return t.UntilGame(() => (Scenario.Hp(front) < frontMax && Scenario.Hp(back) < backMax) || !Scenario.Alive(archer), 90f, "the archer to hit both corruptrons", 10f, () => Note(t, archer));
+		t.Record("frontHp", Scenario.Hp(front) + " of " + frontMax);
+		t.Record("backHp", Scenario.Hp(back) + " of " + backMax);
+		t.Record("archerAlive", Scenario.Alive(archer));
+		t.Record("bothHitAfter", Mathf.Round(Time.time - started));
+		t.True(Scenario.Hp(front) < frontMax && Scenario.Hp(back) < backMax, "The archer died before it had hit both corruptrons");
 	}
 
 	[GameTest("Combat", "An archer ordered to attack a corruptron behind another one shoots within 20 s (#165)", TimeoutSeconds = 180f)]
@@ -81,7 +86,7 @@ internal static class ArcherTargetTests
 		}, 25f, "the archer to hit the far corruptron", 5f, () => Note(t, archer));
 		t.Equal(nearMax, Scenario.Hp(near), "The near corruptron's hit points while it was left be");
 		// Left alone, the block runs out and the near one is tried again from the same place.
-		if (Scenario.Alive(near) && (archer.transform.position - stood).sqrMagnitude < 0.25f)
+		if (Scenario.Alive(near) && Scenario.Alive(archer) && (archer.transform.position - stood).sqrMagnitude < 0.25f)
 		{
 			yield return t.UntilGame(() => !ArcherRetarget.IsBlocked(profession, near.gameObject), BlockedShots<Profession, GameObject>.MaxHold + 1f, "the near corruptron to be tried again");
 			t.True(profession.CanFireAt(Location.Of(near.gameObject)) || !Scenario.Alive(near), "The near corruptron cannot be shot at again after the block ran out");
@@ -107,6 +112,12 @@ internal static class ArcherTargetTests
 	private static void Note(TestContext t, Labor archer)
 	{
 		t.Record("blocked", ArcherRetarget.Blocked.Count);
+		// The archer may have died and been taken out of the game meanwhile (a destroyed Unity object has no transform).
+		if (!Scenario.Alive(archer))
+		{
+			t.Record("archerAt", "dead");
+			return;
+		}
 		t.Record("archerAt", XYZ.FromVector3(archer.transform.position).ToString());
 		t.Record("archerTask", (archer.CurrentTask != null) ? archer.CurrentTask.ToString() : "none");
 	}
