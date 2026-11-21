@@ -71,4 +71,43 @@ internal static class RoadRules
 	{
 		return cost * factor;
 	}
+
+	// The bits of the game's volume cells (Brix VPropertyMask) a road's placement looks at; the same values.
+	internal const long AccessBit = 0x1L;
+
+	internal const long ObstacleBit = 0x2L;
+
+	internal const long OccupyBit = 0x4L;
+
+	internal const long WalkableBit = 0x8L;
+
+	internal const long OperationBit = 0x10L;
+
+	internal const long FantomeBit = 0x20L;
+
+	internal const long DeblocBit = 0x1000L;
+
+	// Whether a road blueprint may lie in a cell that another building or blueprint claims, given that volume's bits in
+	// the cell (here) and in the cell over it (above). A workshop (forge, workbench, lab, loom, altar and the mod's
+	// clones) claims the spot in front of it where its worker stands (occupy, with access or operation, nothing over it),
+	// so no block or blueprint walls the worker in (WorkSpotReserve). A road is a floor the worker stands on as on the
+	// ground, so it may lie there; the game refused it, so a road could not be laid along a workshop's front. The
+	// building's own body (obstacle, debloc), a pallet (walkable), another blueprint's body (fantome) and the floor
+	// inside a walk-in building (claimed over two blocks) stay refused.
+	internal static bool MayLieOn(long here, long above)
+	{
+		if ((here & (OccupyBit | FantomeBit)) == 0)
+		{
+			return true;
+		}
+		if ((here & (ObstacleBit | FantomeBit | DeblocBit | WalkableBit)) != 0)
+		{
+			return false;
+		}
+		if ((here & (AccessBit | OperationBit)) == 0)
+		{
+			return false;
+		}
+		return (above & (OccupyBit | ObstacleBit | FantomeBit)) == 0;
+	}
 }
