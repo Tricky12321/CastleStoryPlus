@@ -441,17 +441,37 @@ internal sealed class LoadRelief : MonoBehaviour
 	// before; only a pit is no place for it.
 	private static bool CanDropAt(Faction faction, XYZ feet, Labor standing = null)
 	{
+		return WhyNotDropAt(faction, feet, standing, true) == null;
+	}
+
+	// Why a load may not be put down at the cell, or null when it may. Without needRoutes only the place itself counts
+	// (solid ground, room to stand, no stair, climb or quarry floor): the last resort when no storage and no place on
+	// the routes was found, so a worker on ground of its own does not carry its load for good.
+	private static string WhyNotDropAt(Faction faction, XYZ feet, Labor standing, bool needRoutes)
+	{
 		XYZ ground = feet - XYZ.up;
-		bool onStair = QuarryGoalProvider2.IsStair(feet) || QuarryGoalProvider2.IsStair(ground) || QuarryStairs.Keeps(ground);
-		bool inQuarry = QuarryStairs.InQuarry(feet);
-		bool groundSolid = !Voxel.IsEmpty(ground);
-		bool feetFree = Voxel.IsEmpty(feet);
-		if (!EscapeRules.CanDropAt(groundSolid, feetFree, onStair, inQuarry, true))
+		if (QuarryGoalProvider2.IsStair(feet) || QuarryGoalProvider2.IsStair(ground) || QuarryStairs.Keeps(ground))
 		{
-			return false;
+			return "a stair step";
+		}
+		if (QuarryStairs.InQuarry(feet))
+		{
+			return "a quarry's floor";
+		}
+		if (Voxel.IsEmpty(ground))
+		{
+			return "no solid ground under it";
+		}
+		if (!Voxel.IsEmpty(feet))
+		{
+			return "no room to stand";
+		}
+		if (!needRoutes)
+		{
+			return null;
 		}
 		bool onRoutes = faction == null || !ReachMap.Has(faction) || ReachMap.Near(faction, feet, 0, 1, 0) || (standing != null && !StuckEscape.ShutIn(standing));
-		return EscapeRules.CanDropAt(groundSolid, feetFree, onStair, inQuarry, onRoutes);
+		return onRoutes ? null : "off the routes";
 	}
 
 	// The nearest place on the base's routes, walking from the worker, where a load may be put down; null when there is
@@ -498,10 +518,11 @@ internal sealed class LoadRelief : MonoBehaviour
 		{
 			return;
 		}
-		if (!CanDropHere(labor))
+		XYZ feet = XYZ.FromVector3(labor.transform.position + Vector3.up * 0.5f);
+		string refused = WhyNotDropAt(labor.faction, feet, labor, false);
+		if (refused != null)
 		{
-			Vector3 here = labor.transform.position;
-			Plugin.Log.LogInfo("LoadRelief: " + labor.name + " found no storage for " + labor.recepteur.ContentString() + " and keeps it: it stands at " + Mathf.FloorToInt(here.x) + "," + Mathf.FloorToInt(here.y) + "," + Mathf.FloorToInt(here.z) + ", where nothing is put down (a stair, a climb, a quarry's floor, off the routes)");
+			Plugin.Log.LogInfo("LoadRelief: " + labor.name + " found no storage for " + labor.recepteur.ContentString() + " and keeps it: it stands at " + feet + ", where nothing is put down (" + refused + ")");
 			return;
 		}
 		string load = labor.recepteur.ContentString();
