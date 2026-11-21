@@ -183,6 +183,18 @@ internal class StuckEscape : MonoBehaviour
 		return labor != null && Escapes.ContainsKey(labor);
 	}
 
+	// Whether the worker stands in a pocket of the route graph (a pit, a hole closed off): fewer than MaxPocket places
+	// can be walked to from where it stands. False when it stands on no place of the graph.
+	internal static bool ShutIn(Labor labor)
+	{
+		PathNode node = (labor != null && labor.presence != null) ? labor.presence.CurrentPathNode : null;
+		if (node == null || node.IsEmpty || node.Lod != 0)
+		{
+			return false;
+		}
+		return Pocket(labor, node) != null;
+	}
+
 	// Where the worker's last escape came out (its last block); false when it never dug its way out.
 	internal static bool LastMouth(Labor labor, out XYZ mouth)
 	{

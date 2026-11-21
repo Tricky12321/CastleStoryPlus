@@ -47,7 +47,7 @@ namespace CastleStoryPlus.WorkerAI;
 // - A storage a worker failed to get to is passed by from about the same place for a while
 //   (EscapeRules.UnreachableStoreSeconds), so the next "store or drop" does not walk the same failed way again.
 // - After the walk to the gather point the worker looks for storage again from there before it puts anything down.
-// - A load is put down only on open ground on the base's routes: never on a stair, a climb or a quarry's floor. A worker
+// - A load is put down only on open ground (not in a pit): never on a stair, a climb or a quarry's floor. A worker
 //   standing on such a place walks to the nearest open ground first, and keeps the load when it cannot get there.
 // - StuckReset leaves the store sequence alone; a store in which the worker has not moved for
 //   EscapeRules.StoreStillSeconds is broken off here instead, and the load is kept.
@@ -432,15 +432,26 @@ internal sealed class LoadRelief : MonoBehaviour
 		{
 			return false;
 		}
-		return CanDropAt(labor.faction, XYZ.FromVector3(labor.transform.position + Vector3.up * 0.1f));
+		return CanDropAt(labor.faction, XYZ.FromVector3(labor.transform.position + Vector3.up * 0.1f), labor);
 	}
 
-	private static bool CanDropAt(Faction faction, XYZ feet)
+	// Whether a load may be put down at the cell (feet: where a worker stands). "On the routes": on the faction's route
+	// map, or (for the worker's own place) anywhere the worker is not shut in: the route map only covers what is
+	// joined to the base, and a worker on open ground of its own (a test site, an outpost) put its load down there
+	// before; only a pit is no place for it.
+	private static bool CanDropAt(Faction faction, XYZ feet, Labor standing = null)
 	{
 		XYZ ground = feet - XYZ.up;
 		bool onStair = QuarryGoalProvider2.IsStair(feet) || QuarryGoalProvider2.IsStair(ground) || QuarryStairs.Keeps(ground);
-		bool onRoutes = faction == null || !ReachMap.Has(faction) || ReachMap.Near(faction, feet, 0, 1, 0);
-		return EscapeRules.CanDropAt(!Voxel.IsEmpty(ground), Voxel.IsEmpty(feet), onStair, QuarryStairs.InQuarry(feet), onRoutes);
+		bool inQuarry = QuarryStairs.InQuarry(feet);
+		bool groundSolid = !Voxel.IsEmpty(ground);
+		bool feetFree = Voxel.IsEmpty(feet);
+		if (!EscapeRules.CanDropAt(groundSolid, feetFree, onStair, inQuarry, true))
+		{
+			return false;
+		}
+		bool onRoutes = faction == null || !ReachMap.Has(faction) || ReachMap.Near(faction, feet, 0, 1, 0) || (standing != null && !StuckEscape.ShutIn(standing));
+		return EscapeRules.CanDropAt(groundSolid, feetFree, onStair, inQuarry, onRoutes);
 	}
 
 	// The nearest place on the base's routes, walking from the worker, where a load may be put down; null when there is
