@@ -18,7 +18,14 @@ namespace CastleStoryPlus.Pathfinding;
 // its order up, standing behind the ally (#102: corruptrons below a ledge with a biftron standing still on its edge
 // never climbed the free ledge beside it). When a unit that cannot pass allies finds its walk blocked by one, the
 // ally's voxel is now closed to that unit's own route searches (its next route, the short repath round a blocker) for
-// a few seconds, so it walks round the ally; with no other way the search fails as it did before PassThroughAllies.
+// a few seconds, so it walks round the ally.
+// Where the ally's voxel is the only way (a stair or a passage one voxel wide between two levels) the closed search
+// found no route: the unit stood on the stair until its walk gave up (PathExecutionFailed), or walked to the nearest
+// place it could reach, back down the stair, and up again (workers on their idle walk, stockpile consolidation or
+// store-or-drop between two terraces in a maintainer's save, 15 s and more on one stair voxel). A search that finds no
+// route while it was refused a closed voxel now opens the unit's closed voxels again and searches once more; those
+// voxels count as the only way for ChokeSeconds and are not closed again meanwhile, so the unit waits for the ally
+// there (ClimbPastAllies) instead of turning back.
 // It reads only what the game's own searches read, with the game time, and nothing is sent to other players.
 [Feature(Features.CrowdPathing, Features.CrowdPathingInfo)]
 [HarmonyPatch(typeof(Locomotion4), nameof(Locomotion4.PathBlockedAt))]
@@ -27,64 +34,17 @@ internal static class CrowdPathing
 	// How long a blocking ally's voxel stays closed to the unit it blocked, in game seconds.
 	internal const float ClosedSeconds = 5f;
 
-	// The most voxels closed to one unit at a time (the oldest gives way to a new one).
-	internal const int MaxClosed = 4;
+	// How long a closed voxel that turned out to be the only way stays open to the unit, in game seconds.
+	internal const float ChokeSeconds = 20f;
 
 	// A unit's closed voxels and the wrappers round its presence tests.
 	internal sealed class Closure
 	{
-		public readonly XYZ[] Voxels = new XYZ[MaxClosed];
-
-		public readonly float[] Until = new float[MaxClosed];
-
-		public int Count;
+		public readonly AllyClosures Voxels = new AllyClosures();
 
 		public readonly List<Func<XYZ, bool>> Inner = new List<Func<XYZ, bool>>(3);
 
 		public readonly List<Func<XYZ, bool>> Wrapped = new List<Func<XYZ, bool>>(3);
-
-		public void Close(XYZ voxel, float until)
-		{
-			int slot = Array.IndexOf(Voxels, voxel);
-			if (slot < 0)
-			{
-				slot = Array.IndexOf(Voxels, XYZ.zero);
-			}
-			if (slot < 0)
-			{
-				slot = 0;
-				for (int i = 1; i < MaxClosed; i++)
-				{
-					if (Until[i] < Until[slot])
-					{
-						slot = i;
-					}
-				}
-			}
-			if (Voxels[slot] == XYZ.zero)
-			{
-				Count++;
-			}
-			Voxels[slot] = voxel;
-			Until[slot] = until;
-		}
-
-		private bool IsClosed(XYZ p)
-		{
-			for (int i = 0; i < MaxClosed; i++)
-			{
-				if (Voxels[i] != XYZ.zero && p == Voxels[i])
-				{
-					if (Time.time < Until[i])
-					{
-						return true;
-					}
-					Voxels[i] = XYZ.zero;
-					Count--;
-				}
-			}
-			return false;
-		}
 
 		public Func<XYZ, bool> Wrap(Func<XYZ, bool> inner)
 		{
@@ -95,7 +55,8 @@ internal static class CrowdPathing
 					return Wrapped[i];
 				}
 			}
-			Func<XYZ, bool> wrapped = (XYZ p) => (Count == 0 || !IsClosed(p)) && inner(p);
+			AllyClosures voxels = Voxels;
+			Func<XYZ, bool> wrapped = (XYZ p) => (voxels.Count == 0 || !voxels.Refuses(Key(p), Time.time)) && inner(p);
 			Inner.Add(inner);
 			Wrapped.Add(wrapped);
 			return wrapped;
@@ -106,8 +67,24 @@ internal static class CrowdPathing
 
 	private static readonly Func<IVolume, VoxelPresence, bool> BlocksFunc = Blocks;
 
-	// For the DevTools: voxels closed so far.
+	// For the DevTools: voxels closed so far, voxels left open because they were the only way a moment ago, and
+	// searches that found no route with closed voxels and searched again with them open.
 	internal static int Closed;
+
+	internal static int KeptOpen;
+
+	internal static int Reopened;
+
+	internal static long Key(XYZ p)
+	{
+		return AllyClosures.Key(p.x, p.y, p.z);
+	}
+
+	// Whether the voxel was the only way for the unit a moment ago (a search found no route with it closed).
+	internal static bool IsChoke(VoxelPresence presence, XYZ voxel)
+	{
+		return presence != null && Closures.TryGetValue(presence, out Closure closure) && closure.Voxels.IsChoke(Key(voxel), Time.time);
+	}
 
 	private static void Prefix(Locomotion4 __instance, Vector3 position)
 	{
@@ -126,9 +103,18 @@ internal static class CrowdPathing
 				return;
 			}
 		}
-		Closures.GetOrCreateValue(presence).Close(voxel, Time.time + ClosedSeconds);
+		bool watched = StraightPaths.Watched != null && __instance.transform == StraightPaths.Watched;
+		if (!Closures.GetOrCreateValue(presence).Voxels.Close(Key(voxel), Time.time, ClosedSeconds))
+		{
+			KeptOpen++;
+			if (watched)
+			{
+				StraightPaths.WatchLog.Add(Time.frameCount + ": kept " + voxel + " open (the only way)");
+			}
+			return;
+		}
 		Closed++;
-		if (StraightPaths.Watched != null && __instance.transform == StraightPaths.Watched)
+		if (watched)
 		{
 			StraightPaths.WatchLog.Add(Time.frameCount + ": closed " + voxel);
 		}
@@ -159,6 +145,58 @@ internal static class CrowdPathingPresencePatch
 		{
 			__result = CrowdPathing.Closures.GetOrCreateValue(__instance).Wrap(__result);
 		}
+	}
+}
+
+// A route search starts counting the closed voxels it was refused afresh.
+[Feature(Features.CrowdPathing, Features.CrowdPathingInfo)]
+[HarmonyPatch(typeof(SearchPathRequest), "InitSearch")]
+internal static class CrowdPathingSearchStart
+{
+	private static void Postfix(SearchPathRequest __instance)
+	{
+		if (__instance.Presence != null && CrowdPathing.Closures.TryGetValue(__instance.Presence, out CrowdPathing.Closure closure))
+		{
+			closure.Voxels.ResetRefused();
+		}
+	}
+}
+
+// A route search to a place (not away from one) that found no route after it was refused a closed ally voxel: the
+// closed voxels were the only way. They are opened (and kept open for CrowdPathing.ChokeSeconds) and the search starts
+// again from the beginning in the same request, its next slice in the next update, so the unit's walk goes on through
+// the ally's voxel instead of failing or ending at the nearest place it could reach.
+[Feature(Features.CrowdPathing, Features.CrowdPathingInfo)]
+[HarmonyPatch(typeof(SearchPathRequest), "Work")]
+internal static class CrowdPathingSearchAgain
+{
+	private static readonly Action<SearchPathRequest> InitSearch = AccessTools.MethodDelegate<Action<SearchPathRequest>>(AccessTools.Method(typeof(SearchPathRequest), "InitSearch"));
+
+	private static void Postfix(SearchPathRequest __instance, ref bool __result)
+	{
+		if (!__result || !__instance.Done || __instance.SearchAway || __instance.Presence == null || __instance.Search == null)
+		{
+			return;
+		}
+		if (!(__instance.Accepter is SearchPathRequest.ResultAccepter accepter) || accepter.Result != null)
+		{
+			return;
+		}
+		if (!CrowdPathing.Closures.TryGetValue(__instance.Presence, out CrowdPathing.Closure closure) || closure.Voxels.Refused == 0)
+		{
+			return;
+		}
+		if (closure.Voxels.ReopenAsChokes(Time.time, CrowdPathing.ChokeSeconds) == 0)
+		{
+			return;
+		}
+		CrowdPathing.Reopened++;
+		if (StraightPaths.Watched != null && __instance.Navigation != null && __instance.Navigation.transform == StraightPaths.Watched)
+		{
+			StraightPaths.WatchLog.Add(Time.frameCount + ": no route round the closed voxels after " + __instance.Searched + " nodes, searching again with them open");
+		}
+		InitSearch(__instance);
+		__result = false;
 	}
 }
 #endif
