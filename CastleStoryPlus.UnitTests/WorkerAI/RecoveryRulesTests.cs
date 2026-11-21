@@ -108,4 +108,36 @@ public class RecoveryRulesTests
 	{
 		Assert.That(RecoveryRules.CanResetNow(timeScale), Is.EqualTo(expected));
 	}
+
+	[Test]
+	public void APlayersOrderWaitsLessForTheLegsThanAnyOtherTask()
+	{
+		Assert.That(RecoveryRules.LegsWaitLimit(true), Is.EqualTo(RecoveryRules.OrderWaitSeconds));
+		Assert.That(RecoveryRules.LegsWaitLimit(false), Is.EqualTo(RecoveryRules.LongWaitSeconds));
+		Assert.That(RecoveryRules.LegsWaitLimit(true), Is.LessThan(RecoveryRules.LegsWaitLimit(false)));
+		Assert.That(RecoveryRules.LegsWaitLimit(true), Is.GreaterThan(0f));
+	}
+
+	[TestCase(false, false, false, false, false, 0f, true)]
+	[TestCase(true, false, false, false, false, 0f, false)]
+	[TestCase(false, true, false, false, false, 0f, false)]
+	[TestCase(false, false, true, false, false, 0f, false)]
+	[TestCase(false, false, false, true, false, 0f, false)]
+	[TestCase(false, false, false, false, true, 0.1f, true)]
+	[TestCase(false, false, false, false, true, 0.5f, false)]
+	[TestCase(false, false, false, false, true, 3f, false)]
+	[TestCase(false, false, false, false, false, 3f, true)]
+	public void LegsAreResetOnlyWhenNothingElseHoldsThem(bool dead, bool grabbed, bool phasedOut, bool climbing, bool flailing, float speed, bool expected)
+	{
+		Assert.That(RecoveryRules.LegsMayBeReset(dead, grabbed, phasedOut, climbing, flailing, speed), Is.EqualTo(expected));
+	}
+
+	[TestCase(false, true, false, true)]
+	[TestCase(true, true, false, false)]
+	[TestCase(false, false, false, false)]
+	[TestCase(false, true, true, false)]
+	public void LegsWaitingWhileTheAnimationStandsAreOutOfStep(bool canMove, bool stands, bool inTransition, bool expected)
+	{
+		Assert.That(RecoveryRules.LegsOutOfStep(canMove, stands, inTransition), Is.EqualTo(expected));
+	}
 }
