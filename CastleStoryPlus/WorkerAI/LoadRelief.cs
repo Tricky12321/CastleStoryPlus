@@ -432,7 +432,7 @@ internal sealed class LoadRelief : MonoBehaviour
 		{
 			return false;
 		}
-		return CanDropAt(labor.faction, XYZ.FromVector3(labor.transform.position + Vector3.up * 0.1f), labor);
+		return CanDropAt(labor.faction, XYZ.FromVector3(labor.transform.position + Vector3.up * 0.5f), labor);
 	}
 
 	// Whether a load may be put down at the cell (feet: where a worker stands). "On the routes": on the faction's route
@@ -463,7 +463,7 @@ internal sealed class LoadRelief : MonoBehaviour
 		{
 			return null;
 		}
-		XYZ start = XYZ.FromVector3(labor.transform.position + Vector3.up * 0.1f);
+		XYZ start = XYZ.FromVector3(labor.transform.position + Vector3.up * 0.5f);
 		HashSet<XYZ> seen = new HashSet<XYZ> { start };
 		Queue<XYZ> open = new Queue<XYZ>();
 		open.Enqueue(start);
