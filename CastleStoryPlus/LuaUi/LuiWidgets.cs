@@ -582,6 +582,12 @@ internal static class LuiTooltip
 
 	private static RectTransform _target;
 
+	// The tooltip's panel, null until the first one is shown (for the tests).
+	public static RectTransform Panel
+	{
+		get { return _panel; }
+	}
+
 	public static void Show(string text, RectTransform target)
 	{
 		if (_panel == null)
@@ -624,7 +630,7 @@ internal static class LuiTooltip
 		_text.supportRichText = true;
 	}
 
-	// Right of the target, or left of it where the right side has no room; moved up or down to stay on screen.
+	// Right of the target, or left of it where the right side has no room; moved up, down or sideways to stay on screen.
 	private static void Place()
 	{
 		RectTransform layer = LuiCanvas.Instance.Tooltips;
@@ -639,7 +645,8 @@ internal static class LuiTooltip
 		{
 			x = topLeft.x - 6f - size.x;
 		}
-		float y = Mathf.Clamp(topRight.y, bounds.yMin + size.y, bounds.yMax);
+		x = Mathf.Clamp(x, bounds.xMin, Mathf.Max(bounds.xMin, bounds.xMax - size.x));
+		float y = Mathf.Clamp(topRight.y, Mathf.Min(bounds.yMin + size.y, bounds.yMax), bounds.yMax);
 		_panel.anchorMin = _panel.anchorMax = new Vector2(0.5f, 0.5f);
 		_panel.anchoredPosition = new Vector2(x, y);
 	}
