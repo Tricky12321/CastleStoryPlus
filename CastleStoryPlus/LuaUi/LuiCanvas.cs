@@ -15,14 +15,22 @@ namespace CastleStoryPlus.LuaUi;
 // player's UI scale setting, Neo.canvasScale, as CanvasScalerDriver does), so the sizes the Lua menus use (48
 // pixel buttons...) carry over as they are. It sorts just above the canvas of the game's in-game menus and, where
 // the game's dialog menu (GS_Modal) has a canvas of its own above them, below that, so dialogs stay on top.
-// Tooltips go on a layer above the menus. Views are children of Menus and are dropped when the game is left.
+// Tooltips go on a layer with a canvas of its own that sorts above everything (#160): our canvas can share its order
+// with the game's menus (it is kept below the game's dialogs), and a view drawn inside a game menu (the scoreboard
+// under GS_Scoreboard) is then drawn over a tooltip on our canvas. Views are children of Menus and are dropped when
+// the game is left.
 internal class LuiCanvas : MonoBehaviour
 {
 	private const int FallbackOrder = 100;
 
+	// Above every canvas of the game (its menus and dialogs sort at 0 and 1) and of ours; sortingOrder is 16 bit.
+	public const int TooltipOrder = 30000;
+
 	private static LuiCanvas _instance;
 
 	private Canvas _canvas;
+
+	private Canvas _tooltipCanvas;
 
 	private CanvasScaler _scaler;
 
@@ -40,8 +48,13 @@ internal class LuiCanvas : MonoBehaviour
 	// opened it, so one shown outside a game (the main menu) is not lost.
 	public RectTransform Dialogs { get; private set; }
 
-	// Parent of tooltips, above the menus.
+	// Parent of tooltips, on a nested canvas that sorts above the menus, the game's menus and the dialogs.
 	public RectTransform Tooltips { get; private set; }
+
+	public Canvas TooltipCanvas
+	{
+		get { return _tooltipCanvas; }
+	}
 
 	public static LuiCanvas Instance
 	{
@@ -71,6 +84,10 @@ internal class LuiCanvas : MonoBehaviour
 		{
 			_canvas.enabled = !Neo.menusOff;
 		}
+		if (_tooltipCanvas != null && _tooltipCanvas.enabled == Neo.menusOff)
+		{
+			_tooltipCanvas.enabled = !Neo.menusOff;
+		}
 		try
 		{
 			GameUi.UiAssembly.Tick();
@@ -96,6 +113,10 @@ internal class LuiCanvas : MonoBehaviour
 		Menus = Layer("Menus");
 		Dialogs = Layer("Dialogs");
 		Tooltips = Layer("Tooltips");
+		// No GraphicRaycaster on it: a tooltip never takes the mouse, so it cannot steal the hover from its target.
+		_tooltipCanvas = Tooltips.gameObject.AddComponent<Canvas>();
+		_tooltipCanvas.overrideSorting = true;
+		_tooltipCanvas.sortingOrder = TooltipOrder;
 		_settings = GameSignals.Connect(UserSettingManager.OnSetSettingIntoGameSignal, OnSettings);
 		GameSession.OnLeave(Clear);
 	}

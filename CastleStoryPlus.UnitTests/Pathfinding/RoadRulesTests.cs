@@ -170,4 +170,69 @@ public class RoadRulesTests
 		Assert.That(RoadRules.StockpileCost(2f, 1.5f), Is.EqualTo(3f));
 		Assert.That(RoadRules.StockpileCost(2f, 1f), Is.EqualTo(2f));
 	}
+
+	// The cells of the game's volumes, as the log prints them (the forge clone Smithy, a walk-in building, a pallet).
+	private const long WorkSpot = RoadRules.AccessBit | RoadRules.OccupyBit;
+
+	private const long WorkSpotWithOperation = RoadRules.AccessBit | RoadRules.OccupyBit | RoadRules.OperationBit;
+
+	private const long WorkshopBody = RoadRules.ObstacleBit | RoadRules.OccupyBit | RoadRules.DeblocBit;
+
+	private const long WorkshopUpperBody = RoadRules.ObstacleBit | RoadRules.OccupyBit;
+
+	private const long PalletBody = RoadRules.ObstacleBit | RoadRules.OccupyBit | RoadRules.WalkableBit | RoadRules.DeblocBit;
+
+	private const long WalkInFloor = RoadRules.OccupyBit | RoadRules.AccessBit | RoadRules.DeblocBit;
+
+	private const long BlueprintBody = RoadRules.FantomeBit;
+
+	[Test]
+	public void ARoadMayLieOnAWorkshopsWorkSpot()
+	{
+		Assert.That(RoadRules.MayLieOn(WorkSpot, RoadRules.AccessBit), Is.True);
+		Assert.That(RoadRules.MayLieOn(WorkSpotWithOperation, RoadRules.AccessBit), Is.True);
+		Assert.That(RoadRules.MayLieOn(WorkSpot, 0L), Is.True);
+		Assert.That(RoadRules.MayLieOn(RoadRules.OccupyBit | RoadRules.OperationBit, 0L), Is.True);
+	}
+
+	[Test]
+	public void ARoadMayLieWhereTheVolumeClaimsNothing()
+	{
+		Assert.That(RoadRules.MayLieOn(0L, 0L), Is.True);
+		Assert.That(RoadRules.MayLieOn(RoadRules.AccessBit, RoadRules.AccessBit), Is.True);
+	}
+
+	[Test]
+	public void ARoadMayNotLieOnABuildingsBody()
+	{
+		Assert.That(RoadRules.MayLieOn(WorkshopBody, WorkshopUpperBody), Is.False);
+		Assert.That(RoadRules.MayLieOn(WorkshopBody, 0L), Is.False);
+		Assert.That(RoadRules.MayLieOn(WorkshopBody | RoadRules.AccessBit, 0L), Is.False);
+		Assert.That(RoadRules.MayLieOn(PalletBody, WorkshopBody), Is.False);
+		Assert.That(RoadRules.MayLieOn(RoadRules.ObstacleBit, 0L), Is.False);
+	}
+
+	[Test]
+	public void ARoadMayNotLieOnAnotherBlueprint()
+	{
+		Assert.That(RoadRules.MayLieOn(BlueprintBody, 0L), Is.False);
+		Assert.That(RoadRules.MayLieOn(BlueprintBody | RoadRules.AccessBit, 0L), Is.False);
+		Assert.That(RoadRules.MayLieOn(BlueprintBody | WorkSpot, 0L), Is.False);
+	}
+
+	[Test]
+	public void ARoadMayNotLieOnTheFloorInsideAWalkInBuilding()
+	{
+		Assert.That(RoadRules.MayLieOn(WalkInFloor, RoadRules.OccupyBit), Is.False);
+		// A floor cell without debloc is still inside: the building claims the cell over it too.
+		Assert.That(RoadRules.MayLieOn(WorkSpot, RoadRules.OccupyBit), Is.False);
+		Assert.That(RoadRules.MayLieOn(WorkSpot, WorkshopUpperBody), Is.False);
+		Assert.That(RoadRules.MayLieOn(WorkSpot, BlueprintBody), Is.False);
+	}
+
+	[Test]
+	public void ARoadMayNotLieOnACellClaimedWithoutAPlaceToStand()
+	{
+		Assert.That(RoadRules.MayLieOn(RoadRules.OccupyBit, 0L), Is.False);
+	}
 }

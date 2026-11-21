@@ -105,9 +105,11 @@ if CastleStoryPlus_ScoreboardState == nil then
 			for wave, t in pairs(counts) do
 				if t[1] + t[2] + t[3] + t[4] + t[5] > 0 then
 					table.insert(ids, wave)
-					local total = _s.waveTotals[wave]
-					if total == nil then total = { 0, 0, 0, 0, 0 } _s.waveTotals[wave] = total end
-					for i = 1, 5 do if t[i] > total[i] then total[i] = t[i] end end
+					-- As many as the wave has had: the most of its own left at once, and the units its warlocks
+					-- summoned into it (counted by the host, WarlockSummons).
+					local total = {}
+					for i = 1, 5 do total[i] = CastleStoryPlus.WaveSeen(wave, i, t[i]) end
+					_s.waveTotals[wave] = total
 				end
 			end
 			table.sort(ids)
@@ -281,6 +283,14 @@ end
 			LuaDriver raid = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsGuardRaid", allowNil: true) : null;
 			return DynValue.NewBoolean(raid != null && Treasure.TreasureChests.IsGuardRaid(raid.gameObject));
 		});
+		// What a wave has had of a kind (1 to 5, the wave rows' order), given what is left of it.
+		LuaInjection.AddFunction("WaveSeen", (ScriptExecutionContext context, CallbackArguments args) =>
+		{
+			int wave = (args.Count > 0 && args[0].Type == DataType.Number) ? (int)args[0].Number : 0;
+			int kind = (args.Count > 1 && args[1].Type == DataType.Number) ? (int)args[1].Number - 1 : -1;
+			int left = (args.Count > 2 && args[2].Type == DataType.Number) ? (int)args[2].Number : 0;
+			return DynValue.NewNumber(Invasion.WarlockSummons.Tally.Seen(wave, kind, left));
+		});
 		LuaInjection.AddFunction("IsHealtron", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			LuaDriver labor = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsHealtron", allowNil: true) : null;
@@ -294,6 +304,7 @@ end
 		LuaInjection.AddPatch(Features.CsMenus, "Gamemodes/grabthegems/Data/Data_Menu.lua", "GS_Scoreboard:LoadMenuFromClosure(self._DoLoadScoreboard)\n", LuaInjection.Mode.Replace, "if not CastleStoryPlus.CsScoreboard(\"grabthegems\", GS_Scoreboard) then GS_Scoreboard:LoadMenuFromClosure(self._DoLoadScoreboard) end\n");
 		GameSession.OnLeave(Drop);
 		GameSession.OnLeave(Invasion.WaveCountsSync.Forget);
+		GameSession.OnLeave(Invasion.WarlockSummons.Tally.Clear);
 	}
 
 	private static string ModeKey(string mode)

@@ -98,7 +98,8 @@ internal sealed class StuckReset : MonoBehaviour
 
 	private static void Check(Labor labor)
 	{
-		if (labor == null || labor.IsPhasedOut || labor.Operable != null || labor.Activity == Activity.Fighting || !Watched(labor))
+		// A worker digging out of a pit or in LoadRelief's store sequence is left alone: both have limits of their own.
+		if (labor == null || labor.IsPhasedOut || labor.Operable != null || labor.Activity == Activity.Fighting || !Watched(labor) || StuckEscape.IsEscaping(labor) || (Plugin.IsEnabled(Features.LoadRelief) && LoadRelief.IsStoring(labor.CurrentTask)))
 		{
 			Watches.Remove(labor);
 			return;
@@ -153,7 +154,8 @@ internal sealed class StuckReset : MonoBehaviour
 			}
 		}
 		labor.AbortWorkSignal.Invoke(TaskResult.ProjectCancelledTask);
-		if (!labor.recepteur.IsEmpty())
+		// Never on a stair, a climb or a quarry's floor: the worker keeps it there.
+		if (!labor.recepteur.IsEmpty() && LoadRelief.CanDropHere(labor))
 		{
 			labor.recepteur.DropAll();
 		}

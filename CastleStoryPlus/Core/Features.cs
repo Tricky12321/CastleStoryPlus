@@ -247,6 +247,10 @@ internal static class Features
 
 	public const string WaveDirectionInfo = "Invasion: the next wave's spawn point is picked ahead, and from 30 seconds before the wave an arrow on the screen points where it will come from.";
 
+	public const string WarlockSummons = "WarlockSummons";
+
+	public const string WarlockSummonsInfo = "Invasion: the units a warlock summons join its wave (its raid), so the wave is not over while they live, and the scoreboard counts them among the enemies left (#161).";
+
 	public const string AutoCleanup = "AutoCleanup";
 
 	public const string AutoCleanupInfo = "Idle workers pick up loose items near the base or near themselves and store them, without a cleanup zone (see [AutoCleanup] Radius). Items on top of a building or stockpile are taken from its foot. The range is also set on the home crystal's task (+ and -, Shift 5 at a time), with a blue ring around the crystal, shown or hidden with \"Show ranges\" / \"Hide ranges\" on the crystal's context wheel ([BaseRanges] ShowRings).";
@@ -466,6 +470,10 @@ internal static class Features
 	public const string WallLean = "WallLean";
 
 	public const string WallLeanInfo = "Archers and other ranged fighters on the edge of a wall lean out over it, so they can shoot enemies at the foot of the wall and all along it ([WallLean] Distance).";
+
+	public const string ArcherRetarget = "ArcherRetarget";
+
+	public const string ArcherRetargetInfo = "An archer or other ranged fighter that cannot shoot its target from where it stands (often an enemy behind another one in a crowd) no longer stands aiming and lowering its bow until it is moved: it leaves that target be for a few seconds and shoots the enemy in the line of fire or the nearest one it can hit, and tries the first target again later from the same place. A target the player ordered is kept: the fighter walks towards it until it has a clear shot.";
 
 	public const string IdleLog = "IdleLog";
 
