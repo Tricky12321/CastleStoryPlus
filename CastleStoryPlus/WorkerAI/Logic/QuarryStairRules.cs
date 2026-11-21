@@ -19,4 +19,36 @@ internal static class QuarryStairRules
 	{
 		return x >= minX && x <= maxX && z >= minZ && z <= maxZ && y >= minY - 1 && y <= maxY;
 	}
+
+	// No lowest step: the floor is not held back.
+	internal const int NoStep = int.MinValue;
+
+	// The height of the lowest step a worker can still walk down to from the top: the steps' heights from the top down
+	// (ys, highest first) and whether each was dug away (gone: an empty cell with ground under it, it can never be cut
+	// again). The stair ends at the first step gone; NoStep for a quarry without steps.
+	internal static int LowestStep(int[] ys, bool[] gone)
+	{
+		if (ys == null || ys.Length == 0)
+		{
+			return NoStep;
+		}
+		int lowest = ys[0];
+		for (int i = 0; i < ys.Length; i++)
+		{
+			if (gone[i])
+			{
+				break;
+			}
+			lowest = ys[i];
+		}
+		return lowest;
+	}
+
+	// Whether a quarry's floor dig at height y is too deep for its stair: the lowest step's bottom is walked onto from
+	// the floor one under it at most, so the floor is not dug lower than the ground right under the lowest step (the
+	// pit of the "Doesnt matter" save was dug two and three under it and its diggers could not climb back out).
+	internal static bool TooDeep(int y, int lowestStep)
+	{
+		return lowestStep != NoStep && y < lowestStep - 1;
+	}
 }

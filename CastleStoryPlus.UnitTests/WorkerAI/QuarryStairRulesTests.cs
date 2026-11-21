@@ -57,4 +57,34 @@ public class QuarryStairRulesTests
 	{
 		Assert.That(QuarryStairRules.Near(x, y, z, 0, 5, 0, 4, 10, 4), Is.False);
 	}
+
+	[Test]
+	public void AWholeStairGoesDownToItsLastStep()
+	{
+		Assert.That(QuarryStairRules.LowestStep(new[] { 130, 129, 128, 127, 126, 125 }, new bool[6]), Is.EqualTo(125));
+	}
+
+	[Test]
+	public void AStairEndsAboveAStepDugAway()
+	{
+		// The save: step (445, 125, 434) dug away, the steps under it cannot be walked down to.
+		bool[] gone = { false, false, false, false, true, false };
+		Assert.That(QuarryStairRules.LowestStep(new[] { 130, 129, 128, 127, 126, 125 }, gone), Is.EqualTo(127));
+	}
+
+	[Test]
+	public void NoStepsHoldNoFloorBack()
+	{
+		Assert.That(QuarryStairRules.LowestStep(new int[0], new bool[0]), Is.EqualTo(QuarryStairRules.NoStep));
+		Assert.That(QuarryStairRules.TooDeep(-500, QuarryStairRules.NoStep), Is.False);
+	}
+
+	[TestCase(127, false)]
+	[TestCase(126, false)]
+	[TestCase(125, true)]
+	[TestCase(123, true)]
+	public void TheFloorGoesOneUnderTheLowestStepAtMost(int y, bool tooDeep)
+	{
+		Assert.That(QuarryStairRules.TooDeep(y, 127), Is.EqualTo(tooDeep));
+	}
 }
