@@ -467,6 +467,10 @@ internal static class Features
 
 	public const string WallLeanInfo = "Archers and other ranged fighters on the edge of a wall lean out over it, so they can shoot enemies at the foot of the wall and all along it ([WallLean] Distance).";
 
+	public const string ArcherRetarget = "ArcherRetarget";
+
+	public const string ArcherRetargetInfo = "An archer or other ranged fighter that cannot shoot its target from where it stands (often an enemy behind another one in a crowd) no longer stands aiming and lowering its bow until it is moved: it leaves that target be for a few seconds and shoots the enemy in the line of fire or the nearest one it can hit, and tries the first target again later from the same place. A target the player ordered is kept: the fighter walks towards it until it has a clear shot.";
+
 	public const string IdleLog = "IdleLog";
 
 	public const string IdleLogInfo = "Bricktrons with a job that stand without a task for 15 seconds or more are written to BepInEx/idle.log: how long, where, their job, their last task and why they turned tasks down ([Debug] IdleLogSeconds).";
