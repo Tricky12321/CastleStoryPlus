@@ -462,7 +462,9 @@ internal sealed class LoadRelief : MonoBehaviour
 		{
 			return "no solid ground under it";
 		}
-		if (!Voxel.IsEmpty(feet))
+		// The worker's own place: it stands there, so there is room (Voxel.IsEmpty is false for a voxel a worker stands
+		// in on smooth ground). Another cell needs room to stand.
+		if (standing == null && !Voxel.IsEmpty(feet))
 		{
 			return "no room to stand";
 		}
