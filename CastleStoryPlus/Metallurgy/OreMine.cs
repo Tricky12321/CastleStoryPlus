@@ -281,7 +281,8 @@ internal class OreHarvestGoals : MonoBehaviour
 	private bool Wants(XYZ pos)
 	{
 		XYZ d = pos - _centre;
-		return d.x * d.x + d.y * d.y + d.z * d.z <= _radius * _radius && OreMine.IsBareOre(pos) && HasStandingPlace(pos) && SafeToDig(pos);
+		// Never a quarry's stair step or the ground under one (ore in a quarry wall is often right there).
+		return d.x * d.x + d.y * d.y + d.z * d.z <= _radius * _radius && OreMine.IsBareOre(pos) && HasStandingPlace(pos) && SafeToDig(pos) && !WorkerAI.QuarryStairs.Keeps(pos);
 	}
 
 	private static readonly XYZ[] Sides = { new XYZ(1, 0, 0), new XYZ(-1, 0, 0), new XYZ(0, 0, 1), new XYZ(0, 0, -1) };

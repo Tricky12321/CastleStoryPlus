@@ -370,9 +370,11 @@ internal class StuckEscape : MonoBehaviour
 		return !Voxel.IsEmpty(cell);
 	}
 
+	// Terrain only, and never a quarry's stair step or the ground under one (QuarryStairs.Keeps): the way out goes round
+	// the stair instead of taking it away.
 	private static bool Diggable(XYZ cell)
 	{
-		return Voxel.IsTerrain(cell) && !Voxel.IsInvincible(cell) && !Voxel.IsBlock(cell);
+		return Voxel.IsTerrain(cell) && !Voxel.IsInvincible(cell) && !Voxel.IsBlock(cell) && !QuarryStairs.Keeps(cell);
 	}
 
 	private static List<XYZ> Blocks(XYZ start, XYZ end, Dictionary<XYZ, XYZ> from)
@@ -491,6 +493,11 @@ internal class StuckEscape : MonoBehaviour
 			return false;
 		}
 		XYZ block = escape.Blocks[escape.Next];
+		if (QuarryStairs.Keeps(block))
+		{
+			// A quarry's stair step (or the ground under one) since the way was planned: given up, planned again later.
+			return true;
+		}
 		if (!ObjectPoolSingleton.RequestComponent<DigGoal>(out DigGoal goal, Brix.External.Factories.Test.DigGoal, block.ToVector3(), Quaternion.identity) || goal == null)
 		{
 			return true;
