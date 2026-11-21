@@ -291,7 +291,16 @@ internal static class BuildRepairTests
 		goal.RebuildNode();
 		goal.ResourceSetting = new KeepNothing();
 		goal.UseHeightAdjustment = false;
-		t.Cleanup(() => Scenario.Release(goal.gameObject));
+		// Released as the pit escape releases its own (back into the pool, not through the network: a dig task is not
+		// spawned on it, and unspawning it failed). Not when the game let go of it already: the pool may have handed it
+		// to someone else since.
+		t.Cleanup(() =>
+		{
+			if (goal != null && !goal.IsNullOrReleased() && goal.voxel != null && goal.voxel.position == voxel)
+			{
+				ObjectPoolSingleton.Release(goal.gameObject);
+			}
+		});
 		return goal;
 	}
 
