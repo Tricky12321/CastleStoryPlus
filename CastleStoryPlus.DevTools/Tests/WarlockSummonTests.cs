@@ -81,8 +81,13 @@ internal static class WarlockSummonTests
 		}
 		t.Record("summons", summons.Count);
 		t.AtLeast(3f, summons.Count, "Summons in the warlock's raid");
-		t.Equal(corruptronsBefore + 1, WarlockSummons.Tally.SummonedOf(TestWave, 1), "Corruptrons summoned into the test wave");
-		t.Equal(minitronsBefore + 2, WarlockSummons.Tally.SummonedOf(TestWave, 0), "Minitrons summoned into the test wave");
+		// A summon is a corruptron and two minitrons (more when the warlock's own AI summoned meanwhile too).
+		int corruptrons = summons.FindAll(s => WarlockSummons.KindOf(s) == 1).Count;
+		int minitrons = summons.FindAll(s => WarlockSummons.KindOf(s) == 0).Count;
+		t.AtLeast(1f, corruptrons, "Corruptrons among the summons");
+		t.AtLeast(2f, minitrons, "Minitrons among the summons");
+		t.Equal(corruptronsBefore + corruptrons, WarlockSummons.Tally.SummonedOf(TestWave, 1), "Corruptrons summoned into the test wave");
+		t.Equal(minitronsBefore + minitrons, WarlockSummons.Tally.SummonedOf(TestWave, 0), "Minitrons summoned into the test wave");
 		foreach (Labor summon in summons)
 		{
 			t.True(summon.faction == enemy, "A summon is not of the enemy faction");
