@@ -208,7 +208,7 @@ internal static class StairCrowdTests
 		t.Equal(0, turnedBack[0], "Workers that turned back on the stair");
 	}
 
-	[GameTest("Pathfinding", "A worker whose only way up (a stair step) is closed to its search still finds the way up through it", TimeoutSeconds = 150f)]
+	[GameTest("Pathfinding", "A worker whose only way up (a stair step where an ally stands) is closed to its search still finds the way up through it", TimeoutSeconds = 150f)]
 	private static IEnumerator ClosedStairStepIsSearchedAgainOpen(TestContext t)
 	{
 		if (!Plugin.IsEnabled(Features.CrowdPathing))
@@ -218,18 +218,32 @@ internal static class StairCrowdTests
 		Stair stair = new Stair();
 		yield return BuildStair(t, stair);
 		XYZ c = stair.Center;
+		XYZ step = stair.Steps[1];
+		// An ally stands on the step: the search asks the presence test only at a voxel where some unit or obstacle is
+		// (a node without one is crossed untested), as on the stair of the save.
+		Labor ally = Scenario.Bricktron(t, Occupation.Type.Builder, step);
 		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, new XYZ(c.x - 6, stair.Floor, c.z));
 		yield return t.Frames(5);
-		// As if an ally standing there had blocked it a moment ago: the step is closed to its searches for a while.
-		XYZ step = stair.Steps[1];
+		ally.Autonomy = AutonomyStatus.WaitForOrders;
+		ally.AssignToIdle();
+		yield return t.Frames(5);
+		if (Units.VoxelOf(ally) != step)
+		{
+			t.Skip("The ally is not on the step (it stands at " + Units.VoxelOf(ally) + ")");
+		}
+		// As if the ally had blocked the worker a moment ago: the step is closed to the worker's searches for a while.
 		CrowdPathing.Closures.GetOrCreateValue(worker.presence).Voxels.Close(CrowdPathing.Key(step), Time.time, 60f);
 		int reopened = CrowdPathing.Reopened;
 		XYZ goal = new XYZ(c.x + 6, stair.Top, c.z);
 		SendRun(worker, goal);
+		yield return t.UntilGame(() => CrowdPathing.Reopened > reopened, 15f, "the worker's search to find no route round the closed step and search again with it open", 5f, () =>
+		{
+			t.Log(worker.name + " at " + Units.VoxelOf(worker) + " " + worker.navigation.Locomotion.state + "; ally at " + Units.VoxelOf(ally));
+		});
+		t.True(CrowdPathing.IsChoke(worker.presence, step), "The step is not remembered as the only way");
 		int[] turnedBack = new int[1];
 		yield return WalkAll(t, stair, new List<Labor> { worker }, new List<XYZ> { goal }, new List<bool> { true }, turnedBack);
-		t.True(CrowdPathing.Reopened > reopened, "The search did not search again with the closed step open (it went another way?)");
-		t.True(CrowdPathing.IsChoke(worker.presence, step), "The step is not remembered as the only way");
+		t.Equal(0, turnedBack[0], "Times the worker turned back on the stair");
 	}
 
 	[GameTest("Combat", "A corruptron going up a one voxel wide stair where a biftron stands waits on the stair and climbs on when it moves off, without turning back", TimeoutSeconds = 150f)]
