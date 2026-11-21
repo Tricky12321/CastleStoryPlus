@@ -96,6 +96,10 @@ internal static class RoadRules
 	// inside a walk-in building (claimed over two blocks) stay refused.
 	internal static bool MayLieOn(long here, long above)
 	{
+		if ((here & ObstacleBit) != 0)
+		{
+			return false;
+		}
 		if ((here & (OccupyBit | FantomeBit)) == 0)
 		{
 			return true;
