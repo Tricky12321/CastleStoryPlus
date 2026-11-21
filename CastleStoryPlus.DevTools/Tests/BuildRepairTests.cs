@@ -8,6 +8,7 @@ using Brix.Game.Components;
 using Brix.Game.Semantique;
 using Brix.Input;
 using Brix.Legacy;
+using Brix.Lifecycle.Pooling;
 using CastleStoryPlus.DevTools.Building;
 using CastleStoryPlus.DevTools.Endpoints;
 using CastleStoryPlus.DevTools.Pathing;
@@ -18,7 +19,7 @@ using FactoryBlocks = Brix.External.Factories.Blocks;
 namespace CastleStoryPlus.DevTools.Tests;
 
 // Stockpiles, building and repairs: the stockpile wheel's "accept only" dark crystal button, a damaged door repaired
-// by a repair zone, a quarry's stair cut without gaps, and blueprints built floor by floor.
+// by a repair zone, a quarry's stair cut without gaps and kept from other digging, and blueprints built floor by floor.
 [ParallelTests("Economy")]
 internal static class BuildRepairTests
 {
@@ -170,18 +171,7 @@ internal static class BuildRepairTests
 		Scenario.LeavesMess(t);
 		int top = site.y - 1;
 		int depth = 5;
-		Vector3 min = new Vector3(site.x - 2, top - depth + 1, site.z - 2);
-		Vector3 max = new Vector3(site.x + 2, top + 2, site.z + 2);
-		MineProject quarry = Scenario.NewProject<MineProject>(t, () => Scenario.Groupe.CmdSpawnMineProject(min, Quaternion.identity, false));
-		StairOrientation stairs = StairOrientation.Default;
-		Scenario.Groupe.CmdSetMine(quarry.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), false);
-		QuarryData data = quarry.GetComponent<QuarryData>();
-		t.NotNull(data, "The quarry's data");
-		stairs = data.StairOrientation;
-		Scenario.Groupe.CmdSetMine(quarry.gameObject, data.Bounds.min.ToVector3(), data.Bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
-		// Nothing kept: the dug ground is broken up and needs no storage.
-		data.SetTypesToHarvest(0);
-		ProjectEndpoints.Commit(quarry);
+		MineProject quarry = NewQuarry(t, site, top, depth, out QuarryData data);
 		QuarryGoalProvider2 provider = quarry.GetComponentInChildren<QuarryGoalProvider2>();
 		t.NotNull(provider, "The quarry's goal provider");
 		yield return t.Frames(5);
@@ -194,7 +184,7 @@ internal static class BuildRepairTests
 		Labor c = Scenario.Bricktron(t, Occupation.Type.Builder, stand + new XYZ(-1, 0, 0));
 		yield return t.Frames(5);
 		Scenario.Hire(quarry, a, b, c);
-		int bottom = (int)min.y;
+		int bottom = top - depth + 1;
 		yield return t.UntilGame(() => Gaps(steps).Count > 0 || (provider.GoalCount() == 0 && BottomDug(provider, steps, data.Bounds, bottom)), 480f, "the quarry to be dug out", 60f, () =>
 		{
 			t.Record("quarry", ProjectEndpoints.Describe(quarry));
@@ -208,6 +198,109 @@ internal static class BuildRepairTests
 		// The last steps are cut once the ground above them is gone.
 		yield return t.UntilGame(() => Uncut(steps).Count == 0, 90f, "every step under dug ground to be cut");
 		t.Record("stepsCut", Cut(steps));
+	}
+
+	[GameTest("Tasks", "A quarry's cut stair step and the ground under it are kept from dig tasks that are not the quarry's own (a worker digging out of a pit, another task), also after its list of steps is made again as after a load", TimeoutSeconds = 300f)]
+	private static IEnumerator QuarryStairsKeptFromOtherDigging(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 9, 9);
+		Scenario.LeavesMess(t);
+		int top = site.y - 1;
+		MineProject quarry = NewQuarry(t, site, top, 4, out QuarryData data);
+		QuarryGoalProvider2 provider = quarry.GetComponentInChildren<QuarryGoalProvider2>();
+		t.NotNull(provider, "The quarry's goal provider");
+		yield return t.Frames(5);
+		t.True(provider.stairs.Count > 0, "The quarry has no stair steps");
+		// The highest step is at the surface: it can be cut at once.
+		XYZ step = XYZ.zero;
+		bool found = false;
+		foreach (XYZ planned in provider.stairs.Keys)
+		{
+			if (!found || planned.y > step.y)
+			{
+				step = planned;
+				found = true;
+			}
+		}
+		XYZ under = step - XYZ.up;
+		t.Record("step", step);
+		t.True(WorkerAI.QuarryStairs.Keeps(step), "The step " + step + " still to be cut is not kept");
+		t.True(WorkerAI.QuarryStairs.Keeps(under), "The ground " + under + " under the step is not kept");
+		// The middle of the quarry is ground to dig, no step.
+		XYZ middle = new XYZ(site.x, top, site.z);
+		t.False(WorkerAI.QuarryStairs.Keeps(middle), "The ground " + middle + " in the middle of the quarry is kept as a step");
+		// As after a load: the list of steps is empty until it is made again, and the steps are kept all the same.
+		provider.stairs.Clear();
+		t.True(WorkerAI.QuarryStairs.Keeps(step), "The step " + step + " is not kept once the quarry's list of steps was emptied");
+		t.True(provider.stairs.ContainsKey(step), "The quarry's list of steps was not made again");
+		XYZ stand = TaskTests.StandNear(t, new XYZ(site.x, site.y, site.z - 4));
+		Labor cutter = Scenario.Bricktron(t, Occupation.Type.Builder, stand);
+		yield return t.Frames(5);
+		Scenario.Hire(quarry, cutter);
+		yield return t.UntilGame(() => QuarryGoalProvider2.IsStair(step), 150f, "the top step " + step + " to be cut", 30f, () =>
+		{
+			t.Record("quarry", ProjectEndpoints.Describe(quarry));
+		});
+		t.True(WorkerAI.QuarryStairs.Keeps(step), "The cut step " + step + " is not kept");
+		// Dig tasks that are not the quarry's own, as a worker digging out of a pit makes them: on the step and under it.
+		Labor stray = Scenario.Bricktron(t, Occupation.Type.Builder, stand + new XYZ(1, 0, 0));
+		yield return t.Frames(5);
+		DigGoal onStep = StrayDig(t, step);
+		DigGoal underStep = StrayDig(t, under);
+		yield return t.Frames(5);
+		t.False(Matches(underStep, stray), "A builder would take a dig task on the ground " + under + " under the step");
+		t.False(Matches(onStep, stray), "A builder would take a dig task on the step " + step);
+		// Sent straight to it (as the pit escape does), the builder digs neither.
+		underStep.Instruction.Send(stray, underStep.gameObject, Labor.DecisionSource.Project);
+		yield return t.Seconds(20f);
+		t.True(!Voxel.IsEmpty(under), "The ground " + under + " under the step was dug away");
+		onStep.Instruction.Send(stray, onStep.gameObject, Labor.DecisionSource.Project);
+		yield return t.Seconds(20f);
+		t.True(QuarryGoalProvider2.IsStair(step), "The step " + step + " was dug away");
+		t.True(!Voxel.IsEmpty(under), "The ground " + under + " under the step was dug away");
+	}
+
+	// A committed quarry over the site, depth blocks deep from top down, keeping nothing (the dug ground is broken up
+	// and needs no storage).
+	private static MineProject NewQuarry(TestContext t, XYZ site, int top, int depth, out QuarryData data)
+	{
+		Vector3 min = new Vector3(site.x - 2, top - depth + 1, site.z - 2);
+		Vector3 max = new Vector3(site.x + 2, top + 2, site.z + 2);
+		MineProject quarry = Scenario.NewProject<MineProject>(t, () => Scenario.Groupe.CmdSpawnMineProject(min, Quaternion.identity, false));
+		StairOrientation stairs = StairOrientation.Default;
+		Scenario.Groupe.CmdSetMine(quarry.gameObject, min, max, stairs.corner.ToVector3(), stairs.direction.ToVector3(), false);
+		data = quarry.GetComponent<QuarryData>();
+		t.NotNull(data, "The quarry's data");
+		stairs = data.StairOrientation;
+		Scenario.Groupe.CmdSetMine(quarry.gameObject, data.Bounds.min.ToVector3(), data.Bounds.max.ToVector3(), stairs.corner.ToVector3(), stairs.direction.ToVector3(), true);
+		data.SetTypesToHarvest(0);
+		ProjectEndpoints.Commit(quarry);
+		return quarry;
+	}
+
+	// Dig tasks of a stray dig keep nothing: what is dug is broken without a drop.
+	private sealed class KeepNothing : IDigGoalResourceSetting
+	{
+		public GroundResource TypesToHarvest => GroundResource.None;
+	}
+
+	// A dig task of no project at the voxel, as the pit escape (StuckEscape) makes them; released by the clean-up.
+	private static DigGoal StrayDig(TestContext t, XYZ voxel)
+	{
+		t.True(ObjectPoolSingleton.RequestComponent<DigGoal>(out DigGoal goal, Test.DigGoal, voxel.ToVector3(), Quaternion.identity) && goal != null, "No dig task could be made at " + voxel);
+		goal.RebuildNode();
+		goal.ResourceSetting = new KeepNothing();
+		goal.UseHeightAdjustment = false;
+		t.Cleanup(() => Scenario.Release(goal.gameObject));
+		return goal;
+	}
+
+	private static bool Matches(DigGoal goal, Labor labor)
+	{
+		AIErrorsStore errors = new AIErrorsStore();
+		float time = 0f;
+		bool unmapped = false;
+		return goal.IsMatchFor(labor, errors, ref time, ref unmapped);
 	}
 
 	// MaxSpeed 4: at 10x the builder now and then stopped with the row at 5 of 6 and the column at 1 of 3 (about 1 run
