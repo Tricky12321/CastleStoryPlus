@@ -22,10 +22,13 @@ namespace CastleStoryPlus.Pathfinding;
 // again, often the same way. Two bricktrons each waiting for the other's voxel waited for good.
 // The climb or step into a voxel where only allies stand is now started from the in place state as well, as the game
 // starts it when the voxel is free (turned towards it first): at once for a bricktron that may pass allies
-// (Profession.CanPassThrough, a worker at work), the same rule the climb and the walk use. A unit that may not
-// (soldiers, an idle worker, corruptrons) waits up to PatienceSeconds for the ally to move off, then gives the walk up
-// as the game does when its way is blocked (PathBlockedAt), so CrowdPathing closes the ally's voxel and its next route
-// climbs beside it. An enemy, a door or another obstacle in the voxel is left to the game, as before.
+// (Profession.CanPassThrough, a worker at work or on an idle task, ChillingPassAllies), the same rule the climb and the
+// walk use. A unit that may not (a fighting soldier, corruptrons) waits up to PatienceSeconds for the ally to move off,
+// then gives the walk up as the game does when its way is blocked (PathBlockedAt), so CrowdPathing closes the ally's
+// voxel and its next route climbs beside it. Where the ally's voxel is the only way (CrowdPathing found no route with
+// it closed: a stair one voxel wide) it waits up to ChokePatienceSeconds instead and then searches again, the same way,
+// so it never turns back while the only way is briefly taken. An enemy, a door or another obstacle in the voxel is
+// left to the game, as before.
 [Feature(Features.PassThroughAllies, Features.PassThroughAlliesInfo)]
 [HarmonyPatch(typeof(InPlace), nameof(InPlace.Update))]
 [HarmonyPriority(Priority.Low)]
@@ -33,6 +36,9 @@ internal static class ClimbPastAllies
 {
 	// How long a unit that may not pass allies waits below (or above) one before it looks for another way.
 	internal const float PatienceSeconds = 1f;
+
+	// How long it waits there when the ally's voxel is its only way (a stair one voxel wide).
+	internal const float ChokePatienceSeconds = 6f;
 
 	private sealed class Wait
 	{
@@ -98,7 +104,8 @@ internal static class ClimbPastAllies
 				wait.Since = now;
 			}
 			wait.Last = now;
-			if (now - wait.Since < PatienceSeconds)
+			float patience = CrowdPathing.IsChoke(self, entering) ? ChokePatienceSeconds : PatienceSeconds;
+			if (now - wait.Since < patience)
 			{
 				return false;
 			}
