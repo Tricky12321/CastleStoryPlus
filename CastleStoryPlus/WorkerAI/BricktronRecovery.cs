@@ -25,7 +25,8 @@ namespace CastleStoryPlus.WorkerAI;
 //   elsewhere, as a worker that has none always was). The host does it; a client's button sends a command (message
 //   214) and the host resets the sender's own team only. Asked for while the game is paused (the Escape menu pauses a
 //   single player game), the reset waits until the game runs again: the workers' behaviour does not run while paused,
-//   so a task let go of then was only half let go of (#142).
+//   so a task let go of then was only half let go of (#142). A worker marked as fighting is reset too, and legs that
+//   cannot move are put back on their feet (LocomotionRecovery, #156).
 // - A loop of failed tasks: a worker whose tasks fail again and again (a block no one can get to, a build that has run
 //   out of planks, an item that fell off the map) lets go of what it holds, and when the loop comes back within two
 //   minutes it waits longer before it looks again. A worker locked to a task goes free (it stays a member of the task, so
@@ -259,14 +260,23 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		return profession != null && profession.IsWorker();
 	}
 
+	// The reset of one worker. A worker marked as fighting is reset too (#156): a builder only fights on the player's
+	// order, and one left marked as fighting without a fight neither looks for work nor was touched by the reset. Its
+	// legs are put back on their feet when they cannot move (LocomotionRecovery), so the next task does not wait for
+	// them for good.
 	private static bool Unstick(Labor labor)
 	{
-		if (!Eligible(labor) || labor.IsPhasedOut || labor.Activity == Activity.Fighting)
+		if (!Eligible(labor) || labor.IsPhasedOut)
 		{
 			return false;
 		}
 		LetGo(labor);
 		Free(labor);
+		if (labor.Activity == Activity.Fighting)
+		{
+			labor.Activity = Activity.Idle;
+		}
+		LocomotionRecovery.ResetLegs(labor, "reset");
 		return true;
 	}
 
