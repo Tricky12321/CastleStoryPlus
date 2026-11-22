@@ -1,5 +1,7 @@
 # Features
 
+The Essentials edition has only the features marked In in [Editions](Editions.md).
+
 Each feature has a switch in the `[Features]` section of the config file (see [Configuration](Configuration.md)). Settings in other sections are named next to the feature, e.g. `[Economy] EnergyMultiplier`. See [CHANGELOG.md](../CHANGELOG.md) for every detail, and the [gallery](Gallery.md) for pictures of every building, block, armour stand and stockpile.
 
 > **Status:** every feature has been ported from the earlier decompiled-game prototype to this plugin and loads without errors. They still need play-testing in the plugin form.

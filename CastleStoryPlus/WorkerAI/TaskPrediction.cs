@@ -401,9 +401,13 @@ internal static class TaskPrediction
 				Trace(labor, "next task: routes are being updated, the game searches");
 				return null;
 			}
+#if !ESSENTIALS
 			List<BuildGoal> first = Building.BuildPriority.Of(build);
 			BuildGoalProvider.FulfillableEnumerator rest = build.goals.FulfillableBy(labor);
 			return (first != null) ? new Building.PriorityFirstEnumerator(first, rest) : (IEnumerator<Goal>)rest;
+#else
+			return build.goals.FulfillableBy(labor);
+#endif
 		}
 		Goals.Clear();
 		foreach (IGoalProvider provider in project.GetGoalProviders())

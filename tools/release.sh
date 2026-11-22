@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Publishes a GitHub release for the version in CastleStoryPlus/Plugin.cs:
-# packs dist/CastleStoryPlus-v<version>-linux.zip and -windows.zip (tools/package-port.sh: each a complete package of
-# the Unity 6 port with its installer, launcher and BepInEx), tags v<version> and uploads both with the GitHub CLI, with the install instructions in tools/release-notes.md
+# packs dist/CastleStoryPlus-v<version>-linux.zip and -windows.zip and the Essentials edition's
+# dist/CastleStoryPlus-Essentials-v<version>-linux.zip and -windows.zip (tools/package-port.sh: each a complete package
+# of the Unity 6 port with its installer, launcher and BepInEx; docs/Editions.md), tags v<version> and uploads all four
+# with the GitHub CLI, with the install instructions in tools/release-notes.md
 # and the version's CHANGELOG.md section as the list of changes (tools/release-notes.sh).
 # Bump Plugin.Version (and CHANGELOG.md) and commit before running. Installed games see the new
 # release in the main menu and installers pick it up.
@@ -29,3 +31,8 @@ gh release create "$VERSION" \
     "$ROOT/dist/CastleStoryPlus-$VERSION-linux.zip" "$ROOT/dist/CastleStoryPlus-$VERSION-windows.zip" \
     --repo Tricky12321/CastleStoryPlus --title "Castle Story Plus $VERSION" \
     --notes-file "$NOTES" --generate-notes
+# The Essentials zips after the Full ones: installers before 0.9.4 take the first "CastleStoryPlus-*-<os>.zip" of a
+# release, which must stay the Full one.
+gh release upload "$VERSION" \
+    "$ROOT/dist/CastleStoryPlus-Essentials-$VERSION-linux.zip" "$ROOT/dist/CastleStoryPlus-Essentials-$VERSION-windows.zip" \
+    --repo Tricky12321/CastleStoryPlus

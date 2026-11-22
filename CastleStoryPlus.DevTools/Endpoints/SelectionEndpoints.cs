@@ -25,10 +25,12 @@ internal static class SelectionEndpoints
 		{
 			Parameters = "ranged (true: the ranged units, false: the melee units; default true)"
 		});
+#if !ESSENTIALS
 		routes.Add(new Route("POST", "/api/move", "Moves a building (as the mod's move key does): its blueprint at the new position, the old one demolished by the workers of a build project", Move)
 		{
 			Parameters = "id (object id, required), to (x,y,z world position of the building, required), turn (degrees round the vertical, default: as it is), project (build project id; default: the last selected build project)"
 		});
+#endif
 	}
 
 	private static object SelectArmy(ApiRequest request)
@@ -109,9 +111,14 @@ internal static class SelectionEndpoints
 			"type", (imprint != null && imprint.AssetKey != null) ? (imprint.AssetKey.Factory + "." + imprint.AssetKey.Name) : null,
 			"position", Vec(go.transform.position),
 			"turn", Round(go.transform.eulerAngles.y),
+#if !ESSENTIALS
 			"movable", volume != null && CopyPaste.IsPlacedBuilding(volume) && go.GetComponent<Blueprint>() == null);
+#else
+			"movable", false);
+#endif
 	}
 
+#if !ESSENTIALS
 	private static object Move(ApiRequest request)
 	{
 		int id = request.Int("id", 0);
@@ -135,6 +142,7 @@ internal static class SelectionEndpoints
 		return Obj("ordered", true, "building", Describe("building", building), "to", Vec(to), "turn", turn, "project", project.name);
 	}
 
+#endif
 	private static GameObject FindById(int id)
 	{
 		foreach (FactoryImprint imprint in Object.FindObjectsOfType<FactoryImprint>())

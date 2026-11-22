@@ -139,7 +139,11 @@ internal static class GameEndpoints
 				"position", Vec(labor.transform.position),
 				"carrying", (labor.recepteur == null || labor.recepteur.IsEmpty()) ? null : labor.recepteur.ContentString(),
 				"mine", local != null && local.IsSame(labor.gameObject),
+#if !ESSENTIALS
 				"healtron", CastleStoryPlus.Combat.Healtron.IsHealtron(labor),
+#else
+				"healtron", false,
+#endif
 				"taskTarget", (task != null) ? Target(task.Target) : null,
 				"taskCanInterrupt", (task != null) ? (object)task.CanInterrupt : null,
 				"pending", (labor.PendingTask != null) ? labor.PendingTask.Description : null,
@@ -234,7 +238,11 @@ internal static class GameEndpoints
 				"name", raid.name,
 				"faction", (raid.faction != null) ? raid.faction.name : null,
 				"waveNumber", (raid.data != null) ? raid.data.WaveNumber : -1,
+#if !ESSENTIALS
 				"guards", CastleStoryPlus.Treasure.TreasureChests.IsGuardRaid(raid.gameObject),
+#else
+				"guards", false,
+#endif
 				"crew", crew,
 				"kinds", kinds));
 		}

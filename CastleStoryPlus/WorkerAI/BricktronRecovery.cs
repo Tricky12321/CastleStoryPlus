@@ -161,7 +161,7 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		{
 			return;
 		}
-		Faction team = Sprint.TeamOf(netMsg.conn);
+		Faction team = Multiplayer.ConnectionTeams.TeamOf(netMsg.conn);
 		float last = (team != null && LastReset.TryGetValue(team, out float at)) ? at : -1f;
 		if (!RecoveryRules.AcceptResetCommand(team != null, last, Time.time))
 		{
@@ -307,9 +307,11 @@ internal sealed class BricktronRecovery : MonoBehaviour
 		}
 		TaskReservation.Release(labor);
 		ResourceReservation.Release(labor);
+#if !ESSENTIALS
 		AutoCleanup.Release(labor);
 		AutoRepair.Release(labor);
 		StockpileConsolidation.Release(labor);
+#endif
 		KitReservation.Release(labor);
 		HoldAfterOrder.Release(labor);
 		if (labor.CurrentTask != null && labor.Operable == null)

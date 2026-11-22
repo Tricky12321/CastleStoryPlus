@@ -40,7 +40,11 @@ internal static class FastQuit
 		private IEnumerator Start()
 		{
 			float until = Time.realtimeSinceStartup + AutosaveWaitSeconds;
+#if !ESSENTIALS
 			while ((AutoSave.IsSaving || FastSave.Writing) && Time.realtimeSinceStartup < until)
+#else
+			while (FastSave.Writing && Time.realtimeSinceStartup < until)
+#endif
 			{
 				yield return null;
 			}

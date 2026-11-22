@@ -113,7 +113,9 @@ internal class BenchmarkRun : MonoBehaviour
 			yield return new WaitForSecondsRealtime(5f);
 			Call("POST", "/api/pause", "paused", "false");
 			Call("POST", "/api/speed", "speed", "1");
+#if !ESSENTIALS
 			CastleStoryPlus.Saving.AutoSave.ResetTimer();
+#endif
 			yield return new WaitForSecondsRealtime(WarmupSeconds);
 			// After the warm-up: right after the load not all of the save's buildings are in yet.
 			Vector3 centre = Centre();
@@ -145,7 +147,9 @@ internal class BenchmarkRun : MonoBehaviour
 					"gcs", GC.CollectionCount(0) - gc,
 					"loop", LoopSteps()));
 			}
+#if !ESSENTIALS
 			CastleStoryPlus.Saving.AutoSave.ResetTimer();
+#endif
 			_report = Json.Obj(
 				"time", DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss"),
 				"save", GameParam.Map != null ? GameParam.Map.customName : null,

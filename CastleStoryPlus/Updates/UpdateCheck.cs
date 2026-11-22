@@ -54,7 +54,7 @@ internal class UpdateCheck : MonoBehaviour
 			Id = "update",
 			Visible = () => _instance != null && _instance._latest != null,
 			Label = () => "Update to " + _instance._latest,
-			Tooltip = () => "Castle Story Plus " + _instance._latest + " is available (you have v" + Plugin.Version + "). Saves the game, closes it, installs the update and starts the game again.",
+			Tooltip = () => Plugin.Name + " " + _instance._latest + " is available (you have v" + Plugin.Version + "). Saves the game, closes it, installs the update and starts the game again.",
 			Icon = () => GameUi.GameUiState.Icon(Brix.UI.Icons.IconKeys.UI_Down),
 			Enabled = () => !_instance._updating,
 			OnClick = (bool shift, bool ctrl) => _instance.UpdateNow()
@@ -211,12 +211,12 @@ internal class UpdateCheck : MonoBehaviour
 		}
 		if (best == null || !IsNewer(best, Plugin.Version))
 		{
-			Plugin.Log.LogInfo("Castle Story Plus is up to date (installed v" + Plugin.Version + ", newest release " + (best ?? "none") + ")");
+			Plugin.Log.LogInfo(Plugin.Name + " is up to date (installed v" + Plugin.Version + ", newest release " + (best ?? "none") + ")");
 			_status = "up to date (checked " + DateTime.Now.ToString("HH:mm") + ")";
 			yield break;
 		}
 		_status = best + " is available";
-		Plugin.Log.LogInfo("Castle Story Plus " + best + " is available (installed v" + Plugin.Version + ")");
+		Plugin.Log.LogInfo(Plugin.Name + " " + best + " is available (installed v" + Plugin.Version + ")");
 		_latest = best;
 		// The installer as it is in that tag's source, so installer fixes already apply to this update.
 		_installerUrl = "https://raw.githubusercontent.com/" + Repo + "/" + best + "/installer/" + InstallerName;
@@ -228,10 +228,12 @@ internal class UpdateCheck : MonoBehaviour
 		return new Dictionary<string, string> { { "Accept", "application/vnd.github+json" } };
 	}
 
-	// CastleStoryPlus-v0.1.0-windows.zip / -linux.zip
+	// This edition's zip for this system: CastleStoryPlus-v0.1.0-windows.zip / -linux.zip (Full),
+	// CastleStoryPlus-Essentials-v0.9.4-windows.zip / -linux.zip (Essentials). A release has both editions' zips; an
+	// edition only ever updates to its own.
 	private static bool IsPackageForThisSystem(string name)
 	{
-		return name.StartsWith("CastleStoryPlus-") && name.EndsWith(IsWindows ? "-windows.zip" : "-linux.zip");
+		return name.StartsWith(Edition.PackagePrefix) && name.EndsWith(IsWindows ? "-windows.zip" : "-linux.zip");
 	}
 
 	private static Version ParseVersion(string tag)
@@ -285,7 +287,7 @@ internal class UpdateCheck : MonoBehaviour
 		panel.anchoredPosition = new Vector2(-32f, -32f);
 		panel.gameObject.AddComponent<Image>().color = new Color(0.08f, 0.08f, 0.1f, 0.92f);
 
-		Text title = NewText(panel, font, "Castle Story Plus " + _latest + " is available", 20, FontStyle.Bold, new Color(1f, 0.76f, 0.06f));
+		Text title = NewText(panel, font, Plugin.Name + " " + _latest + " is available", 20, FontStyle.Bold, new Color(1f, 0.76f, 0.06f));
 		Place(title.rectTransform, 16f, -14f, 408f, 28f);
 		Text body = NewText(panel, font, "You have v" + Plugin.Version + ". The update closes the game, installs and starts it again.", 15, FontStyle.Normal, new Color(0.85f, 0.85f, 0.85f));
 		Place(body.rectTransform, 16f, -44f, 408f, 40f);
@@ -368,13 +370,13 @@ internal class UpdateCheck : MonoBehaviour
 		ProcessStartInfo start;
 		if (IsWindows)
 		{
-			start = new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + installer + "\" -Tag " + _latest + " -GameDir \"" + gameDir + "\" -WaitPid " + pid + " -Restart");
+			start = new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -File \"" + installer + "\" -Tag " + _latest + " -Edition " + Edition.Id + " -GameDir \"" + gameDir + "\" -WaitPid " + pid + " -Restart");
 			start.UseShellExecute = true;
 		}
 		else
 		{
 			// Detached from the game, so it keeps running when the game quits.
-			string command = "setsid bash " + Quote(installer) + " --tag " + Quote(_latest) + " --game-dir " + Quote(gameDir) + " --wait-pid " + pid + " --restart > " + Quote(log) + " 2>&1 < /dev/null &";
+			string command = "setsid bash " + Quote(installer) + " --tag " + Quote(_latest) + " --edition " + Edition.Id + " --game-dir " + Quote(gameDir) + " --wait-pid " + pid + " --restart > " + Quote(log) + " 2>&1 < /dev/null &";
 			start = new ProcessStartInfo("/bin/bash", "-c " + Quote(command));
 			start.UseShellExecute = false;
 		}

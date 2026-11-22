@@ -19,6 +19,20 @@ namespace CastleStoryPlus.Army;
 // Weapon and armour sets per soldier job on tool racks, and the AI node to equip one specific kit.
 internal static class Kits
 {
+	// A kit of any soldier class (a call to arms without a class, the game's equip orders).
+	public const int AnyKit = -1;
+
+	// Melee first, so the front line fills before the archers.
+	public static readonly Occupation.Job[] SoldierJobs = new Occupation.Job[6]
+	{
+		Occupation.Job.Knight,
+		Occupation.Job.Halberdier,
+		Occupation.Job.Archer,
+		Occupation.Job.Arbalist,
+		Occupation.Job.Alchemist,
+		Occupation.Job.Artificer
+	};
+
 	// Kit items for a soldier job, or null for Builder.
 	public static List<Ressource> KitFor(Occupation.Job job)
 	{
@@ -54,8 +68,13 @@ internal static class Kits
 		{
 			count = Mathf.Min(count, rack.recepteur.ContentDescription.Value(item));
 		}
+#if ESSENTIALS
+		return count;
+#else
 		return count + KitBundles.CountFor(rack.recepteur, kit);
+#endif
 	}
+#if !ESSENTIALS
 
 	// Like GoEquipBestToolFromRack, but only takes the kit of one soldier job.
 	public static StaticNode GoEquipKitFromRack(Labor labor, Occupation.Job job)
@@ -123,8 +142,10 @@ internal static class Kits
 		Occupation.Job job = (Occupation.Job)role;
 		return (KitFor(job) != null) ? job : Occupation.Job.Builder;
 	}
+#endif
 }
 
+#if !ESSENTIALS
 // A worker whose call to arms role is a soldier class (e.g. Knight) went for the best kit on the nearest stand whenever
 // it was sent for gear without a class (the game's equip orders, a call to arms without quotas), and came back an
 // archer. It now only takes the kit of its role.
@@ -147,3 +168,4 @@ internal static class KitsRoleEquipPatch
 		return false;
 	}
 }
+#endif

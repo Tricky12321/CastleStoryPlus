@@ -112,7 +112,11 @@ internal static class MenuEndpoints
 			}
 			sidebars.Add(Obj("label", LuaBridge.String(LuaBridge.Value(sidebar.Handle, "Label"), null), "shown", sidebar.Shown, "active", sidebar.gameObject.activeInHierarchy));
 		}
+#if !ESSENTIALS
 		return Obj("kind", kind, "count", list.Count, "handles", list, "sidebars", sidebars, "resourceListShown", CastleStoryPlus.UI.ResourceList.Shown);
+#else
+		return Obj("kind", kind, "count", list.Count, "handles", list, "sidebars", sidebars, "resourceListShown", false);
+#endif
 	}
 
 	private static object Press(ApiRequest request)
@@ -270,7 +274,11 @@ internal static class CsMenu
 				sidebars.Add(Obj("id", panel.Id, "open", panel.IsOpen));
 			}
 		}
+#if !ESSENTIALS
 		return Obj("menu", "C#", "count", list.Count, "items", list, "sidebars", sidebars, "resourceListShown", CastleStoryPlus.UI.ResourceList.Shown);
+#else
+		return Obj("menu", "C#", "count", list.Count, "items", list, "sidebars", sidebars, "resourceListShown", false);
+#endif
 	}
 
 	internal static object Press(ApiRequest request)

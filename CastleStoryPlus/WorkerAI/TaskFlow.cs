@@ -68,11 +68,13 @@ internal static class TaskFlow
 	// keyed by resource only and would return the source picked for another destination.
 	internal static GameObject FindForDestination(Labor labor, Description wanted)
 	{
+#if !ESSENTIALS
 		// A workshop's ingredients at different resource priorities: the lowest cost first (ResourcePriority).
 		if (Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.TryChoose(labor, wanted, cached: false, out GameObject chosen, out _))
 		{
 			return chosen;
 		}
+#endif
 		foreach (Ressource resource in wanted.GetRessources().ToList())
 		{
 			if (resource.quantifiable.valeur == 0)
@@ -115,6 +117,9 @@ internal static class TaskFlow
 	// of the worker standing about with a bag that no block can use (issue #124).
 	private static bool LeftAlone(Labor labor, DigGoal dig)
 	{
+#if ESSENTIALS
+		return false;
+#else
 		if (Plugin.IsEnabled(Features.QuarryLimit) && dig.ResourceSetting is QuarryData data && QuarryLimit.All(data) != null)
 		{
 			int flag = QuarryLimit.FlagOf(Voxel.GetBlockInfo(dig.voxel.position).ResourceKey);
@@ -124,6 +129,7 @@ internal static class TaskFlow
 			}
 		}
 		return Plugin.IsEnabled(Features.ResourcePriority) && ResourcePriority.Customised(labor.faction) && ResourcePriority.Applies(dig) && ResourcePriority.Get(labor.faction, dig) == ResourcePriority.Never;
+#endif
 	}
 
 	// A piece a quarry gives: stone, crystals, ore, coal.

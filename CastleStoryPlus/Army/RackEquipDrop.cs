@@ -7,6 +7,7 @@ using Brix.Game.Components.Volumes;
 using Brix.Game.AI.Nodes;
 using Brix.Game.Semantique;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.WorkerAI;
 using HarmonyLib;
 using Motus.Behavior;
 using Brix.Utils;
@@ -34,49 +35,10 @@ internal static class RackEquipDropFirstPatch
 		Node equip = __result;
 		__result = (StaticNode)Node.Sequence.Do((Func<Labor, StaticNode>)DropNode.Drop, labor).Do((Labor l) =>
 		{
-			ForceDrop(l);
+			LoadDrop.ForceDrop(l);
 		}, labor).Do((Labor l, Node n) => n, labor, equip);
 	}
 
-	// As Recepteur.DropAll, but without the check that the load fits the spot (forceDrop).
-	internal static void ForceDrop(Labor labor)
-	{
-		Recepteur recepteur = labor.recepteur;
-		if (recepteur == null || recepteur.IsEmpty())
-		{
-			return;
-		}
-		List<GameObject> objects = new List<GameObject>();
-		foreach (IDescriptor stored in recepteur.StoredItems)
-		{
-			if (stored != null && stored.GameObject != null)
-			{
-				objects.Add(stored.GameObject);
-			}
-		}
-		if (objects.Count == 0)
-		{
-			return;
-		}
-		Vector3 at = VolumeRegistry.ClosestAvailableDropPosition(labor.transform, objects.Count, objects[0], forceDrop: true);
-		if (at == Vector3.zero)
-		{
-			return;
-		}
-		ClasseMoi.Move(objects);
-		if (objects.Count == 1)
-		{
-			BaseVoxelTransform voxel = objects[0].GetComponent<BaseVoxelTransform>();
-			if (voxel != null)
-			{
-				voxel.position = XYZ.FromVector3(at);
-			}
-			else
-			{
-				objects[0].transform.position = at;
-			}
-		}
-	}
 }
 
 [Feature(Features.CallToArms, Features.CallToArmsInfo)]

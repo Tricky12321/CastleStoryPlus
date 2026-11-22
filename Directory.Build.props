@@ -34,6 +34,21 @@
     <!-- The other builds' generated sources under obj/ are not part of this one. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
+  <!-- Edition (docs/Editions.md): Full (default) or Essentials (dotnet build -p:Edition=Essentials), the mod with only
+       its bug fixes, performance work and AI/pathfinding improvements. Essentials defines ESSENTIALS, leaves out the
+       code and files of every other feature (Editions.targets) and builds into obj/.../essentials and
+       bin/.../essentials, so the two editions never share build output. -->
+  <PropertyGroup>
+    <Edition Condition="'$(Edition)' == ''">Full</Edition>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Edition)' == 'Essentials'">
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">obj/</BaseIntermediateOutputPath>
+    <BaseIntermediateOutputPath>$(BaseIntermediateOutputPath)essentials/</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">bin/</BaseOutputPath>
+    <BaseOutputPath>$(BaseOutputPath)essentials/</BaseOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+    <DefineConstants>$(DefineConstants);ESSENTIALS</DefineConstants>
+  </PropertyGroup>
   <PropertyGroup>
     <!-- Castle Story install. Override with: dotnet build -p:GameDir=/path/to/Castle Story/ -->
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Castle Story/</GameDir>

@@ -54,10 +54,12 @@ internal static class CheatRoutes
 		{
 			throw new ApiException(403, request.Path + " is a cheat: " + CheatGuard.Explanation + " The host can allow them with POST /api/net/cheats?value=true (in the lobby or the game).");
 		}
+#if !ESSENTIALS
 		if (IsCheat(request))
 		{
 			// Nothing counts for the achievements in a game where a cheat was used.
 			CastleStoryPlus.Achievements.AchievementTracker.Cheated("the developer API " + request.Path);
 		}
+#endif
 	}
 }

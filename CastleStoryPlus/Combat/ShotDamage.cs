@@ -81,7 +81,11 @@ internal static class ShotDamageFirePatch
 			return;
 		}
 		KinematicProjectile projectile = __result.projectile as KinematicProjectile;
+#if !ESSENTIALS
 		if (projectile == null || ArtificerHealBoltFirePatch.Bolts.ContainsKey(projectile))
+#else
+		if (projectile == null)
+#endif
 		{
 			return;
 		}

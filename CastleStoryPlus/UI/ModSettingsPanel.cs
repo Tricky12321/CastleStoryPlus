@@ -40,11 +40,13 @@ internal class ModSettingsPanel : MonoBehaviour
 		public Text Label;
 	}
 
+#if !ESSENTIALS
 	private const float EnergyStep = 0.05f;
 
 	private const float EnergyMin = 1f;
 
 	private const float EnergyMax = 3f;
+#endif
 
 	private static readonly Color On = new Color(0.45f, 0.85f, 0.4f, 1f);
 
@@ -56,9 +58,13 @@ internal class ModSettingsPanel : MonoBehaviour
 
 	private Transform _body;
 
+#if !ESSENTIALS
 	private Text _autosaveText;
+#endif
 
+#if !ESSENTIALS
 	private Text _energyText;
+#endif
 
 	private Text _feedbackText;
 
@@ -156,11 +162,13 @@ end
 
 	private void Refresh()
 	{
+#if !ESSENTIALS
 		if (_autosaveText != null)
 		{
 			_autosaveText.text = AutoSave.Describe(AutoSave.Minutes.Value);
 		}
 		_energyText.text = "x" + Plugin.EnergyMultiplier.Value.ToString("0.00");
+#endif
 		foreach (Action refresher in _refreshers)
 		{
 			refresher();
@@ -188,6 +196,7 @@ end
 
 	// ---- actions
 
+#if !ESSENTIALS
 	private void StepAutosave(int direction)
 	{
 		int current = Array.IndexOf(AutoSave.Choices, AutoSave.Minutes.Value);
@@ -215,6 +224,7 @@ end
 		Plugin.EnergyMultiplier.Value = Mathf.Clamp(value, EnergyMin, EnergyMax);
 		Refresh();
 	}
+#endif
 
 	private void StartCapture(KeyRow row)
 	{
@@ -276,7 +286,7 @@ end
 		windowRect.anchoredPosition = Vector2.zero;
 
 		Transform header = CreateRow(_window.transform, 30f);
-		Text title = CreateText(header, "CASTLE STORY PLUS " + Plugin.Version, 18, Yellow, TextAnchor.MiddleLeft);
+		Text title = CreateText(header, Plugin.Name.ToUpper() + " " + Plugin.Version, 18, Yellow, TextAnchor.MiddleLeft);
 		title.fontStyle = FontStyle.Bold;
 		Flexible(title.gameObject);
 		CreateButton(header, "X", 28f, () => SetVisible(false));
@@ -298,6 +308,7 @@ end
 
 		AddUpdateRows();
 
+#if !ESSENTIALS
 		if (AutoSave.Minutes != null)
 		{
 			AddSection("SAVING");
@@ -306,6 +317,7 @@ end
 
 		AddSection("ECONOMY");
 		_energyText = AddStepperRow("Energy per brewed firefly", StepEnergy);
+#endif
 
 		if (HeuristicPatch.Weight != null)
 		{
@@ -322,6 +334,7 @@ end
 			}
 		}
 
+#if !ESSENTIALS
 		if (TaskCrewSize.Setting != null)
 		{
 			AddSection("TASKS");
@@ -389,6 +402,7 @@ end
 			AddFloatStepper("Speed of the second speed key", SpeedKeys.Speed2, 0.5f, 1f, 10f, "0.0x");
 			AddFloatStepper("Speed of the third speed key", SpeedKeys.Speed3, 0.5f, 1f, 10f, "0.0x");
 		}
+#endif
 
 		if (RendererChoice.Available)
 		{
@@ -396,11 +410,13 @@ end
 			AddRendererRows();
 		}
 
+#if !ESSENTIALS
 		if (BuildShortage.Icons != null)
 		{
 			AddSection("MISSING MATERIAL ICONS");
 			AddChoiceRow("Icons over blueprints (Alt)", BuildShortage.Icons);
 		}
+#endif
 
 		AddSection("DEBUG");
 		AddToggleRow("Debug mode (F7, F8 and F9 windows)", DebugMode.Entry);

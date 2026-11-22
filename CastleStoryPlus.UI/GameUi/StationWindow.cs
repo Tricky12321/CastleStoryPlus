@@ -46,11 +46,13 @@ internal abstract class CsStationWindow : MonoBehaviour
 
 	private CsWindowDrag _drag;
 
+#if !ESSENTIALS
 	// The workshop rows at the bottom (WorkshopPriority, WorkshopFetchRange), as under a workshop's recipes.
 	private Button[] _priority;
 
 	private Text _fetchRange;
 
+#endif
 	protected abstract float Width { get; }
 
 	// The selected station when it is this window's kind, else null.
@@ -154,9 +156,11 @@ internal abstract class CsStationWindow : MonoBehaviour
 		}
 	}
 
-	// Priority (four steps side by side) and fetch range ("-  40  +", Shift 25 at a time), each when its feature is on.
+	// Priority (four steps side by side) and fetch range ("-  40  +", Shift 25 at a time), each when its feature is on
+	// (neither is in the Essentials edition).
 	private void BuildWorkshopRows()
 	{
+#if !ESSENTIALS
 		bool priority = Plugin.IsEnabled(Core.Features.WorkshopPriority);
 		bool range = Plugin.IsEnabled(Core.Features.WorkshopFetchRange);
 		if (!priority && !range)
@@ -205,10 +209,12 @@ internal abstract class CsStationWindow : MonoBehaviour
 			RoundButton(more, UiTheme.SlotRadius);
 			Clickable(_fetchRange.gameObject, null, () => "How far from this building, in blocks, its workers go for what it needs, to stockpiles and loose items (Shift: 25 at a time). Past " + Economy.WorkshopFetchRange.Max + ": no limit.");
 		}
+#endif
 	}
 
 	private void StepRange(int direction)
 	{
+#if !ESSENTIALS
 		if (Station == null || GameUiState.Paused)
 		{
 			return;
@@ -216,10 +222,12 @@ internal abstract class CsStationWindow : MonoBehaviour
 		bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 		Economy.WorkshopFetchRange.StepFor(Station.state, direction, shift);
 		ReadWorkshopRows(Station);
+#endif
 	}
 
 	private void ReadWorkshopRows(CraftingStation station)
 	{
+#if !ESSENTIALS
 		if (_priority != null)
 		{
 			int current = Economy.WorkshopPriority.StepOf(station.state);
@@ -236,6 +244,7 @@ internal abstract class CsStationWindow : MonoBehaviour
 		{
 			CsRowParts.SetText(_fetchRange, Economy.WorkshopFetchRange.Shown(Economy.WorkshopFetchRange.Get(station.state)));
 		}
+#endif
 	}
 
 	// Read again at once (after a click).

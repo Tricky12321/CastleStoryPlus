@@ -167,7 +167,11 @@ internal static class QuarryStairs
 		}
 		_quarriesFrame = Time.frameCount;
 		Live<QuarryGoalProvider2>.Active(Quarries);
+#if !ESSENTIALS
 		Quarries.RemoveAll((QuarryGoalProvider2 quarry) => quarry.IsNullOrReleased() || quarry.data == null || !quarry.data.Commited || Metallurgy.OreMine.IsOreMine(quarry.data));
+#else
+		Quarries.RemoveAll((QuarryGoalProvider2 quarry) => quarry.IsNullOrReleased() || quarry.data == null || !quarry.data.Commited);
+#endif
 		return Quarries;
 	}
 
@@ -179,7 +183,11 @@ internal static class QuarryStairs
 	// A committed quarry's list of steps, made again when it is empty (after a load, before the quarry's first look).
 	private static void MakeStepList(QuarryGoalProvider2 quarry)
 	{
+#if !ESSENTIALS
 		if (quarry.stairs.Count == 0 && quarry.data != null && quarry.data.Commited && !Metallurgy.OreMine.IsOreMine(quarry.data))
+#else
+		if (quarry.stairs.Count == 0 && quarry.data != null && quarry.data.Commited)
+#endif
 		{
 			quarry.RefreshStairs();
 		}

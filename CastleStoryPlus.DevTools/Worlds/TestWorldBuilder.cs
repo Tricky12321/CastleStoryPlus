@@ -278,9 +278,16 @@ internal partial class TestWorldBuilder : MonoBehaviour
 		// A stockpile of each size for every resource and every Stacking tier, filled with it: the game's 2 x 2, then
 		// the mod's 3 x 3, each from no Stacking up to the top tier.
 		List<Factory.AssetKey> resources = Resources();
+#if !ESSENTIALS
 		foreach (string kind in new[] { "Pallet", CastleStoryPlus.Building.LargeStockpile.Name })
 		{
 			for (int tier = 0; tier <= UpgradeLines.All[UpgradeLines.Stacking].Tiers; tier++)
+#else
+		// Essentials: the game's stockpile only, and no Stacking tiers (Upgrades and LargeStockpile are Full edition features).
+		foreach (string kind in new[] { "Pallet" })
+		{
+			for (int tier = 0; tier <= 0; tier++)
+#endif
 			{
 				List<Piece> stockpiles = new List<Piece>();
 				foreach (Factory.AssetKey resource in resources)
@@ -436,11 +443,13 @@ internal partial class TestWorldBuilder : MonoBehaviour
 				}
 			}
 		}
+#if !ESSENTIALS
 		foreach (Market.MarketPrices.Good good in Market.MarketPrices.Goods)
 		{
 			AddResource(keys, seen, good.Asset);
 		}
 		AddResource(keys, seen, Economy.DarkCrystals.Key);
+#endif
 		return keys;
 	}
 
@@ -673,7 +682,9 @@ internal partial class TestWorldBuilder : MonoBehaviour
 			if (piece.Fill != null && piece.StackingTier >= 0)
 			{
 				Recepteur storage = Nearest(storages, new Vector3(_corner.x + piece.X + piece.Size.x / 2f, _corner.y, _corner.z + piece.Z + piece.Size.z / 2f));
+#if !ESSENTIALS
 				StockpileTiers.Set(storage, piece.StackingTier);
+#endif
 				tiers = true;
 			}
 		}
@@ -735,6 +746,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 	// Trades queued on the market, so its window shows a queue: rope and iron, paid the way the team can pay most often.
 	private void StandingTrades()
 	{
+#if !ESSENTIALS
 		Market.MarketStation market = Object.FindObjectOfType<Market.MarketStation>();
 		if (market == null)
 		{
@@ -754,11 +766,13 @@ internal partial class TestWorldBuilder : MonoBehaviour
 			}
 		}
 		Note("Market: " + added + " trades queued (rope, iron)");
+#endif
 	}
 
 	// Every upgrade line of the player's team at its top tier.
 	private void ResearchAll()
 	{
+#if !ESSENTIALS
 		Faction faction = (User.LocalUser != null) ? User.LocalUser.faction : null;
 		if (faction == null)
 		{
@@ -770,6 +784,7 @@ internal partial class TestWorldBuilder : MonoBehaviour
 			TeamUpgrades.Unlock(faction, line.Index, line.Tiers);
 		}
 		Note("Researched every upgrade (" + UpgradeLines.All.Count + " lines) to its top tier");
+#endif
 	}
 
 	// Kit after kit, a whole one at a time, while the stand has room for all of the next.

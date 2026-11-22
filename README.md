@@ -42,6 +42,8 @@ Castle Story Plus runs on the Unity 6 port: Castle Story on a current Unity, mad
 | Windows | `CastleStoryPlus-<version>-windows.zip` | Unpack it and double-click `install.bat`. |
 | Linux | `CastleStoryPlus-<version>-linux.zip` | Unpack it and run `bash install.sh`. |
 
+Only want the fixes? **Castle Story Plus - Essentials** (`CastleStoryPlus-Essentials-<version>-windows.zip` / `-linux.zip`, installed the same way) has only the bug fixes, performance work and worker AI and pathfinding improvements: no new buildings, blocks, resources, units or balance changes. See [Editions](docs/Editions.md).
+
 The installer finds Castle Story in your Steam libraries and puts the port in its folder; Play in Steam then starts the port. Run it again at any time to update; the game also offers updates from the main menu, and Castle Story Plus 0.8.0 and older move over to the port that way. In multiplayer every player needs the same version.
 
 > **Linux launch option:** the game needs the Steam launch option `./run_bepinex.sh %command%`. If Steam is closed while the installer runs, it sets the option itself. Otherwise set it once yourself: right-click Castle Story > Properties > Launch Options.
@@ -53,6 +55,7 @@ One-line installers, installer options, updates and manual installation: see [In
 | Page | Contents |
 |---|---|
 | [Features](docs/Features.md) | every feature per area, with its `[Features]` switch |
+| [Editions](docs/Editions.md) | Full and Essentials (only the fixes, performance and AI): what is in each, building, saves, multiplayer |
 | [Installation](docs/Installation.md) | installers and options, updates, manual installation, why a bootstrap, multiplayer |
 | [Configuration](docs/Configuration.md) | the config file, in-game settings and debug mode |
 | [Gallery](docs/Gallery.md) | pictures of every building, block, armour stand and stockpile |

@@ -118,8 +118,11 @@ internal static class BlockTests
 		return receiver;
 	}
 
+#if !ESSENTIALS
 	private static readonly Factory.AssetKey LadderBlueprint = new Factory.AssetKey("Blueprints", CastleStoryPlus.Pathfinding.Ladders.Name);
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Blocks", "Two wood ladders built one on the other, away from stone, both stay up; the ladder blueprint is dragged upwards (#97)")]
 	private static IEnumerator LadderOnLadderStays(TestContext t)
 	{
@@ -148,7 +151,9 @@ internal static class BlockTests
 		IDragger dragger = template.GetInterface<IDragger>();
 		t.True(dragger is VerticalDragger, "The ladder blueprint's dragger is " + ((dragger != null) ? dragger.GetType().Name : "missing") + ", not the vertical one");
 	}
+#endif
 
+#if !ESSENTIALS
 	private static readonly Factory.AssetKey LongBrickBlueprint = new Factory.AssetKey("Blueprints", "Stone_Brick1x4");
 
 	private static readonly Factory.AssetKey LongSlabBlueprint = new Factory.AssetKey("Blueprints", "Wood_Slab1x5");
@@ -217,6 +222,7 @@ internal static class BlockTests
 		t.True(fit.HasCells && fit.Min.Equals(root), "The " + key.Name + " was fitted at " + fit.Min + ", not at " + root);
 		return fit;
 	}
+#endif
 
 	// The player's delete of a blueprint not yet built (UNetBlueprint.CmdDestroyBluePrint).
 	private static void RemoveAfter(TestContext t, Blueprint blueprint)

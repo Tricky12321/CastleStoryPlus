@@ -100,8 +100,13 @@ internal class XRayView : MonoBehaviour
 	// The terrain type whose look each class takes.
 	private static readonly int[] TypeOfClass =
 	{
+#if !ESSENTIALS
 		(int)VoxelTerrainType.Stone, (int)VoxelTerrainType.OrangeCrystal, (int)VoxelTerrainType.BlueCrystal, (int)VoxelTerrainType.Iron,
 		CoalVeins.CoalType, (int)VoxelTerrainType.Stone, (int)VoxelTerrainType.Earth, (int)VoxelTerrainType.Grass,
+#else
+		(int)VoxelTerrainType.Stone, (int)VoxelTerrainType.OrangeCrystal, (int)VoxelTerrainType.BlueCrystal, (int)VoxelTerrainType.Iron,
+		(int)VoxelTerrainType.Stone, (int)VoxelTerrainType.Stone, (int)VoxelTerrainType.Earth, (int)VoxelTerrainType.Grass,
+#endif
 		(int)VoxelTerrainType.Sand, (int)VoxelTerrainType.Snow
 	};
 
@@ -225,7 +230,9 @@ internal class XRayView : MonoBehaviour
 		Classes[(int)VoxelTerrainType.BlueCrystalCrust] = Blue;
 		Classes[(int)VoxelTerrainType.Iron] = Iron;
 		Classes[(int)VoxelTerrainType.IronCrust] = Iron;
+#if !ESSENTIALS
 		Classes[CoalVeins.CoalType] = Coal;
+#endif
 		Classes[(int)VoxelTerrainType.Earth] = Earth;
 		Classes[(int)VoxelTerrainType.Grass] = Grass;
 		Classes[(int)VoxelTerrainType.ThickGrass] = Grass;

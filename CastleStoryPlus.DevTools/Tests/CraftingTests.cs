@@ -40,7 +40,9 @@ internal static class CraftingTests
 		string doing = (worker == null) ? "no worker" : worker.name + " " + worker.Activity + " at " + CastleStoryPlus.DevTools.Pathing.Units.VoxelOf(worker) + ", task " + ((worker.CurrentTask != null) ? worker.CurrentTask.ToString() : "none") + ", bag " + worker.recepteur.ContentString();
 		Faction faction = Faction.GetFaction(shop.Station.gameObject);
 		RecipeInfo planks = CookBook.Planks;
+#if !ESSENTIALS
 		Ressource product = CraftLoopLimit.Product(planks);
+#endif
 		Recipe current = shop.Station.CurrentRecipe;
 		string station = string.Empty;
 		if (worker != null)
@@ -50,7 +52,11 @@ internal static class CraftingTests
 			GameObject store = (made != null) ? worker.BestRecepteurToStore(made) : null;
 			station = ", station " + shop.Station.recepteur.ContentString() + ", decide " + shop.Station.DecideWhatToDo(worker) + ", work for worker " + shop.Station.HasWorkFor(worker) + ", product to pick up " + pickup + " (store " + ((store != null) ? store.name : "none") + "), pick up and store " + shop.Station.CanPickUpProduction(worker, andStore: true) + ", ingredients " + (current != null && current.HasIngredientsIn(shop.Station.recepteur)) + ", room for product " + (current != null && shop.Station.recepteur.HasRoomFor(current.Creates)) + ", needs work " + shop.Station.NeedsWork(current);
 		}
+#if !ESSENTIALS
 		string limit = (product != null) ? ", plank stock " + CraftLoopLimit.Stock(faction, product, cached: false) + " coming " + CraftLoopLimit.Coming(faction, product, planks.Creates, cached: false) : string.Empty;
+#else
+		string limit = string.Empty;
+#endif
 		t.Log(doing + "; queue " + shop.Station.QueueCount + ", current " + ((current != null) ? current.Info.id + (current.Finished ? " finished" : string.Empty) : "none") + limit + station + ", operator " + ((shop.Station.Operator != null) ? shop.Station.Operator.name : "none") + ", logs stored " + Scenario.Stored(FactoryBlocks.Wood_DoubleLog_AA) + ", planks " + Planks);
 	}
 
@@ -134,6 +140,7 @@ internal static class CraftingTests
 		yield return t.UntilGame(() => Planks >= planksBefore + 2 * CookBook.Planks.QtyCreated, 240f, "6 planks from the looping order", 30f, () => Note(t, shop));
 	}
 
+#if !ESSENTIALS
 	[GameTest("Crafting", "A looping Planks order kept to a stock limit (two orders above what there is) with logs for more stops exactly at the limit and waits: planks being made, in the workshop or carried count, so no order more starts", TimeoutSeconds = 420f)]
 	private static IEnumerator LoopLimitHoldsStock(TestContext t)
 	{
@@ -173,6 +180,7 @@ internal static class CraftingTests
 		t.Equal(planksBefore + limit - stockBefore, Planks, "Planks made once the limit is reached (no order more)");
 		t.True(shop.Station.craftingLabor.LoopRecipe && shop.Station.QueueCount >= 1, "The looping order is still queued, waiting");
 	}
+#endif
 
 	[GameTest("Crafting", "An idle builder takes a chopping block's Planks order by itself (no worker assigned) and makes the planks", TimeoutSeconds = 300f)]
 	private static IEnumerator IdleBuilderTakesWorkshopOrder(TestContext t)

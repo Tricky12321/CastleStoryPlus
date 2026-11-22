@@ -85,7 +85,11 @@ internal sealed class CraftRoundRobin : MonoBehaviour
 		int next = -1;
 		for (int i = 1; i < queue.Count; i++)
 		{
+#if !ESSENTIALS
 			if (queue[i].id != current.Info.id && InStock(queue[i], station.recepteur, faction) && !CraftLoopLimit.HasEnough(labor, queue[i], faction))
+#else
+			if (queue[i].id != current.Info.id && InStock(queue[i], station.recepteur, faction))
+#endif
 			{
 				next = i;
 				break;
@@ -117,7 +121,7 @@ internal sealed class CraftRoundRobin : MonoBehaviour
 		{
 			if (adjectif is Ressource resource && resource.quantifiable != null)
 			{
-				int have = workshop.ContentDescription.Value(resource) + CraftLoopLimit.Stock(faction, resource, cached: true);
+				int have = workshop.ContentDescription.Value(resource) + TeamStock.Count(faction, resource, cached: true);
 				if (have < resource.quantifiable.valeur)
 				{
 					return false;

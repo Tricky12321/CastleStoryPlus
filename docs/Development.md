@@ -38,11 +38,12 @@ Finding what is slow or what fills memory: see [Performance](Performance.md) and
 ### Releasing
 
 1. Bump `Version` in `CastleStoryPlus/Plugin.cs`, update [`CHANGELOG.md`](../CHANGELOG.md) and commit.
-2. Run `tools/release.sh`. It builds the plugin once and packs one package per system with `tools/package-port.sh`:
+2. Run `tools/release.sh`. It packs one package per system and edition ([Editions](Editions.md)) with `tools/package-port.sh`:
    - `dist/CastleStoryPlus-v<version>-linux.zip`: `install.sh` and BepInEx linux_x64;
-   - `dist/CastleStoryPlus-v<version>-windows.zip`: `install.bat`, `install.ps1` and BepInEx win_x64.
+   - `dist/CastleStoryPlus-v<version>-windows.zip`: `install.bat`, `install.ps1` and BepInEx win_x64;
+   - `dist/CastleStoryPlus-Essentials-v<version>-linux.zip` and `-windows.zip`: the same with the Essentials edition of the mod.
 
-   It then tags `v<version>` and creates the GitHub release with the [GitHub CLI](https://cli.github.com/). The release gets just the two packages and the install instructions from `tools/release-notes.md`.
+   It then tags `v<version>` and creates the GitHub release with the [GitHub CLI](https://cli.github.com/). The release gets the four packages (the Full ones first) and the install instructions from `tools/release-notes.md`.
 
 Releases are built locally, because the build needs the game's own assemblies, which cannot go into the repository or CI.
 

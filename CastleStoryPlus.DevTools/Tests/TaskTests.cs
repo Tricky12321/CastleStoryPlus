@@ -289,6 +289,7 @@ internal static class TaskTests
 		t.True(b.Project == null || b.Project is IdleProject, b.name + " went to a " + b.Project?.GetType().Name);
 	}
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "Hiring three bricktrons onto a project with room for one: the crew size grows to take them all", TimeoutSeconds = 60f)]
 	private static IEnumerator HiringGrowsFullCrew(TestContext t)
 	{
@@ -314,6 +315,7 @@ internal static class TaskTests
 		}
 		t.AtLeast(3f, project.MaximumCrewSize, "Crew size after hiring 3");
 	}
+#endif
 
 	[GameTest("Tasks", "A project's priority goes up and down with the task bar's buttons", TimeoutSeconds = 30f)]
 	private static IEnumerator PriorityRaisedAndLowered(TestContext t)

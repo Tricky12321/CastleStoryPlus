@@ -14,7 +14,11 @@ public class Plugin : BaseUnityPlugin
 {
 	public const string Guid = "com.tricky12321.castlestoryplus";
 
+#if ESSENTIALS
+	public const string Name = "Castle Story Plus - Essentials";
+#else
 	public const string Name = "Castle Story Plus";
+#endif
 
 	public const string Version = "0.9.3";
 
@@ -25,7 +29,9 @@ public class Plugin : BaseUnityPlugin
 	// The BepInEx manager object (survives scene loads); features add their MonoBehaviours here.
 	internal static UnityEngine.GameObject Root;
 
+#if !ESSENTIALS
 	internal static ConfigEntry<float> EnergyMultiplier;
+#endif
 
 	// The plugin's folder (its Assets, Lua and the menu assembly). A reloaded copy (ModReload) has no file of its own.
 	internal static string Directory;
@@ -54,7 +60,9 @@ public class Plugin : BaseUnityPlugin
 		Log = log;
 		Cfg = config;
 		Root = root;
+#if !ESSENTIALS
 		EnergyMultiplier = config.Bind("Economy", "EnergyMultiplier", 1.3f, "Energy carried by each brewed firefly, relative to the blue crystal it costs. 1.3 = new workers arrive 30% faster.");
+#endif
 		Harmony harmony = new Harmony(Guid);
 		int patched = 0;
 		foreach (Type type in typeof(Plugin).Assembly.GetTypes())
@@ -100,6 +108,7 @@ public class Plugin : BaseUnityPlugin
 				Log.LogError("Feature '" + feature.Name + "' failed in " + type.Name + ": " + ex);
 			}
 		}
+		// The Essentials edition says so in its Name ("Castle Story Plus - Essentials").
 		Log.LogInfo(Name + " " + Version + " loaded (" + patched + " patch classes)");
 	}
 }

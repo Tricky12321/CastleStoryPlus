@@ -53,8 +53,6 @@ internal static class CraftLoopLimit
 	// again.
 	private static readonly Dictionary<CraftingState, Dictionary<int, int>> Limits = new Dictionary<CraftingState, Dictionary<int, int>>();
 
-	private static readonly Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>> StockCache = new Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>>();
-
 	private static readonly Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>> ComingCache = new Dictionary<KeyValuePair<Faction, Type>, KeyValuePair<float, int>>();
 
 	private static void Enable()
@@ -62,7 +60,6 @@ internal static class CraftLoopLimit
 		GameSession.OnLeave(() =>
 		{
 			Labors.Clear();
-			StockCache.Clear();
 			ComingCache.Clear();
 		});
 		NetworkBehaviour.RegisterCommandDelegate(typeof(UNetProjectCmd), SetLimitHash, InvokeSetLimit);
@@ -619,9 +616,8 @@ end
 	// The cached counts of a product (after an order of it started).
 	private static void Forget(Faction faction, Ressource product)
 	{
-		KeyValuePair<Faction, Type> key = new KeyValuePair<Faction, Type>(faction, product.GetType());
-		StockCache.Remove(key);
-		ComingCache.Remove(key);
+		TeamStock.Forget(faction, product);
+		ComingCache.Remove(new KeyValuePair<Faction, Type>(faction, product.GetType()));
 	}
 
 	// What the team has of the product outside its stockpiles and tool racks, and what its workshops are making of it:
@@ -758,39 +754,7 @@ end
 	// What the team's stockpiles and tool racks hold of the resource.
 	internal static int Stock(Faction faction, Ressource resource, bool cached)
 	{
-		KeyValuePair<Faction, Type> key = new KeyValuePair<Faction, Type>(faction, resource.GetType());
-		if (cached && StockCache.TryGetValue(key, out KeyValuePair<float, int> entry) && Time.time - entry.Key < StockCacheSeconds)
-		{
-			return entry.Value;
-		}
-		int count = 0;
-		AutoList list = BrixSingleton<AutoList>.Instance;
-		if (list != null)
-		{
-			HashSet<GameObject> seen = new HashSet<GameObject>();
-			foreach (Factory.AssetKey storage in new[] { ObjetsDynamiques.Palette, ObjetsDynamiques.Toolrack, ObjetsDynamiques.SingleToolrack })
-			{
-				HashSet<GameObject> instances = list.GetInstances(storage);
-				if (instances == null)
-				{
-					continue;
-				}
-				foreach (GameObject go in instances)
-				{
-					if (go == null || !go.activeInHierarchy || !seen.Add(go) || Faction.GetFaction(go) != faction)
-					{
-						continue;
-					}
-					Recepteur recepteur = go.GetComponent<Recepteur>();
-					if (recepteur != null)
-					{
-						count += recepteur.ContentDescription.Value(resource);
-					}
-				}
-			}
-		}
-		StockCache[key] = new KeyValuePair<float, int>(Time.time, count);
-		return count;
+		return TeamStock.Count(faction, resource, cached);
 	}
 }
 
