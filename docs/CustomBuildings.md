@@ -23,12 +23,14 @@ components (volume, collider, recepteur, AI interest, network identity) come wit
 ## Checklist
 
 1. Feature constants: add `<Name>` and `<Name>Info` to `Core/Features.cs`, and put `[Feature(...)]` on every
-   patch class of the building.
-2. Clone the templates in a `Factory.Awake` postfix (see [Cloning](#cloning-the-templates)).
+   patch class of the building's behaviour.
+2. Clone the templates in an `AddToFactories()` method called from `SavedContent` (`Core/SavedContent.cs`, always on,
+   a `Factory.Awake` postfix; see [Cloning](#cloning-the-templates)). Never from a postfix of the building's own
+   feature: a save with the building must load with the feature switched off (#185). `SavedContentAuditTests` checks it.
 3. Set the new key on the clone's `FactoryImprint`, add it with `AddAsset<CloneTemplate>`, and register its
    network handler.
 4. Blueprint: point `Blueprint.BlueprintResult` at the building key, set the build cost and add the blueprint
-   mapping. Also add the `BlueprintMapper.AddMappings` skip patch.
+   mapping. `BlueprintMappingGuard` (always on) makes the game's own mapping skip it afterwards.
 5. Build menu entry: inject it into `LUI/Meta/Meta_Structure.lua`.
 6. Size: rebuild the volume cells, collider, centre offset and fitter.
 7. Model: hide the source's model, build your own meshes with normals, tangents and vertex colours, and use the
@@ -42,16 +44,19 @@ components (volume, collider, recepteur, AI interest, network identity) come wit
 ## Cloning the templates
 
 ```csharp
+// The menu entry and behaviour follow the switch; the templates are added by SavedContent whatever is switched on.
 [Feature(Features.X, Features.XInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class XBuilding
 {
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		TryCreate("Blueprints", blueprint: true);
 		TryCreate("ObjetsDynamiques", blueprint: false);
 	}
 }
+
+// In SavedContent.Postfix:
+Run("X", CastleStoryPlus.Building.XBuilding.AddToFactories);
 ```
 
 - **Factories with the same name are merged.** A later factory moves its templates into the first one and

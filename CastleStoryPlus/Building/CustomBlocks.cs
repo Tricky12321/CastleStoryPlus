@@ -41,11 +41,12 @@ namespace CastleStoryPlus.Building;
 // checked for blueprints (placing and building them); a placed block stays up while one of its support cells holds, the
 // rule all of them were placed under before (CustomBlocksPlacedSupportPatch), so existing saves do not collapse when
 // the game validates every block on load. The IDs are kept in saves and must never change; saves with these blocks
-// need the mod.
+// need the mod. The blocks are added to the factories (SavedContent), get their wood material and keep the support
+// rule they were placed under also with the feature switched off, so saved castles load whole; the switch takes them
+// out of the build menu.
 // The wood ladder (Ladders) is a slab-like wood block with a ladder mesh against its front face; Ladders makes it
-// climbable.
+// climbable. The ladder and the stone road (Roads) are made here too, whichever of the three features is on.
 [Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class CustomBlocks
 {
 	private sealed class Shape
@@ -171,7 +172,7 @@ internal static class CustomBlocks
 	}
 
 	// Factories with the same name are merged; look at the registered ones after every Awake (see CustomBuilding).
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		foreach (Shape shape in Shapes)
 		{
@@ -1089,8 +1090,9 @@ internal class CustomBlockFitter : DefaultFitter
 	}
 }
 
-// The block infos are made once the factories are loaded; the wood blocks' material must be in place by then.
-[Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
+// The block infos are made once the factories are loaded; the wood blocks' material must be in place by then. Always
+// on, as the blocks are (saved wood slabs and ladders must not load as untextured blocks).
+[Feature]
 [HarmonyPatch(typeof(BlockInfoGenerator), nameof(BlockInfoGenerator.CreateMetaBlockInfos))]
 internal static class CustomBlocksMaterialPatch
 {
@@ -1150,8 +1152,9 @@ internal static class CustomBlocksDragPatch
 // is the blueprints' stricter one; a placed block failing only that is kept. The game validates every block when a
 // save is loaded (VolumeRegistryComponent.RevalidateAllRegisteredObjects), so without this the bricks and slabs of
 // existing castles that do not meet the new need would fall. Placed blocks are validated on the host only
-// (ConcreteValidator), and the rule depends on the world alone, so host and clients agree.
-[Feature(Features.CustomBlocks, Features.CustomBlocksInfo)]
+// (ConcreteValidator), and the rule depends on the world alone, so host and clients agree. Always on: with the feature
+// switched off the blocks of a saved castle must not fall either.
+[Feature]
 [HarmonyPatch(typeof(AbstractValidator), "IsValid")]
 internal static class CustomBlocksPlacedSupportPatch
 {

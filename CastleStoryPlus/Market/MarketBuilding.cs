@@ -1,18 +1,16 @@
 using System.Collections.Generic;
-using Brix.External.Factories;
 using Brix.Game.AI;
 using CastleStoryPlus.Building;
 using CastleStoryPlus.Core;
-using HarmonyLib;
 using UnityEngine;
 
 namespace CastleStoryPlus.Market;
 
 // Adds the market to the game's factories when they load (see CustomBuilding): 4 x 3 blocks and 4 high, with its
 // own model, a market station instead of the workbench station, and a build cost. The blueprint is in the build
-// menu's crafting group. Saved markets load through the same factory keys.
+// menu's crafting group. Saved markets load through the same factory keys, so the market is added to the factories
+// also with the feature switched off (SavedContent); the switch takes it out of the build menu.
 [Feature(Features.Market, Features.MarketInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class MarketBuilding
 {
 	internal const string Name = "Market";
@@ -35,7 +33,7 @@ internal static class MarketBuilding
 			"_t.Add(AssetKey.New(\"Blueprints\", \"Market\"),\t\t\t\t{ Name = ||\"Market\",\t\t\tIcon = " + UI.BuildIcons.Lua("market", "_Machine_Shop") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n");
 	}
 
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		Building.AddToFactories();
 	}

@@ -16,9 +16,9 @@ namespace CastleStoryPlus.Upgrades;
 // Adds the smithy (weapon upgrades), the armoury (armour upgrades) and the research station (colony upgrades, paid in
 // dark crystals) to the game's factories when they load (see CustomBuilding), all 4 x 3 blocks, in the build menu's
 // crafting group. The game already has a
-// building called Forge, so the weapon building is the smithy.
+// building called Forge, so the weapon building is the smithy. Added to the factories also with the feature switched
+// off, so saved upgrade buildings load (SavedContent).
 [Feature(Features.Upgrades, Features.UpgradesInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class UpgradeBuildings
 {
 	internal const string SmithyName = "Smithy";
@@ -88,7 +88,7 @@ internal static class UpgradeBuildings
 			+ "_t.Add(AssetKey.New(\"Blueprints\", \"" + ResearchName + "\"),\t\t\t\t{ Name = ||\"" + ResearchLabel + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("research", "_Lab") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n");
 	}
 
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		Smithy.AddToFactories();
 		Armoury.AddToFactories();
@@ -137,17 +137,5 @@ internal static class UpgradeHideFromCraftingMenuPatch
 		{
 			__result = null;
 		}
-	}
-}
-
-// The buildings are mapped to their blueprints as soon as they are created (CustomBuilding); when the game maps
-// all blueprints afterwards it must skip them, or the duplicate key stops the game's factory loading.
-[Feature(Features.Upgrades, Features.UpgradesInfo)]
-[HarmonyPatch(typeof(BlueprintMapper), nameof(BlueprintMapper.AddMappings))]
-internal static class UpgradeBlueprintMappingPatch
-{
-	private static bool Prefix(BlueprintMapper __instance, Blueprint bp)
-	{
-		return !__instance.blueprint2Concrete.ContainsKey(bp.AssetKey);
 	}
 }

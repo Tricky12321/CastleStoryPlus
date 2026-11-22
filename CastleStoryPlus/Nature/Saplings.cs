@@ -26,9 +26,9 @@ namespace CastleStoryPlus.Nature;
 // size over [Saplings] GrowMinutes of game time (30; paused with the game, faster at a higher game speed). Then it
 // becomes an ordinary tree of the map (TreeRegistry), which harvest areas fell like any other. How far each sapling
 // has grown is saved with the game (on the faction, as the team upgrades are). The sapling building is a clone of
-// the knight statue (a plain decoration), with its model replaced.
+// the knight statue (a plain decoration), with its model replaced. Added to the factories also with the feature
+// switched off, so saved saplings load (SavedContent).
 [Feature(Features.Saplings, Features.SaplingsInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class Saplings
 {
 	internal const string Name = "Sapling";
@@ -63,14 +63,9 @@ internal static class Saplings
 		GameUi.BuildCatalog.AddStructure(Features.Saplings, Name, "Tree sapling", GameUi.BuildCatalog.ModIcon("sapling", "_Knight_Statue"), 1, "Pallet");
 		LuaInjection.AddPatch(Features.Saplings, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_Stockpile\",\t\tgroupId = 1 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"" + Name + "\"),\t\t{ Name = ||\"Tree sapling\",\t\tIcon = " + UI.BuildIcons.Lua("sapling", "_Knight_Statue") + ",\tHotkey = \"\",\t\tgroupId = 1 })\n");
-		GameSession.OnLeave(() =>
-		{
-			Growth.Clear();
-			Owners.Clear();
-		});
 	}
 
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		Building.AddToFactories();
 	}
@@ -311,12 +306,22 @@ internal class SaplingGrowth : MonoBehaviour
 }
 
 // Saves the saplings' growth as an extra property on each faction ("saplings": "x,y,z,growth;..."). The unmodded
-// game ignores unknown properties.
-[Feature(Features.Saplings, Features.SaplingsInfo)]
+// game ignores unknown properties. Always on, as the sapling building is (SavedContent): planted saplings keep growing
+// with the feature switched off, and a save made then keeps their growth.
+[Feature]
 [HarmonyPatch(typeof(DefaultGameContractResolver), nameof(DefaultGameContractResolver.GenerateDefaultMonoBehaviourContract))]
 internal static class SaplingsSave
 {
 	private const string Property = "saplings";
+
+	private static void Enable()
+	{
+		GameSession.OnLeave(() =>
+		{
+			Saplings.Growth.Clear();
+			Saplings.Owners.Clear();
+		});
+	}
 
 	private class GrowthProvider : IValueProvider
 	{
