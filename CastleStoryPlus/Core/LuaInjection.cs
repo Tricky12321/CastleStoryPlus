@@ -119,6 +119,11 @@ internal static class LuaInjection
 			{
 				continue;
 			}
+			// A feature switched off since: its part of the menu is left out.
+			if (patch.Owner != null && Plugin.LoadedFeatures.TryGetValue(patch.Owner, out bool on) && !on)
+			{
+				continue;
+			}
 			// The game's Lua files use CRLF; match and insert with the file's own line endings.
 			string newline = code.Contains("\r\n") ? "\r\n" : "\n";
 			string anchor = patch.Anchor.Replace("\r\n", "\n").Replace("\n", newline);

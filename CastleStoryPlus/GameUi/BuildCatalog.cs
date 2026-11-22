@@ -26,6 +26,14 @@ internal static class BuildCatalog
 
 		// What it is for, shown on hover with its name (BuildMenuTooltips), or null.
 		public Func<string> Tooltip;
+
+		// The mod feature that added it ([Features]), or null for the game's own: hidden while that feature is off.
+		public string Feature;
+
+		public bool Shown()
+		{
+			return Feature == null || Plugin.IsEnabled(Feature);
+		}
 	}
 
 	internal sealed class Group
@@ -162,17 +170,22 @@ internal static class BuildCatalog
 	}
 
 	// One of the mod's structures, in a group, after the given blueprint (or at the end of the group).
-	internal static void AddStructure(string blueprint, string name, Func<Sprite> icon, int group, string after = null)
+	internal static void AddStructure(string feature, string blueprint, string name, Func<Sprite> icon, int group, string after = null)
 	{
 		Added.Add(blueprint);
-		Add(Structures, blueprint, name, icon, group, after);
+		Add(Structures, feature, blueprint, name, icon, group, after);
 	}
 
 	// One of the mod's blocks, in a group, before the given blueprint (or at the end of the group).
-	internal static void AddBlock(string blueprint, string name, Func<Sprite> icon, int group, string before = null)
+	internal static void AddBlock(string feature, string blueprint, string name, Func<Sprite> icon, int group, string before = null)
 	{
 		Added.Add(blueprint);
+		if (Blocks.Exists((Entry e) => e.Key.Name == blueprint))
+		{
+			return;
+		}
 		Entry entry = Entry_(blueprint, name, icon, group);
+		entry.Feature = feature;
 		int at = (before != null) ? Blocks.FindIndex((Entry e) => e.Key.Name == before) : -1;
 		if (at < 0)
 		{
@@ -181,13 +194,14 @@ internal static class BuildCatalog
 		Blocks.Insert(Mathf.Clamp(at, 0, Blocks.Count), entry);
 	}
 
-	private static void Add(List<Entry> list, string blueprint, string name, Func<Sprite> icon, int group, string after)
+	private static void Add(List<Entry> list, string feature, string blueprint, string name, Func<Sprite> icon, int group, string after)
 	{
 		if (list.Exists((Entry e) => e.Key.Name == blueprint))
 		{
 			return;
 		}
 		Entry entry = Entry_(blueprint, name, icon, group);
+		entry.Feature = feature;
 		int at = (after != null) ? list.FindIndex((Entry e) => e.Key.Name == after) : -1;
 		if (at < 0)
 		{

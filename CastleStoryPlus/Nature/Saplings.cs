@@ -60,7 +60,7 @@ internal static class Saplings
 	{
 		GrowMinutes = Plugin.Cfg.Bind("Saplings", "GrowMinutes", 30f, new ConfigDescription("Minutes of game time a planted sapling takes to grow into a full tree.", new AcceptableValueRange<float>(1f, 240f)));
 		UI.BuildIcons.Register();
-		GameUi.BuildCatalog.AddStructure(Name, "Tree sapling", GameUi.BuildCatalog.ModIcon("sapling", "_Knight_Statue"), 1, "Pallet");
+		GameUi.BuildCatalog.AddStructure(Features.Saplings, Name, "Tree sapling", GameUi.BuildCatalog.ModIcon("sapling", "_Knight_Statue"), 1, "Pallet");
 		LuaInjection.AddPatch(Features.Saplings, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_Stockpile\",\t\tgroupId = 1 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"" + Name + "\"),\t\t{ Name = ||\"Tree sapling\",\t\tIcon = " + UI.BuildIcons.Lua("sapling", "_Knight_Statue") + ",\tHotkey = \"\",\t\tgroupId = 1 })\n");
 		GameSession.OnLeave(() =>

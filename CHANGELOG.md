@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [FIX] **Switched-off buildings stayed in the build menu:** a feature switched off in the mod's settings (Market, Warehouse, Large stockpile, Upgrades' smithy, armoury and research, Saplings, Custom blocks, Roads) took its own logic away at once, but its buildings and blocks stayed in the build menu and could still be picked and built. Each build menu entry now belongs to its feature and is hidden while that feature is off, at once in the C# build menus and the next time the game's Lua menus load. Buildings already placed and saved games with them load as before.
+
 ## 0.9.3 — 2026-11-21
 
 - [FIX] **Tooltips drawn behind the wave panel (#160):** the name of an enemy kind shown when the pointer is over its kill counter on the wave panel ("Warlock killed") was drawn behind the panel. The C# menus' canvas sorts at the same order as the game's menus (it is kept below the game's dialogs, which sort just above them), and the scoreboard is drawn inside the game's scoreboard menu, so the panel covered a tooltip on the mod's canvas. Tooltips (the C# menus' tooltips and the in-game help tooltips) now have a canvas of their own that sorts above every menu and dialog, and a tooltip is also kept inside the screen sideways (before only up and down).

@@ -30,7 +30,7 @@ internal static class MarketBuilding
 	private static void Enable()
 	{
 		UI.BuildIcons.Register();
-		GameUi.BuildCatalog.AddStructure("Market", "Market", GameUi.BuildCatalog.ModIcon("market", "_Machine_Shop"), 3, "MachineShop");
+		GameUi.BuildCatalog.AddStructure(Features.Market, "Market", "Market", GameUi.BuildCatalog.ModIcon("market", "_Machine_Shop"), 3, "MachineShop");
 		LuaInjection.AddPatch(Features.Market, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_MachineShop\",\tgroupId = 3 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"Market\"),\t\t\t\t{ Name = ||\"Market\",\t\t\tIcon = " + UI.BuildIcons.Lua("market", "_Machine_Shop") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n");
 	}

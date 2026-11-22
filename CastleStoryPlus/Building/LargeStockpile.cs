@@ -52,7 +52,7 @@ internal static class LargeStockpile
 
 	private static void Enable()
 	{
-		GameUi.BuildCatalog.AddStructure(Name, "Large stockpile", GameUi.BuildCatalog.ModIcon(null, "_Stockpiled_Brick"), 1, "Pallet");
+		GameUi.BuildCatalog.AddStructure(Features.LargeStockpile, Name, "Large stockpile", GameUi.BuildCatalog.ModIcon(null, "_Stockpiled_Brick"), 1, "Pallet");
 		LuaInjection.AddPatch(Features.LargeStockpile, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_Stockpile\",\t\tgroupId = 1 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"" + Name + "\"),\t\t{ Name = ||\"Large stockpile\",\t\tIcon = ||IconKeys._Stockpiled_Brick:Get64(),\tHotkey = \"\",\t\tgroupId = 1 })\n");
 		// The workers' storage search and pick-up index only look at these keys.

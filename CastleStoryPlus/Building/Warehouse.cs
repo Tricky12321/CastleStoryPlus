@@ -60,7 +60,7 @@ internal static class Warehouse
 	private static void Enable()
 	{
 		UI.BuildIcons.Register();
-		GameUi.BuildCatalog.AddStructure(Name, Name, GameUi.BuildCatalog.ModIcon("warehouse", "_Stockpiled_Brick"), 1, "Pallet");
+		GameUi.BuildCatalog.AddStructure(Features.Warehouse, Name, Name, GameUi.BuildCatalog.ModIcon("warehouse", "_Stockpiled_Brick"), 1, "Pallet");
 		LuaInjection.AddPatch(Features.Warehouse, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_Stockpile\",\t\tgroupId = 1 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"" + Name + "\"),\t\t{ Name = ||\"" + Name + "\",\t\tIcon = " + UI.BuildIcons.Lua("warehouse", "_Stockpiled_Brick") + ",\tHotkey = \"\",\t\tgroupId = 1 })\n");
 		// The workers' storage search and pick-up index only look at these keys.
