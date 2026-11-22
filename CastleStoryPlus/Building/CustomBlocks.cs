@@ -139,7 +139,7 @@ internal static class CustomBlocks
 			{
 				continue;
 			}
-			GameUi.BuildCatalog.AddBlock(shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), shape.Wood ? 5 : 1, shape.Wood ? "Wood_Ramp_TopA" : "Stone_Staircase");
+			GameUi.BuildCatalog.AddBlock(Features.CustomBlocks, shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), shape.Wood ? 5 : 1, shape.Wood ? "Wood_Ramp_TopA" : "Stone_Staircase");
 			string line = "_t.Add(AssetKey.New(\"Blueprints\", \"" + shape.Name + "\"),\t\t{ Name = ||\"" + shape.Label + "\",\t\tIcon = " + UI.BuildIcons.Lua(shape.IconFile, shape.Icon) + ",\tHotkey = \"\",\tgroupId = " + (shape.Wood ? 5 : 1) + " })\n";
 			if (shape.Wood)
 			{
@@ -164,7 +164,7 @@ internal static class CustomBlocks
 			{
 				continue;
 			}
-			GameUi.BuildCatalog.AddBlock(shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), 1, "Stone_Staircase");
+			GameUi.BuildCatalog.AddBlock(Features.Roads, shape.Name, shape.Label, GameUi.BuildCatalog.ModIcon(shape.IconFile, shape.Icon), 1, "Stone_Staircase");
 			string line = "_t.Add(AssetKey.New(\"Blueprints\", \"" + shape.Name + "\"),\t\t{ Name = ||\"" + shape.Label + "\",\t\tIcon = " + UI.BuildIcons.Lua(shape.IconFile, shape.Icon) + ",\tHotkey = \"\",\tgroupId = 1 })\n";
 			LuaInjection.AddPatch(Features.Roads, "LUI/Meta/Meta_StoneBlock.lua", "_t.Add(AssetKey.New(\"Blueprints\", \"Stone_Staircase\"),", LuaInjection.Mode.InsertBefore, line);
 		}

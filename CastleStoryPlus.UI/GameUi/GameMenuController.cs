@@ -407,6 +407,7 @@ internal sealed class GameMenuController : GameMenuModel
 				section.Add(new UiButton
 				{
 					Id = e.Key.Name,
+					Visible = e.Shown,
 					Label = e.Name,
 					Icon = e.Icon,
 					IconColor = () => LuiStyle.White,
@@ -620,7 +621,7 @@ internal sealed class GameMenuController : GameMenuModel
 	{
 		foreach (BuildCatalog.Entry entry in entries)
 		{
-			if (!string.IsNullOrEmpty(entry.Hotkey))
+			if (!string.IsNullOrEmpty(entry.Hotkey) && entry.Shown())
 			{
 				Brix.External.Factories.Factory.AssetKey key = entry.Key;
 				GameHotkeys.Register(entry.Hotkey, () => Picking.SetBlueprintInPicker(key));

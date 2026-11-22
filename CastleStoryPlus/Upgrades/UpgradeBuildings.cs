@@ -79,9 +79,9 @@ internal static class UpgradeBuildings
 	private static void Enable()
 	{
 		UI.BuildIcons.Register();
-		GameUi.BuildCatalog.AddStructure(SmithyName, SmithyName, GameUi.BuildCatalog.ModIcon("smithy", "_Forge"), 3, "MachineShop");
-		GameUi.BuildCatalog.AddStructure(ArmouryName, ArmouryName, GameUi.BuildCatalog.ModIcon("armoury", "_Shield"), 3, SmithyName);
-		GameUi.BuildCatalog.AddStructure(ResearchName, ResearchLabel, GameUi.BuildCatalog.ModIcon("research", "_Lab"), 3, ArmouryName);
+		GameUi.BuildCatalog.AddStructure(Features.Upgrades, SmithyName, SmithyName, GameUi.BuildCatalog.ModIcon("smithy", "_Forge"), 3, "MachineShop");
+		GameUi.BuildCatalog.AddStructure(Features.Upgrades, ArmouryName, ArmouryName, GameUi.BuildCatalog.ModIcon("armoury", "_Shield"), 3, SmithyName);
+		GameUi.BuildCatalog.AddStructure(Features.Upgrades, ResearchName, ResearchLabel, GameUi.BuildCatalog.ModIcon("research", "_Lab"), 3, ArmouryName);
 		LuaInjection.AddPatch(Features.Upgrades, "LUI/Meta/Meta_Structure.lua", "Hotkey = \"project_MachineShop\",\tgroupId = 3 })\n", LuaInjection.Mode.InsertAfter,
 			"_t.Add(AssetKey.New(\"Blueprints\", \"" + SmithyName + "\"),\t\t\t\t{ Name = ||\"" + SmithyName + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("smithy", "_Forge") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n"
 			+ "_t.Add(AssetKey.New(\"Blueprints\", \"" + ArmouryName + "\"),\t\t\t\t{ Name = ||\"" + ArmouryName + "\",\t\t\tIcon = " + UI.BuildIcons.Lua("armoury", "_Shield") + ",\t\tHotkey = \"\",\tgroupId = 3 })\n"
