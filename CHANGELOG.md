@@ -5,6 +5,7 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [FIX] **Stockpile: accept only coal (#176):** the stockpile wheel's "accept only" ring had no button for coal, so a stockpile could not be kept for it; it now has one, next to raw iron, with the coal icon. It works as the game's own buttons do: the host makes the stockpile take only coal (also for a client's stockpile in multiplayer), workers bring coal to it and nothing else, the setting is saved with the stockpile, and the large stockpile and the warehouse have the button too. Only while Metallurgy is on (`[Features] Metallurgy`). DevTools: an in-game test (a coal-only stockpile gets a builder's coal and has no room for stone, logs or raw iron).
 - [FIX] **Switched-off buildings stayed in the build menu (#180):** a feature switched off in the mod's settings (Market, Warehouse, Large stockpile, Upgrades' smithy, armoury and research, Saplings, Custom blocks, Roads) took its own logic away at once, but its buildings and blocks stayed in the build menu and could still be picked and built. Each build menu entry now belongs to its feature and is hidden while that feature is off, at once in the C# build menus and the next time the game's Lua menus load. Buildings already placed and saved games with them load as before.
 
 ## 0.9.3 — 2026-11-21
