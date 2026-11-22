@@ -343,12 +343,22 @@ internal static class Metallurgy
 				}
 			}
 			Tint(item, tint);
-			// Left on the ground, raw items merge back into the terrain as the type they came from.
+			// Left on the ground, raw items merge back into the terrain as the type they came from. The coal terrain
+			// (CoalVeins) comes with the feature: with it switched off the item is still made (SavedContent), but loose
+			// coal stays an item instead of becoming a terrain type the game then has no block info for.
 			if (resource == Coal)
 			{
+				bool coalTerrain = IsOn();
 				foreach (Brix.Legacy.Garnotte garnotte in item.GetComponentsInChildren<Brix.Legacy.Garnotte>(true))
 				{
-					garnotte.terrainType = (Brix.Engine.VoxelTerrainType)CoalVeins.CoalType;
+					if (coalTerrain)
+					{
+						garnotte.terrainType = (Brix.Engine.VoxelTerrainType)CoalVeins.CoalType;
+					}
+					else
+					{
+						garnotte.CanMergeback = false;
+					}
 				}
 			}
 			if (adjust != null)
