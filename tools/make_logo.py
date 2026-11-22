@@ -78,7 +78,7 @@ def essentials(width):
 def main():
     plus = word("PLUS", 220, YELLOW, BLACK, BLACK, tilt=4)
     save(plus, "plus.png")
-    save(under(plus, essentials(int(plus.width * 1.25)), 14), "plus_essentials.png")
+    save(under(plus, essentials(int(plus.width * 0.85)), 10), "plus_essentials.png")
 
     castle = word("CASTLE", 300, YELLOW, BLACK, BLACK, outline=18, extrude=22, tilt=3)
     story = word("STORY", 150, BLACK, WHITE, BLACK, outline=12, extrude=10, tilt=3)
@@ -94,7 +94,7 @@ def main():
     logo.alpha_composite(small_plus, (w - small_plus.width - 30, plus_y))
     logo = logo.crop(logo.getbbox())
     save(logo, "logo.png")
-    save(under(logo, essentials(int(logo.width * 0.62)), 20, shift=int(logo.width * 0.17)), "logo_essentials.png")
+    save(under(logo, essentials(int(logo.width * 0.4)), 14, shift=int(logo.width * 0.28)), "logo_essentials.png")
 
 
 if __name__ == "__main__":
