@@ -34,6 +34,9 @@ namespace CastleStoryPlus.Treasure;
 // its guards are near, the chest's ruin is no place for the workers' own work (InGuardedRuin).
 // The host places them the first time a world is played (a new world, or a save from before this feature); the
 // chests and their state are kept in a file next to the save (the guards are ordinary units the game saves).
+// The ruin round a chest and its guardians each have a switch of their own (TreasureRuins, TreasureGuardians); the
+// host's switches decide, as it places everything. With Treasure or TreasureGuardians off, the guardians a saved
+// world already has are taken away when it loads (GuardianSweep).
 [Feature(Features.Treasure, Features.TreasureInfo)]
 internal class TreasureChests : MonoBehaviour
 {
@@ -135,7 +138,8 @@ internal class TreasureChests : MonoBehaviour
 
 	// ---- placing (host, when the level is ready)
 
-	private static void LevelReady()
+	// Internal for the DevTools' tests.
+	internal static void LevelReady()
 	{
 		// Every peer (the host too, through its own client) takes the "defeat the guardians" hints.
 		NetworkClient client = Brix.Network.UNetManager.instance?.LocalNetworkClient;
@@ -150,8 +154,13 @@ internal class TreasureChests : MonoBehaviour
 		Chests.Clear();
 		GuardedNow.Clear();
 		_active = false;
+		// The switch is asked here, not only when the plugin starts: a feature switched off while the game runs loses
+		// its patches and its component (FeatureToggle), but this hook, made by Enable, stays. Without this a world
+		// started after Treasure was switched off still got its ruins and guards, and with the component off the ruins
+		// were left half built, no chest was made and the guards had no beast model, leash or roaming patches: plain
+		// corruptrons standing in the ruins as an ordinary raid, chasing bricktrons that came by (#179, #182, #181).
 		Asset_Map map = GameParam.Map;
-		if (!NetworkServer.active || map == null || !Playable())
+		if (!NetworkServer.active || map == null || !Plugin.IsEnabled(Features.Treasure) || !Playable())
 		{
 			return;
 		}
@@ -216,14 +225,40 @@ internal class TreasureChests : MonoBehaviour
 			Plugin.Log.LogInfo("Treasure: no place for a chest on this map");
 			return;
 		}
-		Faction enemy = Faction.FindByName("Corruptrons") ?? Faction.DefaultEnemy;
-		for (int i = 0; i < spots.Count; i++)
-		{
-			Chest chest = new Chest { Position = TreasureRuins.Build(spots[i], random), Guards = MinGuards + random.Next(MaxGuards - MinGuards + 1), Made = false };
-			Chests.Add(chest);
-			Guard(chest, enemy, random);
-		}
+		Populate(spots, random);
 		Plugin.Log.LogInfo("Treasure: placed " + Chests.Count + " chests (" + map.mapSize + " map)");
+	}
+
+	// A chest at each spot (x, the first empty layer, z), in its ruin and with its guardians as the host's switches
+	// say (TreasureRuins, TreasureGuardians); nothing at all with Treasure off. Returns where the chests stand.
+	// Internal for the DevTools' tests.
+	internal static List<Vector3> Populate(List<Vector3> spots, System.Random random)
+	{
+		List<Vector3> placed = new List<Vector3>();
+		if (!Plugin.IsEnabled(Features.Treasure))
+		{
+			return placed;
+		}
+		bool ruins = Plugin.IsEnabled(Features.TreasureRuins);
+		bool guardians = Plugin.IsEnabled(Features.TreasureGuardians);
+		Faction enemy = Faction.FindByName("Corruptrons") ?? Faction.DefaultEnemy;
+		foreach (Vector3 spot in spots)
+		{
+			Vector3 at = ruins ? TreasureRuins.Build(spot, random) : TreasureRuins.OpenGround(spot);
+			// The loot's size is drawn either way: an unguarded chest holds what a pack of that size would have guarded.
+			Chest chest = new Chest { Position = at, Guards = MinGuards + random.Next(MaxGuards - MinGuards + 1), Made = false };
+			Chests.Add(chest);
+			if (guardians)
+			{
+				Guard(chest, enemy, random);
+			}
+			placed.Add(at);
+		}
+		if (!ruins || !guardians)
+		{
+			Plugin.Log.LogInfo("Treasure: " + placed.Count + " chests " + (ruins ? "in ruins" : "without ruins") + ", " + (guardians ? "guarded" : "without guardians"));
+		}
+		return placed;
 	}
 
 	private static List<Vector3> Positions(string group)
@@ -756,6 +791,19 @@ internal class TreasureChests : MonoBehaviour
 		{
 			Chests.Add(new Chest { Position = go.transform.position, Guards = guards, Go = go });
 		}
+	}
+
+	// For the DevTools' tests: the chest made at the place a chest stands at (null while it waits for its ruin).
+	internal static GameObject ChestObject(Vector3 at)
+	{
+		foreach (Chest chest in Chests)
+		{
+			if ((chest.Position - at).sqrMagnitude < 0.25f)
+			{
+				return chest.Go;
+			}
+		}
+		return null;
 	}
 
 	internal static void Forget(Vector3 at)

@@ -27,8 +27,12 @@ internal static class WildPlantsPausePatch
 [HarmonyPatch(typeof(TreasureChests), "Place")]
 internal static class NoTreasureOnTestIslandPatch
 {
+	// How many times a level set about placing the chests (on any map), for the treasure tests.
+	internal static int Calls;
+
 	private static bool Prefix(Asset_Map map)
 	{
+		Calls++;
 		if (!IsTestIsland(map))
 		{
 			return true;
