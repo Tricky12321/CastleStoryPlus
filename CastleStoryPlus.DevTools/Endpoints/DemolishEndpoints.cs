@@ -62,7 +62,11 @@ internal static class DemolishEndpoints
 		foreach (MovableVolume volume in Object.FindObjectsOfType<MovableVolume>())
 		{
 			GameObject building = volume.gameObject;
+#if !ESSENTIALS
 			if (!CopyPaste.IsPlacedBuilding(volume) || building.GetComponent<Blueprint>() != null || !User.LocalUser.faction.IsSame(building))
+#else
+			if (building.GetComponent<Blueprint>() != null || !User.LocalUser.faction.IsSame(building))
+#endif
 			{
 				continue;
 			}

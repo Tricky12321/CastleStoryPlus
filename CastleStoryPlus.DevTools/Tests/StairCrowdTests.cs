@@ -253,6 +253,13 @@ internal static class StairCrowdTests
 		{
 			t.Skip("CrowdPathing or PassThroughAllies is off");
 		}
+		// The test's stair is of neutral blocks: a corruptron kept waiting hits the block in its way (HitBrick) and
+		// breaks through instead of waiting, unless Treasure's ruins patch keeps enemies off the neutral faction's
+		// blocks (TreasureRuins). Without it (Treasure off, the Essentials edition) the scenario does not hold.
+		if (!Plugin.IsEnabled(Features.Treasure))
+		{
+			t.Skip("Treasure is off: enemies break the test's neutral stair blocks");
+		}
 		Stair stair = new Stair();
 		yield return BuildStair(t, stair);
 		XYZ c = stair.Center;

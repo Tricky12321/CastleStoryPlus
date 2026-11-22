@@ -117,7 +117,11 @@ internal static class BuildFloorOrder
 			{
 				continue;
 			}
+#if !ESSENTIALS
 			if (BuildPriority.Has(other) || UnreachableTasks.IsMarked(other) || !Knowledge.Instance.CanReach(labor, other))
+#else
+			if (UnreachableTasks.IsMarked(other) || !Knowledge.Instance.CanReach(labor, other))
+#endif
 			{
 				continue;
 			}
@@ -169,7 +173,11 @@ internal static class BuildFloorOrderPatch
 {
 	private static void Postfix(BuildGoal __instance, Labor labor, AIErrorsStore errorDestination, ref bool __result)
 	{
+#if !ESSENTIALS
 		if (!__result || __instance.IsAnti || BuildPriority.Has(__instance))
+#else
+		if (!__result || __instance.IsAnti)
+#endif
 		{
 			return;
 		}

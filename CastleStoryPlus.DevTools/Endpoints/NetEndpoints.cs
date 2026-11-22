@@ -84,11 +84,13 @@ internal static class NetEndpoints
 		{
 			Parameters = "value (true or false; required)"
 		});
+#if !ESSENTIALS
 		routes.Add(new Route("GET", "/api/net/taskcrew", "Bricktrons per task (TaskCrewSize) as this player has it: the value, whether this player chooses it, and the tasks' crew sizes in the world", TaskCrew));
 		routes.Add(new Route("POST", "/api/net/taskcrew", "Single player or host: sets the bricktrons per task, as the lobby's \"Bricktrons per task\" and the mod's settings do (in the lobby or a game; the tasks in the world take it at once)", SetTaskCrew)
 		{
 			Parameters = "value (1 to 31; required)"
 		});
+#endif
 		routes.Add(new Route("POST", "/api/net/cheatprobe", "Test of the cheat guard: sends the game's spawn command (a builder by the home crystal) or a blueprint placed at once to the host, as a changed game could; the host refuses them while cheats are off", CheatProbe)
 		{
 			Parameters = "kind (spawn or instant; required), key (instant: Factory/Name of the blueprint), at (instant: x,y,z)"
@@ -124,11 +126,14 @@ internal static class NetEndpoints
 		throw new ApiException(400, "'kind' takes spawn or instant");
 	}
 
+#if !ESSENTIALS
 	private static object TaskCrew(ApiRequest request)
 	{
 		return TaskCrewState();
 	}
 
+#endif
+#if !ESSENTIALS
 	private static object SetTaskCrew(ApiRequest request)
 	{
 		if (!CastleStoryPlus.WorkerAI.TaskCrewSize.CanChoose)
@@ -144,6 +149,8 @@ internal static class NetEndpoints
 		return TaskCrewState();
 	}
 
+#endif
+#if !ESSENTIALS
 	private static object TaskCrewState()
 	{
 		Dictionary<string, int> sizes = new Dictionary<string, int>();
@@ -164,6 +171,7 @@ internal static class NetEndpoints
 		return Obj("value", CastleStoryPlus.WorkerAI.TaskCrewSize.Value, "canChoose", CastleStoryPlus.WorkerAI.TaskCrewSize.CanChoose, "tasks", tasks);
 	}
 
+#endif
 	private static object Cheats(ApiRequest request)
 	{
 		if (!CastleStoryPlus.Multiplayer.CheatGuard.CanChoose)

@@ -82,6 +82,8 @@
     <ItemGroup>
       <ModLua Include="Lua/**/*.lua" />
       <ModAssets Include="Assets/**/*.png;Assets/**/*.json;Assets/**/*.wav" />
+      <!-- The other edition's files (Editions.targets). -->
+      <ModAssets Remove="@(EditionExcludedFile)" />
     </ItemGroup>
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)BepInEx/plugins/CastleStoryPlus/" />
     <Copy SourceFiles="@(ModLua)" DestinationFiles="@(ModLua->'$(GameDir)BepInEx/plugins/CastleStoryPlus/Lua/%(RecursiveDir)%(Filename)%(Extension)')" />

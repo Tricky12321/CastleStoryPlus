@@ -281,7 +281,11 @@ end
 		LuaInjection.AddFunction("IsGuardRaid", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			LuaDriver raid = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsGuardRaid", allowNil: true) : null;
+#if !ESSENTIALS
 			return DynValue.NewBoolean(raid != null && Treasure.TreasureChests.IsGuardRaid(raid.gameObject));
+#else
+			return DynValue.NewBoolean(false);
+#endif
 		});
 		// What a wave has had of a kind (1 to 5, the wave rows' order), given what is left of it.
 		LuaInjection.AddFunction("WaveSeen", (ScriptExecutionContext context, CallbackArguments args) =>
@@ -294,7 +298,11 @@ end
 		LuaInjection.AddFunction("IsHealtron", (ScriptExecutionContext context, CallbackArguments args) =>
 		{
 			LuaDriver labor = (args.Count > 0 && !args[0].IsNil()) ? args.AsComponent<LuaDriver>(0, "IsHealtron", allowNil: true) : null;
+#if !ESSENTIALS
 			return DynValue.NewBoolean(labor != null && Combat.Healtron.IsHealtron(labor.gameObject));
+#else
+			return DynValue.NewBoolean(false);
+#endif
 		});
 		Patch("Gamemodes/invasion/invasion_ui.lua", "invasion");
 		Patch("Gamemodes/tutorial/invasion_ui.lua", "tutorial");

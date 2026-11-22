@@ -79,7 +79,7 @@
     </Reference>
   </ItemGroup>
   <!-- Next to the mod in the game's BepInEx/plugins/CastleStoryPlus folder, where UiAssembly reads it. -->
-  <Target Name="InstallUi" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins')">
+  <Target Name="InstallUi" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins') And '$(SkipInstall)' != 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)BepInEx/plugins/CastleStoryPlus/" />
   </Target>
 </Project>

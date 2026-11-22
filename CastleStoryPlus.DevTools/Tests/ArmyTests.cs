@@ -38,6 +38,7 @@ internal static class ArmyTests
 		built(rack);
 	}
 
+#if !ESSENTIALS
 	// Puts a whole loose kit of the class on the stand (it may be packed into a bundle there).
 	private static void PutKit(TestContext t, ToolRack rack, Occupation.Job job)
 	{
@@ -54,6 +55,7 @@ internal static class ArmyTests
 			rack.recepteur.AddObject(go);
 		}
 	}
+#endif
 
 	private static void HandBack(Labor labor, ToolRack rack)
 	{
@@ -69,6 +71,7 @@ internal static class ArmyTests
 		}
 	}
 
+#if !ESSENTIALS
 	[GameTest("Army", "A worker whose call to arms role is Knight takes the knight kit from a stand with more archer kits, and one sent for a knight kit takes nothing when only archer kits are left (#63)", TimeoutSeconds = 90f)]
 	private static IEnumerator RoleKitFromMixedStand(TestContext t)
 	{
@@ -103,7 +106,9 @@ internal static class ArmyTests
 		t.Equal(Occupation.Job.Builder, other.Occupation.CurrentJob, "Class taken by a worker sent for a knight kit the stand no longer has");
 		t.Equal(2, Kits.KitsFor(rack, Occupation.Job.Archer), "Archer kits left on the stand");
 	}
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Army", "A knight kit on a stand is reserved by the first worker going for it: a second worker does not choose that stand (#59)", TimeoutSeconds = 90f)]
 	private static IEnumerator KitIsReserved(TestContext t)
 	{
@@ -134,7 +139,9 @@ internal static class ArmyTests
 		KitReservation.Release(first);
 		t.Equal(1, KitReservation.FreeKits(rack, Occupation.Job.Knight, second), "Knight kits free once the reservation ends");
 	}
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Army", "A guarding archer with a corruptron in range shoots it without leaving its place (#60)", TimeoutSeconds = 120f)]
 	private static IEnumerator ArcherGuardsPlace(TestContext t)
 	{
@@ -161,12 +168,14 @@ internal static class ArmyTests
 		SoldierOrdersNetwork.SendGuard(archer.gameObject, false);
 		t.False(RangedGuard.IsGuarding(archer), "The archer still guards after Stop guarding");
 	}
+#endif
 
 	private static float RangedFlat(Vector3 v)
 	{
 		return new Vector3(v.x, 0f, v.z).magnitude;
 	}
 
+#if !ESSENTIALS
 	[GameTest("Army", "A knight keeps its post: sent elsewhere, Back to post brings it there again (#61)", TimeoutSeconds = 120f)]
 	private static IEnumerator KnightBackToPost(TestContext t)
 	{
@@ -190,6 +199,7 @@ internal static class ArmyTests
 		SoldierPosts.Clear(new[] { knight });
 		t.False(SoldierPosts.Has(knight), "The knight still has a post after Clear post");
 	}
+#endif
 
 	// The buttons and sub-wheels a wheel of the game's compiled wheels names.
 	private static List<string> WheelTerms(string name)
@@ -209,6 +219,7 @@ internal static class ArmyTests
 		return terms;
 	}
 
+#if !ESSENTIALS
 	[GameTest("Army", "The artificer's wheel over itself has Set post, Back to post and Clear post, as the other soldiers' have (#103)", TimeoutSeconds = 30f)]
 	private static IEnumerator ArtificerWheelHasPosts(TestContext t)
 	{
@@ -230,7 +241,9 @@ internal static class ArmyTests
 		}
 		t.NotNull(WheelTerms("PlusArtificerMain"), "The artificer's wheel anywhere else");
 	}
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Army", "A guarding archer shows the guard's icon in its name tag, and its own icon again after Stop guarding (#98)", TimeoutSeconds = 60f)]
 	private static IEnumerator GuardingArcherIcon(TestContext t)
 	{
@@ -251,7 +264,9 @@ internal static class ArmyTests
 		SoldierOrdersNetwork.SendGuard(archer.gameObject, false);
 		t.True(archer.Autonomy.GetIcon(archer) != guard, "The archer still shows the guard's icon after Stop guarding");
 	}
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Army", "A looping kit order's stock limit counts the kits soldiers of the class wear, as the call to arms counts its sets (#99)", TimeoutSeconds = 60f)]
 	private static IEnumerator WornKitsCountForLoopLimit(TestContext t)
 	{
@@ -272,4 +287,5 @@ internal static class ArmyTests
 		t.Record("coming", coming);
 		t.True(coming >= before + 1, "The worn kits are not counted with the kits on the way");
 	}
+#endif
 }

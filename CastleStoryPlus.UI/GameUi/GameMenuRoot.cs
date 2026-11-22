@@ -93,6 +93,7 @@ internal class GameMenuRoot : MonoBehaviour
 		GamePopupBuilder.AddTooltips(Model.Popup);
 		Transform parent = transform;
 		CsTopBarView.Create(parent);
+#if !ESSENTIALS
 		if (ResourceList.Enabled)
 		{
 			ResourceListView.Create(parent, Model);
@@ -101,6 +102,7 @@ internal class GameMenuRoot : MonoBehaviour
 		{
 			ResourcePriorityView.Create(parent, Model);
 		}
+#endif
 		CsBarView.Create(parent, Model.LeftBar, rightSide: false, LuiStyle.BgDefault);
 		CsBarView.Create(parent, Model.RightBar, rightSide: true, LuiStyle.BgDefault);
 		foreach (UiPanel panel in new UiPanel[] { Model.NewTask, Model.Structures, Model.Blocks, Model.Blueprints })
@@ -112,11 +114,13 @@ internal class GameMenuRoot : MonoBehaviour
 		CsPanelView.Create(parent, Model.Debug, rightSide: true);
 		GameTaskList.Create(parent);
 		CsPopupView.Create(parent, Model.Popup);
+#if !ESSENTIALS
 		CsUpgradeWindow.Create(parent, Upgrades.UpgradeHall.Research);
 		CsUpgradeWindow.Create(parent, Upgrades.UpgradeHall.Smithy);
 		CsUpgradeWindow.Create(parent, Upgrades.UpgradeHall.Armoury);
 		CsMarketWindow.Create(parent);
 		CsRackFilterWindow.Create(parent);
+#endif
 		CsPausedView.Create(parent);
 		foreach (UiPanel panel in Model.ExtraPanels)
 		{

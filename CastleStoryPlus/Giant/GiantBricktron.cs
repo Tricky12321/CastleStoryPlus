@@ -134,14 +134,7 @@ internal class GiantBricktron : MonoBehaviour
 
 	public static FireflyNest HomeNest(Faction faction)
 	{
-		foreach (FireflyNest nest in Live<FireflyNest>.Active())
-		{
-			if (nest != null && nest.isHome && nest.faction == faction && nest.mainRecepteur != null)
-			{
-				return nest;
-			}
-		}
-		return null;
+		return HomeCrystal.Of(faction);
 	}
 
 	public static bool UsesDarkCrystals => Economy.DarkCrystals.IsOn();

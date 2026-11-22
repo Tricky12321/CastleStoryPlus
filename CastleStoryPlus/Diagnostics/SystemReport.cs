@@ -57,7 +57,7 @@ internal static class SystemReport
 		text.AppendLine();
 
 		Section(text, "Versions");
-		Line(text, "Castle Story Plus", Plugin.Version);
+		Line(text, "Castle Story Plus", Plugin.Version + " (" + Edition.Id + " edition)");
 		Line(text, "Unity", Application.unityVersion);
 		Line(text, "Platform", Application.platform.ToString());
 		Line(text, "Game folder", BepInEx.Paths.GameRootPath);

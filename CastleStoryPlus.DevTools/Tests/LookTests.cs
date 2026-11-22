@@ -13,6 +13,7 @@ namespace CastleStoryPlus.DevTools.Tests;
 // How things look: steel ingots (#146) and the scoreboard's enemy icons (#140).
 internal static class LookTests
 {
+#if !ESSENTIALS
 	[GameTest("Metallurgy", "Steel on a stockpile and as a loose ingot has the iron ingot's mesh with the steel look, not the glass or the iron material (#146)")]
 	private static IEnumerator SteelLooksLikeTintedIron(TestContext t)
 	{
@@ -76,6 +77,7 @@ internal static class LookTests
 			}
 		}
 	}
+#endif
 
 	[GameTest("UI", "Every enemy kind on the scoreboard has an icon, the Healtron's badge too (#140)", NeedsHostGame = false)]
 	private static IEnumerator ScoreboardEnemyIcons(TestContext t)

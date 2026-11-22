@@ -48,11 +48,13 @@ internal static class Routes
 		TestEndpoints.Add(routes);
 		TestWorldEndpoints.Add(routes);
 		CameraEndpoints.Add(routes);
+#if !ESSENTIALS
 		RandomWorldEndpoints.Add(routes);
 		TreasureEndpoints.Add(routes);
 		WeatherEndpoints.Add(routes);
 		AchievementEndpoints.Add(routes);
 		SpawnEndpoints.Add(routes);
+#endif
 		VolumeDumpEndpoints.Add(routes);
 		TemplateEndpoints.Add(routes);
 		AnimatorEndpoints.Add(routes);

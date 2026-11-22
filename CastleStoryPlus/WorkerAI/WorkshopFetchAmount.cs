@@ -28,7 +28,11 @@ internal static class WorkshopFetchAmount
 		}
 		GameObject giver = labor.CurrentTask?.Giver;
 		CraftingStation station = (giver != null) ? giver.GetComponent<CraftingStation>() : null;
+#if !ESSENTIALS
 		if (station == null || station is MarketStation || itemToTake.ParentRecepteur == station.recepteur)
+#else
+		if (station == null || itemToTake.ParentRecepteur == station.recepteur)
+#endif
 		{
 			return;
 		}

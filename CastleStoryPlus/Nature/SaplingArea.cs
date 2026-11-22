@@ -1,15 +1,12 @@
 using Brix.External.Factories;
 using CastleStoryPlus.Building;
-using CastleStoryPlus.Core;
-using HarmonyLib;
 using UnityEngine;
 
 namespace CastleStoryPlus.Nature;
 
 // The old "Sapling area" marker post, replaced by the tree farm task (TreeFarm). It is no longer in the build menu
-// and does nothing; it stays a building of the game only so saves that have one still load (it can be taken down).
-[Feature(Features.Saplings, Features.SaplingsInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
+// and does nothing; it stays a building of the game only so saves that have one still load (it can be taken down),
+// also with the Saplings feature switched off (SavedContent).
 internal static class SaplingArea
 {
 	internal const string Name = "SaplingArea";
@@ -24,7 +21,7 @@ internal static class SaplingArea
 		SetupBuilding = (GameObject go) => { }
 	};
 
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		Building.AddToFactories();
 	}

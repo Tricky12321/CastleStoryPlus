@@ -140,11 +140,13 @@ internal static class BlueprintEndpoints
 				ValidationData vData = validator.VData;
 				check = validator.Validator.Validate(ref vData).ToString();
 				obstructed = validator.IsObstructed();
+#if !ESSENTIALS
 				if (CastleStoryPlus.Building.CustomBlocks.IsWoodSlab(vData.Volume))
 				{
 					ValidationData hang = validator.VData;
 					woodHang = CastleStoryPlus.Building.WoodOverhang.HangsFromWood(ref hang, built: false);
 				}
+#endif
 				if (withCells && vData.Volume != null)
 				{
 					cells = new List<object>();

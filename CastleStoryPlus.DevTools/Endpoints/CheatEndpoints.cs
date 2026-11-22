@@ -226,6 +226,7 @@ internal static class CheatEndpoints
 			}
 			Labor labor = go.GetComponent<Labor>();
 			// Exactly what was asked for: the raid does not roll a plain corruptron into a Healtron.
+#if !ESSENTIALS
 			if (healtron)
 			{
 				Healtron.Make(labor);
@@ -234,6 +235,7 @@ internal static class CheatEndpoints
 			{
 				Healtron.MarkRolled(labor);
 			}
+#endif
 			if (labor != null)
 			{
 				units.Add(labor);

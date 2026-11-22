@@ -273,25 +273,7 @@ internal static class BuildPriority
 
 	internal static float Radius(GameObject go)
 	{
-		bool any = false;
-		Bounds bounds = new Bounds(go.transform.position, Vector3.zero);
-		foreach (Renderer renderer in go.GetComponentsInChildren<Renderer>())
-		{
-			if (renderer.GetComponentInParent<CircleHighlight>() != null)
-			{
-				continue;
-			}
-			if (any)
-			{
-				bounds.Encapsulate(renderer.bounds);
-			}
-			else
-			{
-				bounds = renderer.bounds;
-				any = true;
-			}
-		}
-		return any ? Mathf.Max(0.6f, Mathf.Max(bounds.extents.x, bounds.extents.z) + 0.3f) : 1f;
+		return UI.RingRadius.Of(go);
 	}
 }
 

@@ -377,8 +377,10 @@ internal static class FrameSaversShelfPatch
 			{
 				count += target.ContentDescription.Value(adjectif);
 			}
+#if !ESSENTIALS
 			// A weapon stand's kit bundles light the rows of their pieces too (KitBundleRackDisplayPatch).
 			count += Army.KitBundleRackDisplayPatch.BundlesFor(track.adjs, target);
+#endif
 			if (count == shown[i])
 			{
 				continue;

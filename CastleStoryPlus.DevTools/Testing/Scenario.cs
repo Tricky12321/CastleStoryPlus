@@ -29,6 +29,13 @@ namespace CastleStoryPlus.DevTools.Testing;
 // not depend on what the world already holds and leave it as they found it.
 internal static class Scenario
 {
+#if ESSENTIALS
+	// The most bricktrons a task can hold: the game's 8 (TaskCrewSize is a Full edition feature).
+	private const int MostCrew = 8;
+#else
+	private static int MostCrew => CastleStoryPlus.WorkerAI.TaskCrewSize.Most;
+#endif
+
 	internal static Faction Player => User.LocalUser.faction;
 
 	internal static UNetGroupe Groupe => User.LocalUser.GetComponent<UNetGroupe>();
@@ -408,11 +415,13 @@ internal static class Scenario
 		}
 		Labor labor = go.GetComponent<Labor>();
 		t.NotNull(labor, "The spawned unit's Labor");
+#if !ESSENTIALS
 		if (CastleStoryPlus.Plugin.IsEnabled(CastleStoryPlus.Core.Features.Healtron))
 		{
 			// Exactly what the test asked for: no raid roll into a Healtron.
 			CastleStoryPlus.Combat.Healtron.MarkRolled(labor);
 		}
+#endif
 		Contexts[labor] = t;
 		t.Cleanup(() =>
 		{
@@ -696,7 +705,7 @@ internal static class Scenario
 				continue;
 			}
 			QuietCrews[project] = project.MaximumCrewSize;
-			for (int i = 0; i < CastleStoryPlus.WorkerAI.TaskCrewSize.Most && project.MaximumCrewSize > 0; i++)
+			for (int i = 0; i < MostCrew && project.MaximumCrewSize > 0; i++)
 			{
 				Groupe.CmdRemoveProjectCapacity(project.gameObject);
 			}
@@ -718,7 +727,7 @@ internal static class Scenario
 		}
 		foreach (KeyValuePair<Project, int> pair in QuietCrews)
 		{
-			for (int i = 0; i < CastleStoryPlus.WorkerAI.TaskCrewSize.Most && pair.Key != null && pair.Key.MaximumCrewSize < pair.Value; i++)
+			for (int i = 0; i < MostCrew && pair.Key != null && pair.Key.MaximumCrewSize < pair.Value; i++)
 			{
 				Groupe.CmdAddProjectCapacity(pair.Key.gameObject);
 			}

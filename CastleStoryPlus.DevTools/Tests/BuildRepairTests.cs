@@ -25,6 +25,7 @@ internal static class BuildRepairTests
 {
 	private static readonly Factory.AssetKey StoneBlueprint = new Factory.AssetKey("Blueprints", FactoryBlocks.Stone_Brick.Name);
 
+#if !ESSENTIALS
 	[GameTest("Stockpiles", "The stockpile wheel has an 'accept only dark crystal' button and its command makes the stockpile take only dark crystal", TimeoutSeconds = 60f)]
 	private static IEnumerator StockpileAcceptsOnlyDarkCrystal(TestContext t)
 	{
@@ -51,6 +52,7 @@ internal static class BuildRepairTests
 		yield return t.Until(() => stockpile.ExclusiveRessource != null, 5f, "the stockpile to take only one resource");
 		t.Equal(Adjectif.purifiedBlueCrystal.GetType(), stockpile.ExclusiveRessource.GetType(), "The resource the stockpile takes");
 	}
+#endif
 
 	[GameTest("Repairs", "A door at half health inside a repair zone is repaired by the zone's builder", TimeoutSeconds = 240f)]
 	private static IEnumerator RepairZoneRepairsDoor(TestContext t)

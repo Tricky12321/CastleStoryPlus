@@ -127,14 +127,18 @@ internal class DebugMenu : MonoBehaviour
 
 	private Text _fogLabel;
 
+#if !ESSENTIALS
 	private Text _critLabel;
 
+#endif
 	private Text _routesText;
 
+#if !ESSENTIALS
 	private Text _spawnLabel;
 
 	private Text _spawnText;
 
+#endif
 	private Text _xrayLabel;
 
 	private Text _xrayText;
@@ -278,6 +282,7 @@ end)
 		{
 			XRayView.Set(XRayView.Mode.Off);
 		}
+#if !ESSENTIALS
 		if (SpawnView.Enabled)
 		{
 			SpawnView.Toggle();
@@ -286,6 +291,7 @@ end)
 		{
 			CastleStoryPlus.Combat.CriticalHits.Forced = false;
 		}
+#endif
 		if (_fogOffByMenu && !LocalFactionVision.IsEnabled())
 		{
 			LocalFactionVision.ToggleFogSystem(true);
@@ -368,10 +374,12 @@ end)
 			// workers or materials, and what is removed goes at once. This machine only; off again when the game is left.
 			Brix.Engine.Architecte.editorMode = !Brix.Engine.Architecte.editorMode;
 			Brix.Engine.GameSignals.Invoke(Brix.Engine.GameSignals.OnEditorModeChanged, Brix.Engine.Architecte.editorMode);
+#if !ESSENTIALS
 			if (Brix.Engine.Architecte.editorMode)
 			{
 				Achievements.AchievementTracker.Cheated("instant build");
 			}
+#endif
 			SetStatus(Brix.Engine.Architecte.editorMode ? "Instant build on: what you place is built at once, what you remove goes at once." : "Instant build off.");
 			Refresh();
 		});
@@ -446,6 +454,7 @@ end)
 		_routesText = CreateText(CreateRow(body, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_routesText.gameObject);
 
+#if !ESSENTIALS
 		Section(body, "Spawn points (invasion)");
 		Transform spawnRow = CreateRow(body, 26f);
 		Button spawnButton = CreateButton(spawnRow, string.Empty, 150f, () =>
@@ -468,6 +477,7 @@ end)
 		Legend(spawnRow, "drawn last", SpawnView.LastColor);
 		_spawnText = CreateText(CreateRow(body, 20f), string.Empty, 12, Grey, TextAnchor.MiddleLeft);
 		Flexible(_spawnText.gameObject);
+#endif
 
 		Section(body, "Fog of war");
 		Transform fogRow = CreateRow(body, 26f);
@@ -480,10 +490,12 @@ end)
 			// The game's own switch (as its Lua SetFogOfWar): everything visible, the fog drawn no more.
 			LocalFactionVision.ToggleFogSystem(!LocalFactionVision.IsEnabled());
 			_fogOffByMenu = !LocalFactionVision.IsEnabled();
+#if !ESSENTIALS
 			if (_fogOffByMenu)
 			{
 				Achievements.AchievementTracker.Cheated("the fog of war switched off");
 			}
+#endif
 			SetStatus(LocalFactionVision.IsEnabled() ? "Fog of war on." : "Fog of war off: everything is visible.");
 			Refresh();
 		});
@@ -532,6 +544,7 @@ end)
 		CreateButton(enemies, "+1 corruptron", 110f, () => Run(() => SpawnEnemies(1)));
 		CreateButton(enemies, "+5 corruptrons", 115f, () => Run(() => SpawnEnemies(5)));
 		CreateButton(enemies, "Kill enemies near", 135f, () => Run(KillEnemies));
+#if !ESSENTIALS
 		Button crit = CreateButton(enemies, string.Empty, 140f, () =>
 		{
 			if (CheatsOff())
@@ -547,6 +560,7 @@ end)
 			Refresh();
 		});
 		_critLabel = crit.GetComponentInChildren<Text>();
+#endif
 
 		Section(body, "Invasion waves");
 		_waveText = CreateText(CreateRow(body, 20f), string.Empty, 13, TextColor, TextAnchor.MiddleLeft);
@@ -560,7 +574,11 @@ end)
 		CreateButton(waves, "Freeze / resume", 120f, () => QueueWave(WaveFreeze));
 		Transform interval = CreateRow(body, 26f);
 		Fixed(CreateText(interval, "Waves every", 13, TextColor, TextAnchor.MiddleLeft).gameObject, 90f, 26f);
+#if !ESSENTIALS
 		foreach (int minutes in WaveInterval.Minutes)
+#else
+		foreach (int minutes in new[] { 5, 10, 15, 20, 30 })
+#endif
 		{
 			int value = minutes;
 			CreateButton(interval, value + " min", 70f, () => QueueWave(WaveIntervalCommand - value * 60));
@@ -594,10 +612,12 @@ end)
 			return;
 		}
 		XRayView.Set(mode);
+#if !ESSENTIALS
 		if (mode != XRayView.Mode.Off)
 		{
 			Achievements.AchievementTracker.Cheated("the x-ray");
 		}
+#endif
 		SetStatus(mode == XRayView.Mode.Off ? "X-ray off." : (mode == XRayView.Mode.Semi ? "X-ray: the walls of mines, tunnels and caves" : "X-ray: only the ore") + " within " + XRayView.Radius + " blocks of where the camera looks.");
 		Refresh();
 	}
@@ -626,10 +646,14 @@ end)
 		_fastSpeedLabel.text = FastSpeedKeys.Value ? "Keys 4/5 = 10x/20x: on" : "Keys 4/5 = 10x/20x: off";
 		_instantLabel.text = Brix.Engine.Architecte.editorMode ? "Instant build: on" : "Instant build: off";
 		_fogLabel.text = LocalFactionVision.IsEnabled() ? "Fog of war: on" : "Fog of war: off";
+#if !ESSENTIALS
 		_critLabel.text = CastleStoryPlus.Combat.CriticalHits.Forced ? "100% critrate: on" : "100% critrate: off";
+#endif
 		_routesText.text = RouteView.Enabled ? RouteView.Summary : string.Empty;
+#if !ESSENTIALS
 		_spawnLabel.text = SpawnView.Enabled ? "Spawn points: on" : "Spawn points: off";
 		_spawnText.text = SpawnView.Enabled ? SpawnView.Summary : string.Empty;
+#endif
 		_xrayLabel.text = "X-ray: " + XRayView.Current.ToString().ToLower();
 		_xrayText.text = XRayView.Summary;
 		if (CheatGuard.Restricted)
@@ -672,7 +696,9 @@ end)
 			SetStatus("Host only: these commands run on the host.");
 			return;
 		}
+#if !ESSENTIALS
 		Achievements.AchievementTracker.Cheated("the debug menu");
+#endif
 		string result;
 		try
 		{
@@ -703,7 +729,9 @@ end)
 			SetStatus("No invasion wave timer in this game.");
 			return;
 		}
+#if !ESSENTIALS
 		Achievements.AchievementTracker.Cheated("the debug menu's waves");
+#endif
 		_waveCommand = command;
 		string message;
 		if (command == WaveNext)
@@ -774,7 +802,7 @@ end)
 
 	private static string GiveEnergy(int amount)
 	{
-		FireflyNest nest = GiantBricktron.HomeNest(LocalFaction());
+		FireflyNest nest = HomeCrystal.Of(LocalFaction());
 		if (nest == null)
 		{
 			return "No home crystal.";
@@ -793,7 +821,7 @@ end)
 	private static string SpawnBuilders(int count)
 	{
 		Faction faction = LocalFaction();
-		FireflyNest nest = GiantBricktron.HomeNest(faction);
+		FireflyNest nest = HomeCrystal.Of(faction);
 		if (nest == null)
 		{
 			return "No home crystal.";

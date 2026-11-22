@@ -25,12 +25,18 @@ internal static class TestWorldEndpoints
 		});
 		routes.Add(new Route("GET", "/api/testworld", "How the test world's building goes: state, site, what was placed or refused, items stored", Status));
 		routes.Add(new Route("GET", "/api/testworld/pieces", "The test world's pieces as laid out: name, section, centre (x,y,z on the floor), size, and for a stockpile its resource and Stacking tier, for a stand its kits (e.g. to photograph each one)", Pieces));
+#if !ESSENTIALS
 		routes.Add(new Route("GET", "/api/studio/plan", "The photo studio's pieces: the test world's plan (every building, block, stand and stockpile with its resource and Stacking tier), by index", StudioPlan));
+#endif
+#if !ESSENTIALS
 		routes.Add(new Route("POST", "/api/studio", "Shows one piece of the test world's plan alone on the photo studio's spot (west of the home crystal): the last one taken away, this one built at once and filled. Answers at once; GET /api/studio follows it and gives the piece's drawn bounds when ready", StudioShow)
 		{
 			Parameters = "index (from GET /api/studio/plan, required)"
 		});
+#endif
+#if !ESSENTIALS
 		routes.Add(new Route("GET", "/api/studio", "The photo studio: state (ready when the piece stands), its spot, the piece and its drawn bounds (centre, size)", StudioStatus));
+#endif
 		routes.Add(new Route("GET", "/api/tree", "An object's children as a tree: name, active, scale and renderers (mesh, materials); for a stockpile also its display tracks (resources, pieces shown). Find the object by id, or the nearest storage to a point", Tree)
 		{
 			Parameters = "id (object id), at (x,y,z: the nearest storage to it instead), depth (default 4)"
@@ -57,11 +63,14 @@ internal static class TestWorldEndpoints
 		return TestWorldBuilder.Instance.Status();
 	}
 
+#if !ESSENTIALS
 	private static object StudioPlan(ApiRequest request)
 	{
 		return TestWorldBuilder.Instance.StudioPlan();
 	}
 
+#endif
+#if !ESSENTIALS
 	private static object StudioShow(ApiRequest request)
 	{
 		if (!NetworkServer.active || User.LocalUser == null || User.LocalUser.faction == null || !Architecte.commence || Architecte.termine)
@@ -71,11 +80,14 @@ internal static class TestWorldEndpoints
 		return TestWorldBuilder.Instance.StudioShow(request.Int("index", -1));
 	}
 
+#endif
+#if !ESSENTIALS
 	private static object StudioStatus(ApiRequest request)
 	{
 		return TestWorldBuilder.Instance.StudioStatus();
 	}
 
+#endif
 	private static object Pieces(ApiRequest request)
 	{
 		return TestWorldBuilder.Instance.PieceList();

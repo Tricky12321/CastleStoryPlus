@@ -74,7 +74,7 @@
     </Reference>
   </ItemGroup>
   <!-- Into the game's BepInEx/plugins folder, next to (not inside) the mod's folder. -->
-  <Target Name="InstallPlugin" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins')">
+  <Target Name="InstallPlugin" AfterTargets="Build" Condition="Exists('$(GameDir)BepInEx/plugins') And '$(SkipInstall)' != 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)BepInEx/plugins/CastleStoryPlus.DevTools/" />
   </Target>
 </Project>

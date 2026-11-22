@@ -1,0 +1,25 @@
+# Keeps the Essentials edition (docs/Editions.md) from rotting, on every pull request and every push to main:
+# - tools/check-editions.py: every feature is In or Out in docs/Editions.md, and no class of an Out feature is
+#   compiled into Essentials (Editions.targets, #if !ESSENTIALS);
+# - the unit tests' logic compiled in the Essentials edition (-p:Edition=Essentials defines ESSENTIALS).
+# The game is not installed here, so the mod itself is compiled in both editions locally (docs/Editions.md, Building).
+name: Editions
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  editions:
+    name: Editions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - run: python3 tools/check-editions.py
+      - run: dotnet build CastleStoryPlus.UnitTests -p:Edition=Essentials --nologo

@@ -55,18 +55,6 @@ internal static class MarketHideFromCraftingMenuPatch
 	}
 }
 
-// The market is mapped to its building as soon as it is created (MarketBuilding); when the game maps all
-// blueprints afterwards it must skip it, or the duplicate key stops the game's factory loading.
-[Feature(Features.Market, Features.MarketInfo)]
-[HarmonyPatch(typeof(BlueprintMapper), nameof(BlueprintMapper.AddMappings))]
-internal static class MarketBlueprintMappingPatch
-{
-	private static bool Prefix(BlueprintMapper __instance, Blueprint bp)
-	{
-		return !__instance.blueprint2Concrete.ContainsKey(bp.AssetKey);
-	}
-}
-
 // The trades with coal and steel, after the metallurgy recipes and the research station's (made first here if
 // their own postfixes have not run yet: the order of postfixes is not guaranteed).
 [Feature(Features.Market, Features.MarketInfo)]

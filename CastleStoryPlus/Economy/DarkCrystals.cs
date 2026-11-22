@@ -102,6 +102,8 @@ internal static class DarkCrystals
 		StockpiledIcon = Metallurgy.Metallurgy.AddIcon(database, "dark_crystal_stockpiled");
 	}
 
+	// The item and its resource info, after every factory Awake. Also with the feature switched off (SavedContent), so a
+	// save with dark crystals loads with them.
 	internal static void SetUpFactories()
 	{
 		Factory raw = Metallurgy.Metallurgy.Ready("RawResources", "RawBlueCrystal");
@@ -280,16 +282,6 @@ internal static class DarkCrystals
 			ObjectPoolSingleton.Release(item);
 		}
 		return true;
-	}
-}
-
-[Feature(Features.DarkCrystals, Features.DarkCrystalsInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
-internal static class DarkCrystalsFactoryPatch
-{
-	private static void Postfix()
-	{
-		DarkCrystals.SetUpFactories();
 	}
 }
 

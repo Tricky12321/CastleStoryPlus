@@ -93,7 +93,11 @@ internal static class UnloadToWorkshops
 		foreach (IOperable<Labor> project in Projects)
 		{
 			CraftingStation station = project as CraftingStation;
+#if !ESSENTIALS
 			if (station == null || station is MarketStation || station.IsNullOrReleased() || station.recepteur == null || station.gameObject == storage)
+#else
+			if (station == null || station.IsNullOrReleased() || station.recepteur == null || station.gameObject == storage)
+#endif
 			{
 				continue;
 			}

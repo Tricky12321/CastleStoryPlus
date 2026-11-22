@@ -531,7 +531,7 @@ internal sealed class LoadRelief : MonoBehaviour
 		labor.recepteur.DropAll();
 		if (!labor.recepteur.IsEmpty())
 		{
-			RackEquipDropFirstPatch.ForceDrop(labor);
+			LoadDrop.ForceDrop(labor);
 		}
 		Vector3 at = labor.transform.position;
 		Plugin.Log.LogInfo("LoadRelief: " + labor.name + " found no storage for " + load + " and put it down at " + Mathf.FloorToInt(at.x) + "," + Mathf.FloorToInt(at.y) + "," + Mathf.FloorToInt(at.z) + (labor.recepteur.IsEmpty() ? string.Empty : " (some is still in its bag)"));

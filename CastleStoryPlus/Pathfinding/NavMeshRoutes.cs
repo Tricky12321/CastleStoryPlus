@@ -849,11 +849,13 @@ internal static int RoadEases;
 
 	private const int RoadLooks = 12;
 
+#if !ESSENTIALS
 	private static bool BesideRoad(XYZ p)
 	{
 		return !Roads.IsRoad(p) && (Roads.IsRoad(p + XYZ.right) || Roads.IsRoad(p - XYZ.right) || Roads.IsRoad(p + XYZ.forward) || Roads.IsRoad(p - XYZ.forward));
 	}
 
+#endif
 	private static void Ease(PathBranchEvaluator evaluator)
 	{
 		int roadLooks = 0;
@@ -865,7 +867,11 @@ internal static int RoadEases;
 			}
 			bool steep = Route[i].Weight >= SteepWeight;
 			// Not a route that only crosses a road: two route voxels in a row lie beside it.
+#if !ESSENTIALS
 			if (!steep && (roadLooks >= RoadLooks || !Roads.Any || !BesideRoad(start.position) || !(Route[i].Node is TerrainPathNode along) || !BesideRoad(along.position)))
+#else
+			if (!steep)
+#endif
 			{
 				continue;
 			}

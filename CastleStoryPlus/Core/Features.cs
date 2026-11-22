@@ -523,6 +523,10 @@ internal static class Features
 
 	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes, and at the bottom of the market's, research station's, smithy's and armoury's windows (the game keeps every workshop at high).";
 
+	public const string BaseArea = "BaseArea";
+
+	public const string BaseAreaInfo = "Workers keep their own work to the base (#181): their own searches for material and for storage take nothing no player owns (treasure loot, a neutral chest, loose items) further than [BaseArea] Radius (40) blocks from the home crystal, the gather point and the team's stockpiles (task zones count as base too), and nothing with a living enemy within [BaseArea] EnemyDistance (20) blocks of it outside the base; the idle cleanup leaves items by enemies alone. A worker out of the base area with no player's order is written to BepInEx/idle.log with its task and target. Host only.";
+
 	public const string WorkshopFetchRange = "WorkshopFetchRange";
 
 	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range. The range goes along with \"Copy setup\", with copied areas and blueprints (also the blueprint library), and a workshop built from such a blueprint starts with it.";
@@ -565,7 +569,15 @@ internal static class Features
 
 	public const string Treasure = "Treasure";
 
-	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it (while the guards are near, workers take no work of their own in its ruin): iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
+	public const string TreasureInfo = "Treasure chests in every new world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each in a small castle ruin (TreasureRuins) and guarded by a pack of 2 to 10 beasts (TreasureGuardians; the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it (while the guards are near, workers take no work of their own in its ruin): iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out. Off: new worlds get no chests, no ruins and no guardians, and in a saved world that has them the host takes the guardians away when it loads (the ruins stay, ordinary blocks you can dig). Applies from the next game you start or load; the host's switch decides in multiplayer.";
+
+	public const string TreasureRuins = "TreasureRuins";
+
+	public const string TreasureRuinsInfo = "With Treasure on: each treasure chest of a new world stands in a small castle ruin of stone blocks (worn walls, now and then a tower stump, rubble round it) with no trees near it. Off: the chests stand on open ground (with their guardians when TreasureGuardians is on). Ruins already in a saved world stay. Applies from the next new world; the host's switch decides in multiplayer.";
+
+	public const string TreasureGuardians = "TreasureGuardians";
+
+	public const string TreasureGuardiansInfo = "With Treasure on: each treasure chest of a new world is guarded by a pack of 2 to 10 beasts that must be killed or lured away before the chest opens. Off: no guardians (and no corruptrons) are put at the chests or ruins, the chests open as soon as a bricktron walks up to them, and in a saved world the host takes the guardians it has away when it loads. Applies from the next game you start or load; the host's switch decides in multiplayer.";
 
 	public const string GuardianSounds = "GuardianSounds";
 

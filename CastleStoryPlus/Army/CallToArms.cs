@@ -36,7 +36,7 @@ internal static class CallToArms
 		public Vector3 Melee;
 	}
 
-	public const int AnyKit = -1;
+	public const int AnyKit = Kits.AnyKit;
 
 	// Called, but no kit is left for it: it runs to the home crystal (out of the fight) instead of staying at work.
 	public const int NoKit = -2;
@@ -51,15 +51,7 @@ internal static class CallToArms
 	public const int FlagMelee = 2;
 
 	// Melee first, so the front line fills before the archers.
-	public static readonly Occupation.Job[] SoldierJobs = new Occupation.Job[6]
-	{
-		Occupation.Job.Knight,
-		Occupation.Job.Halberdier,
-		Occupation.Job.Archer,
-		Occupation.Job.Arbalist,
-		Occupation.Job.Alchemist,
-		Occupation.Job.Artificer
-	};
+	public static readonly Occupation.Job[] SoldierJobs = Kits.SoldierJobs;
 
 	public static readonly LaborInstruction<Orders> EquipAndRally = new LaborInstruction<Orders>("CallToArmsRally", IconKeys.DropThere, (Labor labor, Orders orders) => EquipAndRallyNode(labor, orders));
 

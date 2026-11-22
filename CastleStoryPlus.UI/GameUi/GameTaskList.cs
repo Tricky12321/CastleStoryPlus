@@ -306,7 +306,7 @@ internal class GameTaskList : MonoBehaviour
 			return null;
 		}
 		// Six levels (PriorityLevels) on the game's four icons: 1-2 low, 3 medium, 4-5 high.
-		switch (CastleStoryPlus.WorkerAI.PriorityLevels.Level(key.Project.GetPriority()))
+		switch (Level(key.Project.GetPriority()))
 		{
 			case 0:
 				return GameUiState.Icon(IconKeys._UI_PriorityLocked_alt);
@@ -327,8 +327,23 @@ internal class GameTaskList : MonoBehaviour
 		{
 			return -1;
 		}
-		return CastleStoryPlus.WorkerAI.PriorityLevels.Level(key.Project.GetPriority());
+		return Level(key.Project.GetPriority());
 	}
+
+#if ESSENTIALS
+	// The game's four priorities on the levels the task list shows (0 locked, 1 low, 3 medium, 5 high): PriorityLevels,
+	// with its six levels, is a Full edition feature.
+	private static int Level(ProjectPriority.Bias bias)
+	{
+		int value = (int)bias;
+		return (value < 0) ? 0 : (value < 4) ? 1 : (value < 8) ? 3 : 5;
+	}
+#else
+	private static int Level(ProjectPriority.Bias bias)
+	{
+		return CastleStoryPlus.WorkerAI.PriorityLevels.Level(bias);
+	}
+#endif
 
 	private static readonly Occupation.Job[] MeleeJobs = new Occupation.Job[2] { Occupation.Job.Halberdier, Occupation.Job.Knight };
 
@@ -345,7 +360,11 @@ internal class GameTaskList : MonoBehaviour
 			return;
 		}
 		Project project = key.Operable ? ((GameUiState.Station != null) ? GameUiState.Station.GetComponent<Project>() : null) : key.Project;
+#if !ESSENTIALS
 		int max = IsIdle(key) ? 15 : CastleStoryPlus.WorkerAI.WorkLimit.Most;
+#else
+		int max = IsIdle(key) ? 15 : 8;
+#endif
 		if (project == null)
 		{
 			return;
