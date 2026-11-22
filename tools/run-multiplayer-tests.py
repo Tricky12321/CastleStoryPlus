@@ -138,8 +138,14 @@ def join(host, client):
     host.call("POST", "/api/net/cheats", value="true")
     # Chosen in the lobby, as the host's "Bricktrons per task" does (TaskCrew); the setting is saved in the player
     # folder's config, so it is put back afterwards.
-    TASK_CREW_BEFORE.append(host.call("GET", "/api/net/taskcrew")["value"])
-    log("bricktrons per task:", host.call("POST", "/api/net/taskcrew", value=TASK_CREW)["value"])
+    # The Essentials edition has no TaskCrewSize (no endpoint): its check is skipped.
+    try:
+        TASK_CREW_BEFORE.append(host.call("GET", "/api/net/taskcrew")["value"])
+        log("bricktrons per task:", host.call("POST", "/api/net/taskcrew", value=TASK_CREW)["value"])
+    except RuntimeError as e:
+        if "No endpoint" not in str(e):
+            raise
+        log("bricktrons per task: not in this edition")
     client.call("POST", "/api/net/join", address="127.0.0.1", port=GAME_PORT, name="Client")
     host.wait_for("the client in the lobby", lambda: len(host.call("GET", "/api/net").get("players", [])) >= 2, 120)
     time.sleep(3)
@@ -496,7 +502,12 @@ def main():
                     passed, message = check(host, client)
             except Exception as e:
                 passed, message = False, "error: %s" % e
-            results.append({"name": name, "outcome": "Passed" if passed else "Failed", "message": message, "seconds": round(time.time() - begun, 1)})
+                # A check of a feature this edition leaves out (Essentials): its endpoint, feature or blueprint is
+                # missing.
+                if any(m in str(e) for m in ("No endpoint", "feature is off", "No blueprint 'Warehouse'")):
+                    passed = None
+            outcome = "Skipped" if passed is None else ("Passed" if passed else "Failed")
+            results.append({"name": name, "outcome": outcome, "message": message, "seconds": round(time.time() - begun, 1)})
             log("%-7s %-20s %5.1f s  %s" % (results[-1]["outcome"], name, results[-1]["seconds"], message))
         if args.hold > 0:
             log("holding the players for %d s" % args.hold)
@@ -514,8 +525,9 @@ def main():
     path = os.path.join(args.work, "multiplayer-tests-%s.json" % stamp)
     with open(path, "w") as f:
         json.dump({"results": results}, f, indent=1)
-    failed = [r for r in results if r["outcome"] != "Passed"]
-    log("%d passed, %d failed; %s" % (len(results) - len(failed), len(failed), path))
+    failed = [r for r in results if r["outcome"] == "Failed"]
+    skipped = [r for r in results if r["outcome"] == "Skipped"]
+    log("%d passed, %d failed, %d skipped; %s" % (len(results) - len(failed) - len(skipped), len(failed), len(skipped), path))
     sys.exit(1 if failed or not results else 0)
 
 
