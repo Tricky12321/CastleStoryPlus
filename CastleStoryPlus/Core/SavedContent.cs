@@ -1,4 +1,6 @@
+#if !ESSENTIALS
 using System;
+#endif
 using Brix.External.Factories;
 using Brix.Game.Components;
 using Brix.Game.Utils;
@@ -12,6 +14,9 @@ namespace CastleStoryPlus.Core;
 // load and was gone from the world at the next save, and a still-enabled feature that used them (roads and ladders are
 // custom blocks) broke. A switched-off feature now only leaves the build menu and its own behaviour; what it put in the
 // world still loads. Each part runs on its own, so one that fails does not keep the others out.
+// The Essentials edition compiles none of this content (docs/Editions.md), so it has nothing to add here: a Full save's
+// objects of it are skipped by the loader there (UnknownObjects, UnknownBlocks, FullSaveGuards).
+#if !ESSENTIALS
 [Feature]
 [HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class SavedContent
@@ -43,6 +48,7 @@ internal static class SavedContent
 		}
 	}
 }
+#endif
 
 // The mod's buildings are mapped to their blueprints as soon as they are made (CustomBuilding, LargeStockpile); when
 // the game maps all blueprints afterwards it must skip them, or the duplicate key stops the game's factory loading.

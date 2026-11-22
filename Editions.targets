@@ -51,13 +51,13 @@
 
   <!-- The developer tools: the in-game tests, endpoints and test worlds of Out features. -->
   <ItemGroup Condition="'$(Edition)' == 'Essentials' And '$(MSBuildProjectName)' == 'CastleStoryPlus.DevTools'">
-    <Compile Remove="Tests/AchievementTests.cs;Tests/ConsolidationTests.cs;Tests/DirectTaskTests.cs;Tests/GuardianSoundTests.cs;Tests/KitBundleTests.cs;Tests/ResourcePriorityTests.cs;Tests/RoadTests.cs;Tests/RoofItemTests.cs;Tests/SprintTests.cs;Tests/WeatherTests.cs" />
+    <Compile Remove="Tests/AchievementTests.cs;Tests/CoalStockpileTests.cs;Tests/ConsolidationTests.cs;Tests/DirectTaskTests.cs;Tests/GuardianSoundTests.cs;Tests/KitBundleTests.cs;Tests/ResourcePriorityTests.cs;Tests/RoadTests.cs;Tests/RoofItemTests.cs;Tests/SavedContentTests.cs;Tests/SprintTests.cs;Tests/TreasureTests.cs;Tests/WeatherTests.cs" />
     <Compile Remove="Endpoints/AchievementEndpoints.cs;Endpoints/RandomWorldEndpoints.cs;Endpoints/SpawnEndpoints.cs;Endpoints/TreasureEndpoints.cs;Endpoints/WeatherEndpoints.cs;Worlds/PhotoStudio.cs" />
   </ItemGroup>
 
   <!-- The local tests with the game's assemblies: the tests of Out features. -->
   <ItemGroup Condition="'$(Edition)' == 'Essentials' And '$(MSBuildProjectName)' == 'CastleStoryPlus.Tests'">
-    <Compile Remove="QuarryDepthStepsTests.cs;WorldSearchQueryTests.cs" />
+    <Compile Remove="QuarryDepthStepsTests.cs;SavedContentAuditTests.cs;WorldSearchQueryTests.cs" />
   </ItemGroup>
 
   <!-- Files shipped next to the plugin (Assets, Lua): Essentials has only its own logo. -->

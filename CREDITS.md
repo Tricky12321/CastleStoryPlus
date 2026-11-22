@@ -4,7 +4,7 @@ Castle Story Plus is better because players took the time to report bugs and sug
 
 ## [@WinterBandit1](https://github.com/WinterBandit1)
 
-81 issues:
+82 issues:
 
 - [#15 UI Fixes](https://github.com/Tricky12321/CastleStoryPlus/issues/15)
 - [#16 archers wander when wave begins](https://github.com/Tricky12321/CastleStoryPlus/issues/16)
@@ -87,14 +87,19 @@ Castle Story Plus is better because players took the time to report bugs and sug
 - [#145 Custom brick placement](https://github.com/Tricky12321/CastleStoryPlus/issues/145)
 - [#146 Steel Texture](https://github.com/Tricky12321/CastleStoryPlus/issues/146)
 - [#147 Combat move](https://github.com/Tricky12321/CastleStoryPlus/issues/147)
+- [#176 Stockpile](https://github.com/Tricky12321/CastleStoryPlus/issues/176)
 
 ## [@StarPAnims](https://github.com/StarPAnims)
 
-3 issues:
+7 issues:
 
+- [#179 Disable Ruins across the map](https://github.com/Tricky12321/CastleStoryPlus/issues/179)
 - [#180 Disabling non vanilla buildings](https://github.com/Tricky12321/CastleStoryPlus/issues/180)
+- [#181 Bricktons are still wandering away](https://github.com/Tricky12321/CastleStoryPlus/issues/181)
+- [#182 No option to disable corruptons in ruins](https://github.com/Tricky12321/CastleStoryPlus/issues/182)
 - [#183 Vanilla gameplay with QOL](https://github.com/Tricky12321/CastleStoryPlus/issues/183)
 - [#184 Disabling mod exclusive non vanilla stuff](https://github.com/Tricky12321/CastleStoryPlus/issues/184)
+- [#185 Game stuck on loading infinetely](https://github.com/Tricky12321/CastleStoryPlus/issues/185)
 
 ## [@Pabloks-png](https://github.com/Pabloks-png)
 

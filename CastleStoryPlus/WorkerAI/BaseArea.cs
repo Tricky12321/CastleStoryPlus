@@ -10,7 +10,6 @@ using Brix.Game.Components;
 using Brix.Legacy;
 using Brix.Lifecycle.Pooling;
 using CastleStoryPlus.Core;
-using CastleStoryPlus.Giant;
 using HarmonyLib;
 using Smooth.Slinq;
 using UnityEngine;
@@ -139,7 +138,7 @@ internal sealed class BaseArea : MonoBehaviour
 		List<float> list = cached ?? new List<float>();
 		list.Clear();
 		float radius = Radius.Value;
-		FireflyNest nest = GiantBricktron.HomeNest(faction);
+		FireflyNest nest = HomeCrystal.Of(faction);
 		if (nest != null)
 		{
 			Add(list, nest.transform.position, radius);
@@ -185,6 +184,17 @@ internal sealed class BaseArea : MonoBehaviour
 		return list;
 	}
 
+	// A unit that is still in the game and not a corpse (as GiantBricktron.IsAlive, which the Essentials edition has not).
+	private static bool IsAlive(Labor labor)
+	{
+		if (labor.IsNullOrReleased() || labor.state == null)
+		{
+			return false;
+		}
+		Locomotion4 locomotion = (labor.navigation != null) ? labor.navigation.Locomotion : null;
+		return locomotion == null || !locomotion.IsCorpse;
+	}
+
 	private static void Add(List<float> list, Vector3 at, float radius)
 	{
 		list.Add(at.x);
@@ -221,7 +231,7 @@ internal sealed class BaseArea : MonoBehaviour
 		foreach (Labor labor in Live<Labor>.Active())
 		{
 			Faction faction = (labor != null) ? labor.faction : null;
-			if (faction == null || !faction.isAI || !labor.gameObject.activeInHierarchy || !GiantBricktron.IsAlive(labor))
+			if (faction == null || !faction.isAI || !labor.gameObject.activeInHierarchy || !IsAlive(labor))
 			{
 				continue;
 			}
@@ -350,7 +360,7 @@ internal sealed class BaseArea : MonoBehaviour
 		foreach (Labor labor in _labors)
 		{
 			Faction faction = (labor != null) ? labor.faction : null;
-			if (faction == null || faction.isAI || faction.IsSpectator || !labor.gameObject.activeInHierarchy || !GiantBricktron.IsAlive(labor))
+			if (faction == null || faction.isAI || faction.IsSpectator || !labor.gameObject.activeInHierarchy || !IsAlive(labor))
 			{
 				continue;
 			}

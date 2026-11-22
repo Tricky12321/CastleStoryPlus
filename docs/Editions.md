@@ -98,6 +98,9 @@ switched off on the host no edition is sent either.
   - workers' stats the Full edition saves (experience, giant tier, soldier posts) stay on the units unused.
   What was stored in a left-out building is lost with it in that game; saving the game in Essentials makes that
   final. Nothing of it crashes the load.
+- In Full, `SavedContent` adds these buildings, blocks and items to the game's factories even with their feature
+  switched off, so a Full save keeps them (#185). Essentials does not compile that content, so it cannot add them;
+  it skips them as above.
 
 ## Features
 
@@ -112,6 +115,7 @@ switched off on the host no edition is sent either.
 | `AutoCleanup` | Out | A new chore for idle workers |
 | `AutoRepair` | Out | A new chore for idle builders |
 | `AutoSave` | Out | A new convenience |
+| `BaseArea` | In | Worker AI fix: workers' own material and storage searches keep to the base (#181) |
 | `BaseJobs` | Out | Builds on AutoCleanup and AutoRepair |
 | `BlockAnchor` | Out | A new building control |
 | `BlueCrystalDeposits` | Out | New resource deposits |
@@ -236,6 +240,8 @@ switched off on the host no edition is sent either.
 | `TaskPrediction` | In | Worker AI: the next task of the same area at once |
 | `TaskReservation` | In | Worker AI: no two workers walk to one task |
 | `Treasure` | Out | New world content (chests, ruins, beasts) |
+| `TreasureGuardians` | Out | Part of Treasure (the chests' guardian packs) |
+| `TreasureRuins` | Out | Part of Treasure (the castle ruin round each chest) |
 | `TreeStumps` | Out | New harvest content |
 | `UnarmedWorkers` | In (borderline) | AI: workers without gear no longer charge enemies on their own |
 | `UnloadToWorkshops` | In (borderline) | Worker AI: a full bag goes to the workshop that needs it |
