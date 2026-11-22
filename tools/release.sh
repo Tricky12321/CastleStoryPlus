@@ -31,7 +31,7 @@ gh release create "$VERSION" \
     "$ROOT/dist/CastleStoryPlus-$VERSION-linux.zip" "$ROOT/dist/CastleStoryPlus-$VERSION-windows.zip" \
     --repo Tricky12321/CastleStoryPlus --title "Castle Story Plus $VERSION" \
     --notes-file "$NOTES" --generate-notes
-# The Essentials zips after the Full ones: installers before 0.9.4 take the first "CastleStoryPlus-*-<os>.zip" of a
+# The Essentials zips after the Full ones: installers before 0.10.0 take the first "CastleStoryPlus-*-<os>.zip" of a
 # release, which must stay the Full one.
 gh release upload "$VERSION" \
     "$ROOT/dist/CastleStoryPlus-Essentials-$VERSION-linux.zip" "$ROOT/dist/CastleStoryPlus-Essentials-$VERSION-windows.zip" \

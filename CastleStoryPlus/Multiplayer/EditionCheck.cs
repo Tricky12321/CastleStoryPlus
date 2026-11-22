@@ -17,7 +17,7 @@ namespace CastleStoryPlus.Multiplayer;
 // come after the setting, so an older client reads the setting and leaves the rest). A client of the other edition
 // leaves the lobby or game at once and says why in a window, and tells the host (message 215, sent only to a host that
 // sent its edition, so never to an older host that has no handler for it), whose chat then says why the player left.
-// A host from before 0.9.4 sends no edition: nothing is checked then (the log says so once).
+// A host from before 0.10.0 sends no edition: nothing is checked then (the log says so once).
 internal static class EditionCheck
 {
 	// The client's "I left: other edition" to the host.
@@ -71,7 +71,7 @@ internal static class EditionCheck
 			if (!_toldOld)
 			{
 				_toldOld = true;
-				Plugin.Log.LogInfo("EditionCheck: the host's mod does not say its edition (Castle Story Plus before 0.9.4); not checked");
+				Plugin.Log.LogInfo("EditionCheck: the host's mod does not say its edition (Castle Story Plus before 0.10.0); not checked");
 			}
 			return;
 		}
