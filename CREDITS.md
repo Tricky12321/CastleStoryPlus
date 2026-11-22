@@ -88,6 +88,12 @@ Castle Story Plus is better because players took the time to report bugs and sug
 - [#146 Steel Texture](https://github.com/Tricky12321/CastleStoryPlus/issues/146)
 - [#147 Combat move](https://github.com/Tricky12321/CastleStoryPlus/issues/147)
 
+## [@StarPAnims](https://github.com/StarPAnims)
+
+1 issue:
+
+- [#180 Disabling non vanilla buildings](https://github.com/Tricky12321/CastleStoryPlus/issues/180)
+
 ## [@Pabloks-png](https://github.com/Pabloks-png)
 
 1 issue:
