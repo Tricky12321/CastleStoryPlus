@@ -565,7 +565,15 @@ internal static class Features
 
 	public const string Treasure = "Treasure";
 
-	public const string TreasureInfo = "Treasure chests in every world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each guarded by a pack of 2 to 10 beasts (the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it (while the guards are near, workers take no work of their own in its ruin): iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out.";
+	public const string TreasureInfo = "Treasure chests in every new world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each in a small castle ruin (TreasureRuins) and guarded by a pack of 2 to 10 beasts (TreasureGuardians; the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it (while the guards are near, workers take no work of their own in its ruin): iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out. Off: new worlds get no chests, no ruins and no guardians, and in a saved world that has them the host takes the guardians away when it loads (the ruins stay, ordinary blocks you can dig). Applies from the next game you start or load; the host's switch decides in multiplayer.";
+
+	public const string TreasureRuins = "TreasureRuins";
+
+	public const string TreasureRuinsInfo = "With Treasure on: each treasure chest of a new world stands in a small castle ruin of stone blocks (worn walls, now and then a tower stump, rubble round it) with no trees near it. Off: the chests stand on open ground (with their guardians when TreasureGuardians is on). Ruins already in a saved world stay. Applies from the next new world; the host's switch decides in multiplayer.";
+
+	public const string TreasureGuardians = "TreasureGuardians";
+
+	public const string TreasureGuardiansInfo = "With Treasure on: each treasure chest of a new world is guarded by a pack of 2 to 10 beasts that must be killed or lured away before the chest opens. Off: no guardians (and no corruptrons) are put at the chests or ruins, the chests open as soon as a bricktron walks up to them, and in a saved world the host takes the guardians it has away when it loads. Applies from the next game you start or load; the host's switch decides in multiplayer.";
 
 	public const string GuardianSounds = "GuardianSounds";
 

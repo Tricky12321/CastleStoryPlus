@@ -127,6 +127,16 @@ internal static class TreasureRuins
 		return new Vector3(cx, Surface(cx, Top(cx, level, cz), cz), cz);
 	}
 
+	// Where the chest stands at the spot without a ruin (TreasureRuins off): on the ground's surface, as in a ruin;
+	// nothing is built and no tree is taken away.
+	internal static Vector3 OpenGround(Vector3 spot)
+	{
+		int cx = Mathf.RoundToInt(spot.x);
+		int level = Mathf.RoundToInt(spot.y);
+		int cz = Mathf.RoundToInt(spot.z);
+		return new Vector3(cx, Surface(cx, Top(cx, level, cz), cz), cz);
+	}
+
 	// The height of the ground's surface in the column whose top is the cell (x, top, z): a full cell's top, or the
 	// smooth surface layer's mean height (its four corners' levels, in thirds of a block from the cell's bottom).
 	private static float Surface(int x, int top, int z)
@@ -526,6 +536,13 @@ internal static class TreasureRuins
 
 	// Blocks of the ruins still waiting to be made.
 	internal static bool Busy => Queue.Count > 0;
+
+	// For the DevTools' tests: every cell of the ruins built in this game.
+	internal static void BuiltCells(List<XYZ> into)
+	{
+		into.Clear();
+		into.AddRange(Built);
+	}
 
 	internal static void Clear()
 	{
