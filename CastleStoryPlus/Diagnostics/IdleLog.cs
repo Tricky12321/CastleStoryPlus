@@ -115,13 +115,26 @@ internal sealed class IdleLog : MonoBehaviour
 		}
 	}
 
-	private static void Write(Labor labor, Wait wait, string what)
+	private static void Open()
 	{
 		if (_writer == null)
 		{
 			_writer = new StreamWriter(System.IO.Path.Combine(BepInEx.Paths.BepInExRootPath, "idle.log"), append: false) { AutoFlush = true };
 			_writer.WriteLine("---- idle log started " + System.DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss"));
 		}
+	}
+
+	// A line from another feature (BaseArea: a worker gone out of the base area of its own accord) in the same file,
+	// with the time in front.
+	internal static void Line(string text)
+	{
+		Open();
+		_writer.WriteLine(System.DateTime.Now.ToString("HH:mm:ss") + " game " + Time.time.ToString("0") + " s | " + text);
+	}
+
+	private static void Write(Labor labor, Wait wait, string what)
+	{
+		Open();
 		Vector3 at = labor.transform.position;
 		StringBuilder text = new StringBuilder();
 		text.Append(System.DateTime.Now.ToString("HH:mm:ss")).Append(" game ").Append(Time.time.ToString("0")).Append(" s | ")
