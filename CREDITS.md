@@ -90,9 +90,11 @@ Castle Story Plus is better because players took the time to report bugs and sug
 
 ## [@StarPAnims](https://github.com/StarPAnims)
 
-1 issue:
+3 issues:
 
 - [#180 Disabling non vanilla buildings](https://github.com/Tricky12321/CastleStoryPlus/issues/180)
+- [#183 Vanilla gameplay with QOL](https://github.com/Tricky12321/CastleStoryPlus/issues/183)
+- [#184 Disabling mod exclusive non vanilla stuff](https://github.com/Tricky12321/CastleStoryPlus/issues/184)
 
 ## [@Pabloks-png](https://github.com/Pabloks-png)
 

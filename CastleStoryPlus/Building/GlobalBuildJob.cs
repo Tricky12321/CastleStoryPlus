@@ -180,8 +180,10 @@ internal static class GlobalBuildJob
 		{
 			return Create(user);
 		}
+#if !ESSENTIALS
 		// New work for the team's build task (placed blueprints, a move, merged tasks): a paused one is resumed.
 		PauseTasks.ResumeForNewWork(global);
+#endif
 		BuildGoalProvider target = global.GetComponent<BuildGoalProvider>();
 		foreach (BuildProject other in projects)
 		{
@@ -199,7 +201,11 @@ internal static class GlobalBuildJob
 				}
 			}
 			// A merge never lowers the priority the player gave either task.
+#if !ESSENTIALS
 			if (PriorityLevels.Level(other.PriorityBias) > PriorityLevels.Level(global.PriorityBias))
+#else
+			if ((int)other.PriorityBias > (int)global.PriorityBias)
+#endif
 			{
 				global.PriorityBias = other.PriorityBias;
 			}

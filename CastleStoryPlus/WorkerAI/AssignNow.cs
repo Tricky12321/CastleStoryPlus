@@ -196,10 +196,12 @@ internal sealed class AssignNow : MonoBehaviour
 	private static string Reason(Labor labor, Watch watch)
 	{
 		Project project = watch.Project;
+#if !ESSENTIALS
 		if (PauseTasks.IsPaused(project))
 		{
 			return "the task is paused";
 		}
+#endif
 		if (!project.HasGoals())
 		{
 			return "the task has nothing to do right now";

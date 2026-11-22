@@ -226,7 +226,11 @@ internal static class UnreachableTasks
 	private static bool InOreMine(GameObject go)
 	{
 		Brix.Game.AI.HarvestProject harvest = go.GetComponentInParent<Brix.Game.AI.HarvestProject>();
+#if !ESSENTIALS
 		return harvest != null && Metallurgy.OreMine.IsOreMine(harvest);
+#else
+		return false;
+#endif
 	}
 
 	// Marks judged by the map's routes (not left hanging, not failed walks) are looked at again with each map.
@@ -760,7 +764,7 @@ internal static class UnreachableTasks
 			}
 			try
 			{
-				CircleHighlight ring = CircleHighlighter.HighlightGameObject(_ringId, entry.Key, Red, BuildPriority.Radius(entry.Key));
+				CircleHighlight ring = CircleHighlighter.HighlightGameObject(_ringId, entry.Key, Red, UI.RingRadius.Of(entry.Key));
 				ring.OccludedOpacity = 1f;
 				mark.Ringed = true;
 				rings++;

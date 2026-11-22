@@ -16,6 +16,8 @@ namespace CastleStoryPlus.UI;
 // - loading screen: the logo on the top curtain above "Loading", so it slides with the curtain.
 // Menu and loading screen show the mod's version under the badge.
 // The game's logo itself is not redistributed: menu and loading screen reuse its texture at runtime.
+// The Essentials edition has artwork of its own (Edition.LogoFile, BadgeFile); its badge is taller than the Full
+// one, which is fine: the badge's width is worked out from its texture's aspect.
 [Feature(Features.PlusLogo, Features.PlusLogoInfo)]
 internal class PlusLogo : MonoBehaviour
 {
@@ -78,7 +80,7 @@ internal class PlusLogo : MonoBehaviour
 	// Every game logo in the loaded scenes, inactive menus included.
 	private static void AddBadges()
 	{
-		Sprite badge = LoadSprite("plus.png");
+		Sprite badge = LoadSprite(Edition.BadgeFile);
 		if (badge == null)
 		{
 			return;
@@ -140,7 +142,7 @@ internal class PlusLogo : MonoBehaviour
 	// Splash: the full logo under the Unity logo, shown and faded together with it.
 	private static void AddToSplash()
 	{
-		Sprite sprite = LoadSprite("logo.png");
+		Sprite sprite = LoadSprite(Edition.LogoFile);
 		GameObject canvas = GameObject.Find("Canvas");
 		Transform unity = canvas != null ? canvas.transform.Find("Unity") : null;
 		Image unityImage = unity != null ? unity.GetComponent<Image>() : null;
@@ -173,8 +175,8 @@ internal class PlusLogo : MonoBehaviour
 			return;
 		}
 		Texture gameLogo = FindGameLogo();
-		Sprite badge = LoadSprite("plus.png");
-		Sprite full = LoadSprite("logo.png");
+		Sprite badge = LoadSprite(Edition.BadgeFile);
+		Sprite full = LoadSprite(Edition.LogoFile);
 		RectTransform rect;
 		if (gameLogo != null && badge != null)
 		{

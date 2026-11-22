@@ -10,10 +10,12 @@
 #   curl -fsSL https://raw.githubusercontent.com/Tricky12321/CastleStoryPlus/main/installer/install.sh | bash
 #   ./install.sh --tag v0.8.1     install a specific release
 #   ./install.sh --local DIR      install from an unpacked release folder (contains CastleStoryPlus-Unity6/)
+#   ./install.sh --edition essentials   the Essentials edition (only fixes, performance and AI; docs/Editions.md)
 #   ./install.sh --uninstall      remove Castle Story Plus (BepInEx and its config stay)
 #
 # Options: --game-dir DIR, --force (reinstall even if up to date), --wait-pid PID (wait for the game
-# to exit first), --restart (start the game through Steam afterwards).
+# to exit first), --restart (start the game through Steam afterwards), --edition full|essentials (which release zip
+# is downloaded; without it the edition already installed, else full).
 set -euo pipefail
 
 REPO="Tricky12321/CastleStoryPlus"
@@ -23,6 +25,8 @@ STEAM_APP_ID="227860"
 PORT_DIR="CastleStoryPlus-Unity6"
 LAUNCHER="BepInEx/core/CastleStoryPlus.PortLauncher.dll"
 PORT_VERSION="$PORT_DIR/BepInEx/plugins/CastleStoryPlus/version.txt"
+# Full or Essentials, written by the release (tools/package-port.sh); a release before 0.9.4 has none (Full).
+PORT_EDITION="$PORT_DIR/BepInEx/plugins/CastleStoryPlus/edition.txt"
 # The mod for the original game (0.8.0 and before), replaced by the port.
 OLD_BOOTSTRAP="BepInEx/core/CastleStoryPlus.Bootstrap.dll"
 OLD_PLUGIN_DIR="BepInEx/plugins/CastleStoryPlus"
@@ -36,6 +40,7 @@ UNINSTALL=0
 FORCE=0
 WAIT_PID=""
 RESTART=0
+EDITION=""
 
 log() { echo "[Castle Story Plus] $*"; }
 fail() { echo "[Castle Story Plus] ERROR: $*" >&2; exit 1; }
@@ -49,7 +54,8 @@ while [ $# -gt 0 ]; do
         --force) FORCE=1; shift ;;
         --wait-pid) WAIT_PID="$2"; shift 2 ;;
         --restart) RESTART=1; shift ;;
-        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+        --edition) EDITION="$2"; shift 2 ;;
+        -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
         *) fail "unknown option: $1" ;;
     esac
 done
@@ -139,6 +145,14 @@ trap 'rm -rf "$TMP"' EXIT
 
 # 1. Castle Story Plus release (the Linux package bundles BepInEx in bepinex/)
 INSTALLED="$(cat "$GAME_DIR/$PORT_VERSION" 2>/dev/null || true)"
+INSTALLED_EDITION="$(tr -d '[:space:]' < "$GAME_DIR/$PORT_EDITION" 2>/dev/null || true)"
+[ -n "$INSTALLED_EDITION" ] || INSTALLED_EDITION="Full"
+[ -n "$EDITION" ] || EDITION="$INSTALLED_EDITION"
+case "$(echo "$EDITION" | tr '[:upper:]' '[:lower:]')" in
+    full) EDITION="Full"; PACKAGE="CastleStoryPlus-v" ;;
+    essentials) EDITION="Essentials"; PACKAGE="CastleStoryPlus-Essentials-v" ;;
+    *) fail "unknown edition: $EDITION (full or essentials)" ;;
+esac
 if [ -n "$LOCAL_DIR" ]; then
     SOURCE="$LOCAL_DIR"
     VERSION="$(cat "$LOCAL_DIR/$PORT_VERSION" 2>/dev/null || echo local)"
@@ -151,13 +165,14 @@ else
     RELEASE="$(fetch "$API")" || fail "could not read the release from GitHub ($API)"
     VERSION="$(echo "$RELEASE" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
     ASSETS="$(echo "$RELEASE" | grep -o '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*CastleStoryPlus-[^"]*\.zip"' | sed 's/.*"\(https[^"]*\)"/\1/')"
-    URL="$(echo "$ASSETS" | grep -- '-linux\.zip$' | head -1 || true)"
-    [ -n "$VERSION" ] && [ -n "$URL" ] || fail "release $API has no Castle Story Plus package for Linux"
-    if [ "$FORCE" = 0 ] && [ "$INSTALLED" = "$VERSION" ] && [ -f "$GAME_DIR/$LAUNCHER" ]; then
-        log "Castle Story Plus $VERSION is already installed."
+    # Only this edition's zip (a release has a Full and an Essentials zip per system).
+    URL="$(echo "$ASSETS" | grep -- "/$PACKAGE[^/]*-linux\.zip\$" | head -1 || true)"
+    [ -n "$VERSION" ] && [ -n "$URL" ] || fail "release $API has no Castle Story Plus $EDITION package for Linux"
+    if [ "$FORCE" = 0 ] && [ "$INSTALLED" = "$VERSION" ] && [ "$INSTALLED_EDITION" = "$EDITION" ] && [ -f "$GAME_DIR/$LAUNCHER" ]; then
+        log "Castle Story Plus $VERSION ($EDITION) is already installed."
         SOURCE=""
     else
-        log "downloading Castle Story Plus $VERSION..."
+        log "downloading Castle Story Plus $VERSION ($EDITION)..."
         download "$URL" "$TMP/mod.zip"
         extract "$TMP/mod.zip" "$TMP/mod"
         SOURCE="$(dirname "$(find "$TMP/mod" -maxdepth 2 -type d -name "$PORT_DIR" | head -1)")"

@@ -209,11 +209,13 @@ internal static class WorkerOrderTests
 		yield return StaysOnTask(t, false);
 	}
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "A free worker right-clicked onto a tree of a harvest joins that harvest and stays on it while another task of higher priority has work", TimeoutSeconds = 480f)]
 	private static IEnumerator RightClickedWorkerStaysOnTask(TestContext t)
 	{
 		yield return StaysOnTask(t, true);
 	}
+#endif
 
 	// A harvest with at least two trees; a quarry next to the worker with a higher priority. The worker fells the first
 	// tree and then goes on in the harvest, never in the quarry.
@@ -237,6 +239,7 @@ internal static class WorkerOrderTests
 		Labor worker = Scenario.Bricktron(t, Occupation.Type.Builder, TaskTests.StandNear(t, tree));
 		yield return t.Frames(5);
 		Scenario.QuietWorldTasks(t);
+#if !ESSENTIALS
 		if (rightClick)
 		{
 			if (!CastleStoryPlus.WorkerAI.DirectTask.TryAssign(worker, (object)tree.ToVector3()))
@@ -248,6 +251,9 @@ internal static class WorkerOrderTests
 		{
 			Scenario.Hire(harvest, worker);
 		}
+#else
+		Scenario.Hire(harvest, worker);
+#endif
 		yield return t.Frames(2);
 		t.Record("projectAfterOrder", (worker.Project != null) ? worker.Project.GetType().Name : "none");
 		t.Record("autonomyAfterOrder", worker.Autonomy.Description);
@@ -261,6 +267,7 @@ internal static class WorkerOrderTests
 		t.Record("felled", Felled(treesAtStart));
 	}
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "With at most 12 bricktrons per task (TaskCrewSize, #88) a new quarry (keeping nothing) has a crew size of 12: twelve builders put on it all join its crew (a thirteenth does not) and stay on it, more than 8 work on it at once, and a work limit of 5 cuts the crew down to 5", TimeoutSeconds = 240f, Exclusive = true)]
 	private static IEnumerator TwelveOnOneQuarry(TestContext t)
 	{
@@ -323,7 +330,9 @@ internal static class WorkerOrderTests
 		yield return t.Frames(2);
 		t.Equal(5, quarry.CrewCount(), "Crew after a work limit of 5");
 	}
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "With at most 22 bricktrons per task (#127) twelve free workers fill a quarry with plenty of work by themselves: more than 8 join its crew without being assigned, and with \"Workers at a time\" 5 no more than 5 do", TimeoutSeconds = 300f, Exclusive = true)]
 	private static IEnumerator FreeWorkersFillLargeCrew(TestContext t)
 	{
@@ -369,6 +378,7 @@ internal static class WorkerOrderTests
 			return Time.time >= end;
 		}, 60f, "twenty seconds under the limit");
 	}
+#endif
 
 	[GameTest("Tasks", "Eight builders put on an 8 x 8 quarry that keeps stone, with no storage for it, stay on it for a minute: none walks off to the gather point or to another quarry of higher priority next to it that can be dug (#86)", TimeoutSeconds = 300f)]
 	private static IEnumerator FullCrewStaysOnBigQuarry(TestContext t)
@@ -412,6 +422,7 @@ internal static class WorkerOrderTests
 		t.Record("farthest", Mathf.Round(farthest * 10f) / 10f);
 	}
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "A builder put on a quarry with blocks left does not go after loose logs by a stockpile next to it (#81)", TimeoutSeconds = 240f)]
 	private static IEnumerator AssignedWorkerLeavesLooseLogs(TestContext t)
 	{
@@ -444,6 +455,7 @@ internal static class WorkerOrderTests
 			return Time.time >= end || QuarryDone(quarry);
 		}, 70f, "60 game seconds of digging", 20f, () => t.Log(Describe(a) + "; " + Describe(b)));
 	}
+#endif
 
 	private static bool QuarryDone(MineProject quarry)
 	{

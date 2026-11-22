@@ -593,13 +593,22 @@ internal static class ProjectEndpoints
 		NeedHost();
 		Project project = Find(request.Int("id", 0));
 		int size = request.Int("size", -1);
+#if !ESSENTIALS
 		int most = CastleStoryPlus.WorkerAI.TaskCrewSize.Value;
+#else
+		// The game's crew size (TaskCrewSize is a Full edition feature).
+		int most = 8;
+#endif
 		if (size < 0 || size > most)
 		{
 			throw new ApiException(400, "'size' must be from 0 to " + most + " (the bricktrons per task)");
 		}
 		UNetGroupe groupe = User.LocalUser.GetComponent<UNetGroupe>();
+#if !ESSENTIALS
 		for (int i = 0; i <= CastleStoryPlus.WorkerAI.TaskCrewSize.Most && project.MaximumCrewSize != size; i++)
+#else
+		for (int i = 0; i <= most && project.MaximumCrewSize != size; i++)
+#endif
 		{
 			if (project.MaximumCrewSize < size)
 			{

@@ -27,6 +27,7 @@ namespace CastleStoryPlus.DevTools.Tests;
 [ParallelTests("Economy")]
 internal static class WorkerRouteTests
 {
+#if !ESSENTIALS
 	[GameTest("Tasks", "A stone just behind a wall 3 high counts the walk round the wall: the worker takes the one further off on its own side first (#69)", TimeoutSeconds = 120f)]
 	private static IEnumerator NearestByWalk(TestContext t)
 	{
@@ -85,7 +86,9 @@ internal static class WorkerRouteTests
 		// In the test world the idle chore may see neither stone (nothing to compare then); it must never take the far one.
 		t.True(planned != behind, "The idle cleanup chose the stone behind the wall");
 	}
+#endif
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "An unopened treasure chest near the base is no cleanup chore (idle cleanup or the base cleanup task); loot lying there is (#58)", TimeoutSeconds = 120f)]
 	private static IEnumerator ChestIsNoCleanupChore(TestContext t)
 	{
@@ -155,7 +158,9 @@ internal static class WorkerRouteTests
 		}
 		t.True(planned == ingot, "The idle cleanup did not choose the iron ingot");
 	}
+#endif
 
+#if !ESSENTIALS
 	// Which workers' idle cleanup has planned to take the item (AutoCleanup's plans), for the log.
 	private static string ClaimedBy(GameObject item)
 	{
@@ -174,10 +179,12 @@ internal static class WorkerRouteTests
 		}
 		return (who.Count > 0) ? "; planned by " + string.Join(", ", who.ToArray()) : string.Empty;
 	}
+#endif
 
 	// How close to the chest a bricktron counts as having walked up to it (it opens, or shows the hint, from 2.6).
 	private const float AtChest = 4f;
 
+#if !ESSENTIALS
 	[GameTest("Tasks", "A treasure chest its guardians still guard sends no worker out: the loose item by it is neither fetched as material nor cleaned up, and an idle builder near it never walks up to it; once the guardians are gone the item is free again (#58)", TimeoutSeconds = 240f)]
 	private static IEnumerator GuardedChestIsNoErrand(TestContext t)
 	{
@@ -299,7 +306,9 @@ internal static class WorkerRouteTests
 			t.True(why == null || !why.Contains("treasure chest"), "The idle cleanup still leaves the iron ingot alone for the chest (" + why + ")");
 		}
 	}
+#endif
 
+#if !ESSENTIALS
 	// Why the idle cleanup would leave the item alone (null: it would pick it up; "not considered": out of its reach).
 	private static string CleanupReason(Labor labor, GameObject item)
 	{
@@ -312,6 +321,7 @@ internal static class WorkerRouteTests
 		}
 		return "not considered";
 	}
+#endif
 
 	// What the bricktron is about, for the log.
 	private static string Doing(Labor labor)

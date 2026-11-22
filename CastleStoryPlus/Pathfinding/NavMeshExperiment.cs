@@ -987,10 +987,12 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 			{
 				kind = 1;
 			}
+#if !ESSENTIALS
 			if (kind == 0 && Roads.IsRoad(p))
 			{
 				kind = RoadLayer;
 			}
+#endif
 			if (kind == 2)
 			{
 				// Ground under a building is no ground at all: no unit's search crosses it, and as an area of its own
@@ -1196,7 +1198,12 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		}
 		filter.areaMask = mask;
 		// Every area but the road costs the speed factor (the pallets' extra on top), the road costs 1.
+#if !ESSENTIALS
 		float factor = Roads.Factor;
+#else
+		// No roads in the Essentials edition: every area at the game's own cost.
+		float factor = 1f;
+#endif
 		for (int area = 0; area < 32; area++)
 		{
 			float? cost = RoadRules.AreaCost(area, AreaRoad, 1, factor);

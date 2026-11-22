@@ -28,7 +28,7 @@ internal static class KitReservation
 
 		public GameObject Rack;
 
-		// The class of the kit to take (CallToArms.AnyKit for whatever the stand hands out); unused when storing.
+		// The class of the kit to take (Kits.AnyKit for whatever the stand hands out); unused when storing.
 		public int Job;
 
 		public bool Store;
@@ -60,7 +60,7 @@ internal static class KitReservation
 
 	public static void ReserveRoom(Labor labor, GameObject rack)
 	{
-		Reserve(labor, rack, CallToArms.AnyKit, store: true);
+		Reserve(labor, rack, Kits.AnyKit, store: true);
 	}
 
 	private static void Reserve(Labor labor, GameObject rack, int job, bool store)
@@ -111,7 +111,7 @@ internal static class KitReservation
 		int count = 0;
 		foreach (Reservation reservation in Others(rack, except))
 		{
-			if (!reservation.Store && (job == CallToArms.AnyKit || reservation.Job == job))
+			if (!reservation.Store && (job == Kits.AnyKit || reservation.Job == job))
 			{
 				count++;
 			}
@@ -194,14 +194,14 @@ internal static class KitReservation
 		}
 		int free = kits - KitsReserved(rack.gameObject, (int)job, except);
 		// Kits of any class someone takes (a call to arms without a class) may be this class too.
-		return Mathf.Min(free, AllKits(rack) - KitsReserved(rack.gameObject, CallToArms.AnyKit, except));
+		return Mathf.Min(free, AllKits(rack) - KitsReserved(rack.gameObject, Kits.AnyKit, except));
 	}
 
 	// Whole kits of any class on the stand.
 	public static int AllKits(ToolRack rack)
 	{
 		int kits = 0;
-		foreach (Occupation.Job job in CallToArms.SoldierJobs)
+		foreach (Occupation.Job job in Kits.SoldierJobs)
 		{
 			kits += Kits.KitsFor(rack, job);
 		}
@@ -235,7 +235,7 @@ internal static class KitReservationPickupPatch
 	{
 		if (__result != null && __result.GetComponent<ToolRack>() != null)
 		{
-			KitReservation.ReserveKit(__instance, __result, CallToArms.AnyKit);
+			KitReservation.ReserveKit(__instance, __result, Kits.AnyKit);
 		}
 	}
 }
@@ -251,7 +251,7 @@ internal static class KitReservationPickupTestPatch
 			return;
 		}
 		ToolRack rack = gc.GameObject.GetComponent<ToolRack>();
-		if (rack != null && KitReservation.AllKits(rack) - KitReservation.KitsReserved(gc.GameObject, CallToArms.AnyKit, futureUser) <= 0)
+		if (rack != null && KitReservation.AllKits(rack) - KitReservation.KitsReserved(gc.GameObject, Kits.AnyKit, futureUser) <= 0)
 		{
 			__result = false;
 		}

@@ -73,11 +73,17 @@ internal static class WarlockSummons
 			return false;
 		}
 		RaidProject raid = warlock.Project as RaidProject;
+#if !ESSENTIALS
 		if (raid == null || !raid.IsStillAlive || raid.faction != warlock.faction || Treasure.TreasureChests.IsGuardRaid(raid.gameObject))
+#else
+		if (raid == null || !raid.IsStillAlive || raid.faction != warlock.faction)
+#endif
 		{
 			return false;
 		}
+#if !ESSENTIALS
 		Combat.Healtron.MarkRolled(summon);
+#endif
 		if (raid.IsFull())
 		{
 			// One more place (the game's own MaximumCrewSize clamps a raid to 8, which would fire a unit of a bigger one).
@@ -107,7 +113,11 @@ internal static class WarlockSummons
 			case Occupation.Type.Minitron:
 				return 0;
 			case Occupation.Type.Corruptron:
+#if !ESSENTIALS
 				return Combat.Healtron.IsHealtron(labor) ? 2 : 1;
+#else
+				return 1;
+#endif
 			case Occupation.Type.Biftron:
 				return 3;
 			case Occupation.Type.Magitron:

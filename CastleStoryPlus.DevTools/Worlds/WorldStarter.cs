@@ -249,10 +249,12 @@ internal class WorldStarter : MonoBehaviour
 	// chosen mode and preset replace them, and OnOk makes them the loaded ones and starts.
 	private static void StartWorld(Asset_Map map, Asset_Gamemode mode, Asset_GamemodePreset preset, int waveMinutes)
 	{
+#if !ESSENTIALS
 		if (waveMinutes > 0)
 		{
 			WaveInterval.Chosen = waveMinutes;
 		}
+#endif
 		BaseMapLibraryMenu.SetSelectedMap(map, AssetPlayableContext.Singleplayer, BaseAssetMenu.MenuGameContext.Normal, BaseAssetMenu.MenuTypeContext.New);
 		BaseMapLibraryMenu.SetSelectedGamemode(mode);
 		BaseMapLibraryMenu.SetSelectedPreset(preset);

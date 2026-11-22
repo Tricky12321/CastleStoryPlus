@@ -13,7 +13,9 @@ using Brix.UI;
 using Brix.UI.Icons;
 using CastleStoryPlus.Core;
 using CastleStoryPlus.LuaUi;
+#if !ESSENTIALS
 using CastleStoryPlus.Metallurgy;
+#endif
 using UnityEngine;
 
 namespace CastleStoryPlus.GameUi;
@@ -98,7 +100,9 @@ internal static class GamePopupBuilder
 		harvest.Add(Nature("harvestBoulder", "##gamemenu_taskbar_boulders", IconKeys._Boulder, NatureType.boulder));
 		harvest.Add(Nature("harvestIron", "##gamemenu_taskbar_iron", IconKeys._Raw_Iron, NatureType.iron));
 		harvest.Add(Nature("harvestBrimstone", "##gamemenu_taskbar_brimstone", IconKeys._Raw_Orange_Crystal, NatureType.pyrite));
+#if !ESSENTIALS
 		harvest.Add(Coal());
+#endif
 		harvest.Add(Nature("harvestTree", "##gamemenu_taskbar_trees", IconKeys._Pine_Tree, NatureType.tree));
 		harvest.Add(Nature("harvestPlant", "##gamemenu_taskbar_plants", IconKeys._Plant, NatureType.plant));
 
@@ -324,6 +328,7 @@ internal static class GamePopupBuilder
 		};
 	}
 
+#if !ESSENTIALS
 	// Coal deposits on their own (CoalHarvest), shown with Metallurgy on.
 	private static UiButton Coal()
 	{
@@ -344,6 +349,7 @@ internal static class GamePopupBuilder
 			}
 		};
 	}
+#endif
 
 	// Ok, apply, cancel or delete: shown when the task offers it, coloured when it can be done now.
 	private static UiButton Status(string id, string label, IconKey icon, Color color, Project.CommitStatusAction action)

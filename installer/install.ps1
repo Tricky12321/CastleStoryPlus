@@ -8,10 +8,12 @@
 #   install.bat                   install or update to the latest release
 #   install.bat -Tag v0.8.1       install a specific release
 #   install.bat -Local DIR        install from an unpacked release folder (contains CastleStoryPlus-Unity6\)
+#   install.bat -Edition Essentials   the Essentials edition (only fixes, performance and AI; docs/Editions.md)
 #   install.bat -Uninstall        remove Castle Story Plus (BepInEx and its config stay)
 #
 # Options: -GameDir DIR, -Force (reinstall even if up to date), -WaitPid PID (wait for the game to
-# exit first), -Restart (start the game through Steam afterwards).
+# exit first), -Restart (start the game through Steam afterwards), -Edition Full|Essentials (which release zip is
+# downloaded; without it the edition already installed, else Full).
 param(
     [string]$GameDir = "",
     [string]$Tag = "",
@@ -19,7 +21,8 @@ param(
     [switch]$Uninstall,
     [switch]$Force,
     [int]$WaitPid = 0,
-    [switch]$Restart
+    [switch]$Restart,
+    [string]$Edition = ""
 )
 $ErrorActionPreference = "Stop"
 # Windows PowerShell redraws its progress bar for every block Invoke-WebRequest and Expand-Archive handle, which makes
@@ -33,6 +36,8 @@ $SteamAppId = "227860"
 $PortDir = "CastleStoryPlus-Unity6"
 $Launcher = "BepInEx\core\CastleStoryPlus.PortLauncher.dll"
 $PortVersion = "$PortDir\BepInEx\plugins\CastleStoryPlus\version.txt"
+# Full or Essentials, written by the release (tools/package-port.sh); a release before 0.9.4 has none (Full).
+$PortEdition = "$PortDir\BepInEx\plugins\CastleStoryPlus\edition.txt"
 # The mod for the original game (0.8.0 and before), replaced by the port.
 $OldBootstrap = "BepInEx\core\CastleStoryPlus.Bootstrap.dll"
 $OldPluginDir = "BepInEx\plugins\CastleStoryPlus"
@@ -166,6 +171,15 @@ try {
     # 1. Castle Story Plus release (the Windows package bundles BepInEx x64 in bepinex\)
     $versionFile = Join-Path $GameDir $PortVersion
     $installed = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { "" }
+    $editionFile = Join-Path $GameDir $PortEdition
+    $installedEdition = if (Test-Path $editionFile) { (Get-Content $editionFile -Raw).Trim() } else { "" }
+    if (-not $installedEdition) { $installedEdition = "Full" }
+    if (-not $Edition) { $Edition = $installedEdition }
+    switch ($Edition.ToLower()) {
+        "full" { $Edition = "Full"; $package = "CastleStoryPlus-v" }
+        "essentials" { $Edition = "Essentials"; $package = "CastleStoryPlus-Essentials-v" }
+        default { Fail "unknown edition: $Edition (Full or Essentials)" }
+    }
     $hasBepInEx = Test-Path (Join-Path $GameDir "BepInEx\core\BepInEx.Preloader.dll")
     $source = $null
     if ($Local) {
@@ -177,13 +191,14 @@ try {
         $api = if ($Tag) { "https://api.github.com/repos/$Repo/releases/tags/$Tag" } else { "https://api.github.com/repos/$Repo/releases/latest" }
         $release = Invoke-RestMethod -Uri $api -Headers @{ Accept = "application/vnd.github+json" }
         $version = $release.tag_name
-        $asset = $release.assets | Where-Object { $_.name -like "CastleStoryPlus-*-windows.zip" } | Select-Object -First 1
-        if (-not $version -or -not $asset) { Fail "release $api has no Castle Story Plus package for Windows" }
-        if (-not $Force -and $installed -eq $version -and (Test-Path (Join-Path $GameDir $Launcher))) {
-            Log "Castle Story Plus $version is already installed."
+        # Only this edition's zip (a release has a Full and an Essentials zip per system).
+        $asset = $release.assets | Where-Object { $_.name -like "$package*-windows.zip" } | Select-Object -First 1
+        if (-not $version -or -not $asset) { Fail "release $api has no Castle Story Plus $Edition package for Windows" }
+        if (-not $Force -and $installed -eq $version -and $installedEdition -eq $Edition -and (Test-Path (Join-Path $GameDir $Launcher))) {
+            Log "Castle Story Plus $version ($Edition) is already installed."
         }
         else {
-            Log "downloading Castle Story Plus $version..."
+            Log "downloading Castle Story Plus $version ($Edition)..."
             $zip = Join-Path $Tmp "mod.zip"
             Download $asset.browser_download_url $zip
             Expand-Archive -Path $zip -DestinationPath (Join-Path $Tmp "mod") -Force

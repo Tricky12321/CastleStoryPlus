@@ -36,7 +36,24 @@ internal static class GameActions
 	// UIGame.CallToArms(the local player's crystal).
 	internal static void CallToArms()
 	{
+#if !ESSENTIALS
 		Army.CallToArms.Execute(OwnCrystal());
+#else
+		// The game's own call to arms: every builder takes gear and runs to the crystal.
+		SoundEngine.Play("Call_To_Arm");
+		GameObject crystal = OwnCrystal();
+		if (UIGameObserver.bricktrons == null)
+		{
+			return;
+		}
+		foreach (Labor labor in UIGameObserver.bricktrons.CheckCreation())
+		{
+			if (labor != null && labor.Profession.OccupationType == Occupation.Type.Builder)
+			{
+				DirectOrderProject.AddCallToArmsGoal(labor, crystal);
+			}
+		}
+#endif
 	}
 
 	// The local player's team's crystal (GameMenu's userCrystal).

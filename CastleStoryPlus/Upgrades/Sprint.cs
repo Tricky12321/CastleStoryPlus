@@ -355,19 +355,7 @@ internal sealed class Sprint : MonoBehaviour
 
 	internal static Faction TeamOf(NetworkConnection connection)
 	{
-		if (connection == null || connection.playerControllers == null)
-		{
-			return null;
-		}
-		foreach (PlayerController controller in connection.playerControllers)
-		{
-			User user = (controller != null && controller.gameObject != null) ? controller.gameObject.GetComponent<User>() : null;
-			if (user != null && user.faction != null)
-			{
-				return user.faction;
-			}
-		}
-		return null;
+		return Multiplayer.ConnectionTeams.TeamOf(connection);
 	}
 
 	// A client: the host started a sprint; shows the dust for as long as it lasts.

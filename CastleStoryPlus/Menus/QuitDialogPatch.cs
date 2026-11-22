@@ -19,10 +19,15 @@ namespace CastleStoryPlus.Menus;
 // Adds SAVE AND RETURN TO MAIN MENU and SAVE AND QUIT GAME (after a confirmation) to the Quit Game dialog. A loaded
 // manual save is overwritten; anything else (new map, quicksave, autosave) becomes a new manual save named after the
 // map and the time.
+// The Essentials edition has no such buttons (SaveAndLeave is a Full edition feature), but keeps SaveBeforeLeaving: the
+// updater, the renderer switch and DevTools' quit save the game with it.
+#if !ESSENTIALS
 [Feature(Features.SaveAndLeave, Features.SaveAndLeaveInfo)]
 [HarmonyPatch(typeof(Container), nameof(Container.ItemClick))]
+#endif
 internal static class QuitDialogPatch
 {
+#if !ESSENTIALS
 	private static bool Prefix(Container __instance, int itemIdx)
 	{
 		if (__instance.GetComponent<ContainerGenericPopulator>() == null || itemIdx < 0 || itemIdx >= __instance.items.Count)
@@ -100,6 +105,8 @@ internal static class QuitDialogPatch
 		}
 		return !Neo.IsMultiplayer || NetworkServer.active;
 	}
+
+#endif
 
 	// Also DevTools' POST /api/quit?save=true.
 	internal static bool SaveBeforeLeaving()

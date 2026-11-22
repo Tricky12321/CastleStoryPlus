@@ -22,10 +22,12 @@ internal static class DiagnosticsEndpoints
 		{
 			Parameters = "count (default 100), q (filter on source or message)"
 		});
+#if !ESSENTIALS
 		routes.Add(new Route("GET", "/api/cleanup", "What a worker's automatic cleanup would do: each loose item near the base or the worker and why it would not be picked up", Cleanup)
 		{
 			Parameters = "unit (bricktron id; default: the player's first builder), max (default 50)"
 		});
+#endif
 		routes.Add(new Route("GET", "/api/workertrace", "Whether the worker trace (every worker state change and why workers reject or fail tasks, written to BepInEx/workertrace.log) is on", WorkerTraceState));
 		routes.Add(new Route("POST", "/api/workertrace", "Switches the worker trace on or off (off by default; it costs frame time while on)", SetWorkerTrace)
 		{
@@ -92,6 +94,7 @@ internal static class DiagnosticsEndpoints
 		return Obj("count", result.Count, "problems", result);
 	}
 
+#if !ESSENTIALS
 	private static object Cleanup(ApiRequest request)
 	{
 		if (!NetworkServer.active)
@@ -132,4 +135,5 @@ internal static class DiagnosticsEndpoints
 			"reasons", reasons,
 			"items", items);
 	}
+#endif
 }

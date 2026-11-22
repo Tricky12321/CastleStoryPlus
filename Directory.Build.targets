@@ -1,4 +1,6 @@
 <Project>
+  <!-- What the Essentials edition leaves out (docs/Editions.md). -->
+  <Import Project="$(MSBuildThisFileDirectory)Editions.targets" />
   <!-- Unity 6 build (see Directory.Build.props): the game and engine references point at the Unity 6 project
        instead of the game's Managed folders. Publicize and the other metadata stay as each project sets them. -->
   <PropertyGroup Condition="'$(UnityTarget)' == '6'">

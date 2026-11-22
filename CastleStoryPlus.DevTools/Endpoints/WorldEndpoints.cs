@@ -285,7 +285,7 @@ internal static class WorldEndpoints
 	// else (no crystal of the faction yet) any crystal next to its bricktrons, the one they spawned at.
 	internal static FireflyNest HomeNest(Faction faction)
 	{
-		FireflyNest home = GiantBricktron.HomeNest(faction);
+		FireflyNest home = CastleStoryPlus.Core.HomeCrystal.Of(faction);
 		if (home != null)
 		{
 			return home;
