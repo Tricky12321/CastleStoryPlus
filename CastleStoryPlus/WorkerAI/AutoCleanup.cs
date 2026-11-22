@@ -155,6 +155,11 @@ internal static class AutoCleanup
 			{
 				continue;
 			}
+			// Enemies standing by it: no walk into them for a loose item (#181).
+			if (BaseArea.NearEnemy(labor.faction, item.transform.position))
+			{
+				continue;
+			}
 			GameComponent component = item.GetComponent<GameComponent>();
 			if (component == null || OtherPlayers(component, labor.faction) || !labor.recepteur.HasRoomFor(item) || labor.BestRecepteurToStore(item) == null)
 			{
@@ -271,6 +276,10 @@ internal static class AutoCleanup
 			else if (Treasure.TreasureChests.InGuardedRuin(item.transform.position))
 			{
 				why = "in the ruin of a treasure chest its guardians still guard";
+			}
+			else if (BaseArea.NearEnemy(labor.faction, item.transform.position))
+			{
+				why = "enemies stand near it";
 			}
 			else if (Claims.ContainsKey(item))
 			{

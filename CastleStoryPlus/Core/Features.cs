@@ -523,6 +523,10 @@ internal static class Features
 
 	public const string WorkshopPriorityInfo = "A workshop's priority (research station, smithy, furnace...) can be set like a task's in its menu: locked, low, medium or high, picked side by side under the recipes, and at the bottom of the market's, research station's, smithy's and armoury's windows (the game keeps every workshop at high).";
 
+	public const string BaseArea = "BaseArea";
+
+	public const string BaseAreaInfo = "Workers keep their own work to the base (#181): their own searches for material and for storage take nothing no player owns (treasure loot, a neutral chest, loose items) further than [BaseArea] Radius (40) blocks from the home crystal, the gather point and the team's stockpiles (task zones count as base too), and nothing with a living enemy within [BaseArea] EnemyDistance (20) blocks of it outside the base; the idle cleanup leaves items by enemies alone. A worker out of the base area with no player's order is written to BepInEx/idle.log with its task and target. Host only.";
+
 	public const string WorkshopFetchRange = "WorkshopFetchRange";
 
 	public const string WorkshopFetchRangeInfo = "A workshop's workers fetch its ingredients only from stockpiles and loose items within its range (counted from the workshop), instead of anywhere on the map; with nothing in range the workshop waits. Set per workshop under its recipes (\"Fetch within\", - and +, Shift 25 at a time, past 250 no limit); workshops not set use [WorkshopFetchRange] Default (40 blocks). While a workshop is selected, a ring on the ground around it shows its range. The range goes along with \"Copy setup\", with copied areas and blueprints (also the blueprint library), and a workshop built from such a blueprint starts with it.";
