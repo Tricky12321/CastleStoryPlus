@@ -26,9 +26,9 @@ namespace CastleStoryPlus.Building;
 // factories when they load, cloned from the pallet (blueprint Blueprints/Pallet, building ObjetsDynamiques/Palette)
 // and grown to 3 x 3 around its centre voxel. It has its own key (saves and the network need one template per key),
 // so everywhere the game finds stockpiles by the pallet's key it is added as one: the instance lists, the workers'
-// storage search, the faction storage count, the "accepts one resource" rule and the hover circle.
+// storage search, the faction storage count, the "accepts one resource" rule and the hover circle. Added to the
+// factories also with the feature switched off, so saved large stockpiles load (SavedContent).
 [Feature(Features.LargeStockpile, Features.LargeStockpileInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class LargeStockpile
 {
 	private const string BlueprintSource = "Pallet";
@@ -75,7 +75,7 @@ internal static class LargeStockpile
 
 	// Factories with the same name are merged: a later one moves its templates into the first and is destroyed
 	// inside its own Awake. So look at the registered factories (not the instance) after every Awake.
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		TryCreate(BlueprintKey.Factory, BlueprintSource, blueprint: true);
 		TryCreate(BuildingKey.Factory, BuildingSource, blueprint: false);
@@ -478,17 +478,5 @@ internal static class LargeStockpileDragPatch
 			}
 		}
 		__result = result;
-	}
-}
-
-// The large stockpile is mapped to its building as soon as it is created; when the game maps all blueprints
-// afterwards it must skip it, or the duplicate key stops the game's factory loading.
-[Feature(Features.LargeStockpile, Features.LargeStockpileInfo)]
-[HarmonyPatch(typeof(BlueprintMapper), nameof(BlueprintMapper.AddMappings))]
-internal static class LargeStockpileBlueprintMappingPatch
-{
-	private static bool Prefix(BlueprintMapper __instance, Blueprint bp)
-	{
-		return !__instance.blueprint2Concrete.ContainsKey(bp.AssetKey);
 	}
 }

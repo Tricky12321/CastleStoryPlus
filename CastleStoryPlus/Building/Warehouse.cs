@@ -23,9 +23,9 @@ namespace CastleStoryPlus.Building;
 // bulk units: 4500 stones, 225 bricks, 675 planks, ...), workers walk in through the cart doors and store and fetch
 // inside, and its brick works turns stored stone into bricks: 20 stones become 1 brick, while the stockpile's
 // "convert stone to bricks" switch is on. The game's own conversion (fill a full stockpile with bricks) is off for
-// it. Expensive to build.
+// it. Expensive to build. Added to the factories also with the feature switched off, so saved warehouses load
+// (SavedContent).
 [Feature(Features.Warehouse, Features.WarehouseInfo)]
-[HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class Warehouse
 {
 	internal const string Name = "Warehouse";
@@ -70,7 +70,7 @@ internal static class Warehouse
 		CursorTooltip.titles[Building.BlueprintKey] = "&&" + Name;
 	}
 
-	private static void Postfix()
+	internal static void AddToFactories()
 	{
 		Building.AddToFactories();
 	}

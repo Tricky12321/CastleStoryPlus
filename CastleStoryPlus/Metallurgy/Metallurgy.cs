@@ -252,8 +252,10 @@ internal static class Metallurgy
 		table[name] = UserData.CreateWithDescriptor(new LuaEnumProxy<T>(value), sample.UserData.Descriptor);
 	}
 
-	// Called after every factory Awake (factories with the same name are merged, so look at the registered ones).
-	internal static void SetUpFactories()
+	// The coal and steel items and their resource infos, after every factory Awake (factories with the same name are
+	// merged, so look at the registered ones). Also with the feature switched off (SavedContent): a save with loose
+	// coal or steel, or a stockpile holding them, loads with them.
+	internal static void SetUpItems()
 	{
 		Factory raw = Ready("RawResources", "RawIron");
 		if (raw != null && !raw.cachedTemplates.ContainsKey(CoalName))
@@ -266,15 +268,23 @@ internal static class Metallurgy
 			// The iron ingot with the steel look (IngotLooks.SteelLook), not tinted again by AddItem.
 			AddItem(build, "IronIngot", SteelName, typeof(Iron), Steel, Color.white, IngotLooks.SteelItem);
 		}
-		if (build != null && build.cachedTemplates.ContainsKey(SteelName) && build.cachedTemplates.ContainsKey(BuildResources.GlassIngot.Name))
-		{
-			IngotLooks.GlassItem(build.GetTemplate(BuildResources.GlassIngot.Name).gameObject);
-		}
 		Factory adjectives = Ready("Adjectives", "RawIron");
 		if (adjectives != null)
 		{
+			EnsureIcons();
 			SetUpInfo(adjectives, "Clay", "RawIron", "Coal", CoalIcon, CoalStockpiledIcon);
 			SetUpInfo(adjectives, "Terracotta", "Iron", "Steel", SteelIcon, SteelStockpiledIcon);
+		}
+	}
+
+	// The feature's looks and room on the templates: steel and glass ingots on stockpiles, the furnace and forge
+	// holding coal and steel. After SetUpItems (SavedContent runs first, Priority.First).
+	internal static void SetUpFactories()
+	{
+		Factory build = Ready("BuildResources", "IronIngot");
+		if (build != null && build.cachedTemplates.ContainsKey(SteelName) && build.cachedTemplates.ContainsKey(BuildResources.GlassIngot.Name))
+		{
+			IngotLooks.GlassItem(build.GetTemplate(BuildResources.GlassIngot.Name).gameObject);
 		}
 		Factory storages = Ready("ObjetsDynamiques", "Palette");
 		if (storages != null)
@@ -558,6 +568,8 @@ internal static class Metallurgy
 	}
 }
 
+// The feature's looks and capacities on the templates. It adds no factory keys: the coal and steel items come from
+// SavedContent, which is always on.
 [Feature(Features.Metallurgy, Features.MetallurgyInfo)]
 [HarmonyPatch(typeof(Factory), nameof(Factory.Awake))]
 internal static class MetallurgyFactoryPatch

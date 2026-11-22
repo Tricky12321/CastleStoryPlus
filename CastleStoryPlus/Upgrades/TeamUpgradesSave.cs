@@ -8,8 +8,9 @@ using Newtonsoft.Json.Serialization;
 namespace CastleStoryPlus.Upgrades;
 
 // Saves the researched tiers as an extra property on the existing Faction component ("upgrades": "2,1,0,...").
-// The unmodded game ignores unknown properties, so saves stay loadable without the mod.
-[Feature(Features.Upgrades, Features.UpgradesInfo)]
+// The unmodded game ignores unknown properties, so saves stay loadable without the mod. Always on: a save made with the
+// feature switched off keeps the researched tiers (#185).
+[Feature]
 [HarmonyPatch(typeof(DefaultGameContractResolver), nameof(DefaultGameContractResolver.GenerateDefaultMonoBehaviourContract))]
 internal static class TeamUpgradesSave
 {

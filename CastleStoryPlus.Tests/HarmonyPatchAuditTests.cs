@@ -26,9 +26,6 @@ public class HarmonyPatchAuditTests
 	private static readonly Dictionary<string, string> SkipWhitelist = new Dictionary<string, string>
 	{
 		{ "Asset_Map.Disk_ReadThumbnail|RandomWorldThumbnailPatch", WaitOnly },
-		{ "BlueprintMapper.AddMappings|LargeStockpileBlueprintMappingPatch", BlueprintGuard },
-		{ "BlueprintMapper.AddMappings|MarketBlueprintMappingPatch", BlueprintGuard },
-		{ "BlueprintMapper.AddMappings|UpgradeBlueprintMappingPatch", BlueprintGuard },
 		{ "Container.ItemClick|ContinueClickPatch", ExclusiveOperation },
 		{ "Container.ItemClick|QuitDialogPatch", ExclusiveOperation },
 		{ "CraftingInstructions.FindResource|MarketFetchPatch", ExclusiveStation },
@@ -75,8 +72,6 @@ public class HarmonyPatchAuditTests
 	private const string FetchAmount = "the later prefix (WorkshopFetchAmount) only lowers upTo, which is harmless on an already replaced call";
 
 	private const string SearchBudget = "the later prefixes check __runOriginal (NavMeshRoutes) or only set a flag that their finalizer restores (HeuristicAiSearchPatch)";
-
-	private const string BlueprintGuard = "all the prefixes are the same pure test (the key is mapped already) with no side effects: running on is harmless";
 
 	private const string ExclusiveOperation = "the prefixes act on different menu operations (quit vs continue/load); the other returns true for this item";
 
