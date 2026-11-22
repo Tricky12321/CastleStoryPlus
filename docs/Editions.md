@@ -55,11 +55,11 @@ dotnet build CastleStoryPlus.UI -p:UnityTarget=player -p:Edition=Essentials
 `CastleStoryPlus-Essentials-v<version>-linux.zip` / `-windows.zip`. The two differ only in
 `BepInEx/plugins/CastleStoryPlus`: the plugin, its menu assembly, its Assets and `edition.txt` (`Full` or
 `Essentials`). The Essentials README says which edition it is. `release.sh` uploads the Full zips first and the
-Essentials zips after them, because installers before 0.9.4 take the first `CastleStoryPlus-*-<os>.zip` of a release.
+Essentials zips after them, because installers before 0.10.0 take the first `CastleStoryPlus-*-<os>.zip` of a release.
 
 Updates stay within an edition: the in-game update check only offers a release that has this edition's zip
 (`Edition.PackagePrefix`), and passes the edition to the installer (`--edition` / `-Edition`). The installer takes the
-edition from that option, else from the installed `edition.txt` (a release before 0.9.4 has none: Full), and downloads
+edition from that option, else from the installed `edition.txt` (a release before 0.10.0 has none: Full), and downloads
 only that edition's zip. `install.sh --edition essentials` (`install.bat -Edition Essentials`) switches an install over.
 
 ## Identity and settings
@@ -79,7 +79,7 @@ worlds would differ at once. The host sends its edition and version with the che
 (CheatGuard's message 207; the fields come after the setting, so players of older versions read the setting and stop).
 A client of the other edition leaves the lobby or game at once and shows a window saying which edition the host
 plays and that every player needs the same one; it also tells the host (message 215), whose chat then says why the
-player left. A host before 0.9.4 sends no edition, so nothing is checked against it. With the CheatGuard feature
+player left. A host before 0.10.0 sends no edition, so nothing is checked against it. With the CheatGuard feature
 switched off on the host no edition is sent either.
 
 ## Saves

@@ -11,7 +11,7 @@ internal static class Edition
 
 	public const bool IsEssentials = true;
 
-	// The release zips of this edition: CastleStoryPlus-Essentials-v0.9.4-linux.zip.
+	// The release zips of this edition: CastleStoryPlus-Essentials-v0.10.0-linux.zip.
 	public const string PackagePrefix = "CastleStoryPlus-Essentials-v";
 
 	public const string LogoFile = "logo_essentials.png";
@@ -22,7 +22,7 @@ internal static class Edition
 
 	public const bool IsEssentials = false;
 
-	// The release zips of this edition: CastleStoryPlus-v0.9.4-linux.zip.
+	// The release zips of this edition: CastleStoryPlus-v0.10.0-linux.zip.
 	public const string PackagePrefix = "CastleStoryPlus-v";
 
 	public const string LogoFile = "logo.png";

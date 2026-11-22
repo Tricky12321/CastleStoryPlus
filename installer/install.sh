@@ -25,7 +25,7 @@ STEAM_APP_ID="227860"
 PORT_DIR="CastleStoryPlus-Unity6"
 LAUNCHER="BepInEx/core/CastleStoryPlus.PortLauncher.dll"
 PORT_VERSION="$PORT_DIR/BepInEx/plugins/CastleStoryPlus/version.txt"
-# Full or Essentials, written by the release (tools/package-port.sh); a release before 0.9.4 has none (Full).
+# Full or Essentials, written by the release (tools/package-port.sh); a release before 0.10.0 has none (Full).
 PORT_EDITION="$PORT_DIR/BepInEx/plugins/CastleStoryPlus/edition.txt"
 # The mod for the original game (0.8.0 and before), replaced by the port.
 OLD_BOOTSTRAP="BepInEx/core/CastleStoryPlus.Bootstrap.dll"

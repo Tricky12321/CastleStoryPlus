@@ -36,7 +36,7 @@ $SteamAppId = "227860"
 $PortDir = "CastleStoryPlus-Unity6"
 $Launcher = "BepInEx\core\CastleStoryPlus.PortLauncher.dll"
 $PortVersion = "$PortDir\BepInEx\plugins\CastleStoryPlus\version.txt"
-# Full or Essentials, written by the release (tools/package-port.sh); a release before 0.9.4 has none (Full).
+# Full or Essentials, written by the release (tools/package-port.sh); a release before 0.10.0 has none (Full).
 $PortEdition = "$PortDir\BepInEx\plugins\CastleStoryPlus\edition.txt"
 # The mod for the original game (0.8.0 and before), replaced by the port.
 $OldBootstrap = "BepInEx\core\CastleStoryPlus.Bootstrap.dll"

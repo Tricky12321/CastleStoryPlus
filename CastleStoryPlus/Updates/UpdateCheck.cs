@@ -229,7 +229,7 @@ internal class UpdateCheck : MonoBehaviour
 	}
 
 	// This edition's zip for this system: CastleStoryPlus-v0.1.0-windows.zip / -linux.zip (Full),
-	// CastleStoryPlus-Essentials-v0.9.4-windows.zip / -linux.zip (Essentials). A release has both editions' zips; an
+	// CastleStoryPlus-Essentials-v0.10.0-windows.zip / -linux.zip (Essentials). A release has both editions' zips; an
 	// edition only ever updates to its own.
 	private static bool IsPackageForThisSystem(string name)
 	{
