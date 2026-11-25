@@ -299,10 +299,13 @@ def check_demolition(host, client):
     hosts = own_pallet(host, host, ((-9, 6), (9, 6), (-6, -9), (6, -9), (0, 12)), True)
     spot = "%g,%g,%g" % tuple(hosts)
     # Another player's building: the client sends the request (the API skips the client's own check), the host refuses.
-    client.call("POST", "/api/demolish/mark", at=spot)
-    time.sleep(3)
-    if near(demolition_marks(host)["marks"], hosts):
-        return False, "the host marked its own stockpile for the client's request"
+    # In a co-op game both players share one faction: the host's building is the client's own, so this part is left out.
+    shared = host.call("GET", "/api/nogo")["localFaction"] == client.call("GET", "/api/nogo")["localFaction"]
+    if not shared:
+        client.call("POST", "/api/demolish/mark", at=spot)
+        time.sleep(3)
+        if near(demolition_marks(host)["marks"], hosts):
+            return False, "the host marked its own stockpile for the client's request"
     host.call("POST", "/api/demolish/mark", at=spot)
     try:
         client.wait_for("the host's demolition blueprint", lambda: len(near(demolition_marks(client)["marks"], hosts)) > 0, 15)
@@ -323,7 +326,8 @@ def check_demolition(host, client):
         host.wait_for("the client's cancel", lambda: not near(demolition_marks(host)["marks"], clients), 15)
     except RuntimeError:
         return False, "the client's cancel did not reach the host: %s" % demolition_marks(host)
-    return True, "host refused the client's demolition of its stockpile; host's and client's demolitions and cancels reached both"
+    refused = "the players share a faction (co-op), no refusal to check; " if shared else "host refused the client's demolition of its stockpile; "
+    return True, refused + "host's and client's demolitions and cancels reached both"
 
 
 def zones_of(player, faction):
@@ -336,7 +340,8 @@ def zones_of(player, faction):
 def check_no_go_zones(host, client):
     client_faction = client.call("GET", "/api/nogo")["localFaction"]
     host_faction = host.call("GET", "/api/nogo")["localFaction"]
-    if not client_faction or not host_faction or client_faction == host_faction:
+    # In a co-op game both players share one faction and its zones.
+    if not client_faction or not host_faction:
         return False, "factions: host %s, client %s" % (host_faction, client_faction)
     try:
         client.call("POST", "/api/nogo", op="add", x0=10, z0=10, x1=14, z1=12)
@@ -352,8 +357,8 @@ def check_no_go_zones(host, client):
         # The client's erasing goes through the host too, and comes back.
         client.call("POST", "/api/nogo", op="erase", x0=10, z0=10, x1=14, z1=12)
         try:
-            host.wait_for("the client's zone erased", lambda: not zones_of(host, client_faction), 15)
-            client.wait_for("the erase back from the host", lambda: not zones_of(client, client_faction), 15)
+            host.wait_for("the client's zone erased", lambda: [10, 10, 14, 12] not in zones_of(host, client_faction), 15)
+            client.wait_for("the erase back from the host", lambda: [10, 10, 14, 12] not in zones_of(client, client_faction), 15)
         except RuntimeError:
             return False, "after erasing: host %s, client %s" % (zones_of(host, client_faction), zones_of(client, client_faction))
         return True, "client's zone on the host, host's zone on the client, erase synced"
