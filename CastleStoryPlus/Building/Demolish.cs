@@ -23,6 +23,7 @@ using Brix.Transactions;
 using Brix.UI.Icons;
 using Brix.Utils;
 using CastleStoryPlus.Core;
+using CastleStoryPlus.Diagnostics;
 using CastleStoryPlus.WorkerAI;
 using HarmonyLib;
 using Motus.Behavior;
@@ -544,20 +545,26 @@ internal static class Demolish
 		}
 		int contents = leftovers.Count;
 		List<GameObject> refunded = new List<GameObject>();
-		foreach (KeyValuePair<Factory.AssetKey, int> entry in Refund(mark.Cost))
+		List<KeyValuePair<Factory.AssetKey, int>> refund = Refund(mark.Cost);
+		int total = 0;
+		foreach (KeyValuePair<Factory.AssetKey, int> entry in refund)
+		{
+			total += entry.Value;
+		}
+		// Each item gets its own place on the spot (SpawnSpread), not all one point: items dropped in one point
+		// overlap, and the physics pushed them apart so hard that some flew off the island into the void (a test
+		// lost 2 of 6 planks so). Recepteur.ScatterObjects is not used: it puts every item back on the one point.
+		foreach (KeyValuePair<Factory.AssetKey, int> entry in refund)
 		{
 			for (int i = 0; i < entry.Value; i++)
 			{
-				GameObject go = Transactor.SpawnUNet(entry.Key, faction, center + Vector3.up * 0.5f, Quaternion.identity);
+				GameObject go = Transactor.SpawnUNet(entry.Key, faction, SpawnSpread.Place(center, refunded.Count, total), Quaternion.identity);
 				if (go != null)
 				{
+					SpawnSpread.Calm(go);
 					refunded.Add(go);
 				}
 			}
-		}
-		if (refunded.Count > 0)
-		{
-			Recepteur.ScatterObjects(refunded, center);
 		}
 		leftovers.AddRange(refunded);
 		DemolishHaul.Add(leftovers, faction, center);
@@ -765,6 +772,9 @@ internal static class DemolishHaul
 
 	private static readonly List<GameObject> Gone = new List<GameObject>();
 
+	// What each worker picked up for its current load, to log where it was stored.
+	private static readonly Dictionary<Labor, List<GameObject>> Loads = new Dictionary<Labor, List<GameObject>>();
+
 	public static readonly LaborInstruction<GameObject> Carry = new LaborInstruction<GameObject>("DemolitionLeftovers", IconKeys.PickUp, (Labor labor, GameObject item) => HaulNode(labor, item, 1));
 
 	internal static int Count => Leftovers.Count;
@@ -773,6 +783,7 @@ internal static class DemolishHaul
 	{
 		Leftovers.Clear();
 		Claims.Clear();
+		Loads.Clear();
 	}
 
 	internal static void Add(List<GameObject> items, Faction faction, Vector3 site)
@@ -911,8 +922,16 @@ internal static class DemolishHaul
 				}
 			}, labor)
 			.Do((Func<Labor, Vector3, int, Node>)PickMore, labor, item.transform.position, 0)
+			.Do((Labor l, int n) =>
+			{
+				NotePickedUp(l, n);
+			}, labor, load)
 			.Do(labor.GoStoreInBestStorage())
 			.Label("Store demolition leftovers")
+			.Do((Labor l, int n) =>
+			{
+				NoteStored(l, n);
+			}, labor, load)
 			.Do((Func<Labor, Vector3, int, Node>)NextLoad, labor, item.transform.position, load)
 			.Finally((Labor l) =>
 			{
@@ -979,6 +998,75 @@ internal static class DemolishHaul
 		return HaulNode(labor, item, load + 1);
 	}
 
+	// The load in the worker's hands, logged as picked up; where it went is logged once it is stored.
+	private static void NotePickedUp(Labor labor, int load)
+	{
+		if (labor == null || labor.IsNullOrReleased() || labor.recepteur == null)
+		{
+			return;
+		}
+		List<GameObject> items = new List<GameObject>();
+		foreach (IDescriptor carried in labor.recepteur.StoredItems)
+		{
+			if (carried != null && carried.GameObject != null)
+			{
+				items.Add(carried.GameObject);
+			}
+		}
+		Loads[labor] = items;
+		Plugin.Log.LogInfo("Demolish: " + labor.name + " picked up load " + load + " of demolition leftovers: " + labor.recepteur.ContentString() + " (" + items.Count + " items; " + Leftovers.Count + " leftovers tracked)");
+	}
+
+	private static void NoteStored(Labor labor, int load)
+	{
+		if (labor == null || !Loads.TryGetValue(labor, out List<GameObject> items))
+		{
+			return;
+		}
+		Loads.Remove(labor);
+		Dictionary<string, int> where = new Dictionary<string, int>();
+		foreach (GameObject item in items)
+		{
+			Tally(where, Whereabouts(item));
+		}
+		Plugin.Log.LogInfo("Demolish: " + labor.name + " stored load " + load + " of demolition leftovers: " + Describe(where));
+	}
+
+	// Where a leftover is: in a storage or someone's hands, lying loose, or gone.
+	private static string Whereabouts(GameObject item)
+	{
+		if (item == null || item.IsNullOrReleased())
+		{
+			return "gone (destroyed, e.g. fallen into the void)";
+		}
+		GameComponent component = item.GetComponent<GameComponent>();
+		Recepteur parent = (component != null) ? component.ParentRecepteur : null;
+		if (parent != null)
+		{
+			return "in " + parent.name + " at " + XYZ.FromVector3(parent.transform.position);
+		}
+		if (!item.activeInHierarchy)
+		{
+			return "inactive";
+		}
+		return "loose at " + XYZ.FromVector3(item.transform.position);
+	}
+
+	private static void Tally(Dictionary<string, int> where, string place)
+	{
+		where[place] = where.TryGetValue(place, out int n) ? n + 1 : 1;
+	}
+
+	private static string Describe(Dictionary<string, int> where)
+	{
+		string text = string.Empty;
+		foreach (KeyValuePair<string, int> pair in where)
+		{
+			text += ((text.Length > 0) ? ", " : string.Empty) + pair.Value + " " + pair.Key;
+		}
+		return text;
+	}
+
 	private static bool IsLoose(GameObject item)
 	{
 		GameComponent component = item.GetComponent<GameComponent>();
@@ -1022,9 +1110,16 @@ internal static class DemolishHaul
 				Gone.Add(item);
 			}
 		}
+		Dictionary<string, int> where = null;
 		foreach (GameObject item in Gone)
 		{
 			Leftovers.Remove(item);
+			where = where ?? new Dictionary<string, int>();
+			Tally(where, Whereabouts(item));
+		}
+		if (where != null)
+		{
+			Plugin.Log.LogInfo("Demolish: " + Gone.Count + " demolition leftovers no longer lie loose: " + Describe(where) + "; " + Leftovers.Count + " left");
 		}
 		Gone.Clear();
 		foreach (KeyValuePair<GameObject, Claim> pair in Claims)
