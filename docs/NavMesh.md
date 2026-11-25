@@ -124,8 +124,9 @@ units are answered by the mesh, and the game's A\* stays for enemies and as the 
   the graph to a voxel of the line up to 16 further on is searched, within 10 blocks and 400 places, by the unit's
   rules. Only when that fails is the request left to the A\*.
 - **Steep steps.** The mesh is the voxels' top surfaces, so a walking step up or down most of a block costs it little
-  more than flat ground, where the graph weighs it 130 to 250 against 10. For each such step of the route (weight
-  100 or more) the cheapest way over the graph from the voxel before it to one of the route's next 8 voxels is
+  more than flat ground, where the graph weighs it more (130 to 250 against 10 at the game's penalties, 32 to 55 at
+  the mod's `[Pathfinding] ClimbCost` and `StepDownCost`). For each such step of the route (weight 10 + 3/8 of the
+  climb cost or more: 100 at the game's penalty, 32 at the default) the cheapest way over the graph from the voxel before it to one of the route's next 8 voxels is
   searched, within 6 blocks and 300 places, by the unit's rules, and replaces the stretch when it costs less (a
   route over a hillside cost 1.4 times the shortest before, `RandomRoutesNearShortest`).
 - **Result.** The voxels up to the first one that reaches the target become the search's result, a chain of the

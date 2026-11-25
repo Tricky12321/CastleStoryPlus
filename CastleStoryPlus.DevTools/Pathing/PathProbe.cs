@@ -11,7 +11,7 @@ namespace CastleStoryPlus.DevTools.Pathing;
 // for a given bricktron from one voxel to another, and compares the route with the shortest one: a Dijkstra over
 // the same navigation graph (the game's level-0 nodes and their links), with the same rules of what the bricktron
 // may cross. The cost of a route is the sum of its links' weights, as the game counts it (a flat step 10, a step
-// up or down more, climbing 240+).
+// up or down more, a climb 10 + [Pathfinding] ClimbCost).
 internal static class PathProbe
 {
 	internal sealed class Route
