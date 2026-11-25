@@ -251,6 +251,7 @@ switched off on the host no edition is sent either.
 | `UpdateCheck` | In | Infrastructure: the updater (Essentials updates to the Essentials zips) |
 | `Upgrades` | Out | New buildings and research |
 | `WallLean` | Out (borderline) | Changes what archers can reach |
+| `WardAnimations` | In (borderline) | Less on screen: optional switches (all off by default) that calm or thin out the wards' animations and particles, like RenderTuning's lighter picture |
 | `WardRangeFade` | Out | A visual preference |
 | `Warehouse` | Out | A new building |
 | `WarlockSummons` | In (borderline) | Bug fix (#161): a wave is over only when its summons are dead |

@@ -800,7 +800,8 @@ internal class GameTaskRow : MonoBehaviour
 
 // The selected task's popup: its sections stacked in a panel over the task list, above the selected row. Each
 // section has a small grey caption in capitals and a thin line above it; a section laid out as rows draws its
-// buttons as wide rows (CsListRowView).
+// buttons as wide rows (CsListRowView). A small tab above its top right corner minimizes it to one line with the
+// task's name and a button that opens it again; each task keeps its own choice (TaskPopupFold, #198).
 internal class CsPopupView : MonoBehaviour
 {
 	private const float Width = 320f;
@@ -808,6 +809,16 @@ internal class CsPopupView : MonoBehaviour
 	private UiPanel _panel;
 
 	private RectTransform _rect;
+
+	// The minimized popup's one line: the task's name and the button that opens it again.
+	private GameObject _folded;
+
+	private Text _foldedName;
+
+	// The tab above the open popup that minimizes it.
+	private GameObject _foldTab;
+
+	internal bool Minimized { get; private set; }
 
 	private sealed class SectionView
 	{
@@ -842,6 +853,7 @@ internal class CsPopupView : MonoBehaviour
 		view._panel = panel;
 		view._rect = rect;
 		view._drag = CsWindowDrag.Add(rect, "task popup");
+		view.BuildFold(rect);
 		foreach (UiSection section in panel.Sections)
 		{
 			GameObject line = LuiWidgets.Divider(rect, vertical: false).gameObject;
@@ -892,6 +904,66 @@ internal class CsPopupView : MonoBehaviour
 		return view;
 	}
 
+	// The minimized line (first in the popup, shown only while minimized) and the minimize tab above the popup's top
+	// right corner (outside its layout, so the open popup keeps its size and nothing under the tab is covered).
+	private void BuildFold(RectTransform rect)
+	{
+		RectTransform line = UiKit.CreateRect("Minimized", rect);
+		HorizontalLayoutGroup layout = line.gameObject.AddComponent<HorizontalLayoutGroup>();
+		layout.spacing = 6f;
+		layout.childAlignment = TextAnchor.MiddleLeft;
+		layout.childControlWidth = true;
+		layout.childControlHeight = true;
+		layout.childForceExpandWidth = false;
+		layout.childForceExpandHeight = false;
+		LayoutElement lineSize = line.gameObject.AddComponent<LayoutElement>();
+		lineSize.minHeight = 22f;
+		_foldedName = LuiWidgets.Label(line, string.Empty, 11, UiTheme.TextMuted, TextAnchor.MiddleLeft, LuiStyle.Bold);
+		UiKit.Flexible(_foldedName.gameObject);
+		FoldButton(line, "+", "Open the task's menu again (kept for this task)", 30f, 20f);
+		_folded = line.gameObject;
+		_folded.SetActive(false);
+
+		Button tab = FoldButton(rect, "-", "Minimize this task's menu (only this task: the others stay open)", 30f, 16f);
+		RectTransform tabRect = (RectTransform)tab.transform;
+		LayoutElement ignore = tab.GetComponent<LayoutElement>();
+		ignore.ignoreLayout = true;
+		tabRect.anchorMin = tabRect.anchorMax = new Vector2(1f, 1f);
+		tabRect.pivot = new Vector2(1f, 0f);
+		tabRect.sizeDelta = new Vector2(30f, 16f);
+		tabRect.anchoredPosition = new Vector2(-8f, 1f);
+		// The tab in the popup's own colour, so it reads as part of it.
+		Image tabBackground = tab.GetComponent<Image>();
+		UiTheme.Round(tabBackground, UiTheme.BgPopup, UiTheme.SlotRadius);
+		ColorBlock colors = tab.colors;
+		colors.normalColor = Color.white;
+		colors.highlightedColor = Color.white;
+		colors.pressedColor = new Color(1f, 0.85f, 0.4f, 1f);
+		tab.colors = colors;
+		_foldTab = tab.gameObject;
+		_foldTab.SetActive(false);
+	}
+
+	// A small yellow sign on a faint pill (the newer look's - and + buttons).
+	private static Button FoldButton(Transform parent, string sign, string tip, float width, float height)
+	{
+		Button button = UiKit.CreateButton(parent, sign, 0f, () => TaskPopupFold.Toggle());
+		UiKit.Fixed(button.gameObject, width, height);
+		Image image = button.GetComponent<Image>();
+		UiTheme.Round(image, Color.white, UiTheme.PillRadius);
+		ColorBlock colors = button.colors;
+		colors.normalColor = new Color(1f, 1f, 1f, 0.05f);
+		colors.highlightedColor = new Color(1f, 1f, 1f, 0.16f);
+		colors.pressedColor = new Color(1f, 197f / 255f, 10f / 255f, 0.35f);
+		button.colors = colors;
+		Text text = button.GetComponentInChildren<Text>();
+		text.color = LuiStyle.CastleYellow;
+		text.font = LuiStyle.Bold;
+		text.fontSize = 14;
+		LuiHoverTip.Add(button.gameObject, tip);
+		return button;
+	}
+
 	// A part laid out by the popup across its whole width, not shrunk to what it holds (its fitter would fight the
 	// popup's layout and leave it centred), its children stretched across it.
 	private static void FillWidth(RectTransform rect)
@@ -928,11 +1000,17 @@ internal class CsPopupView : MonoBehaviour
 	{
 		_readAt = Time.unscaledTime;
 		_covered = CsStationWindow.Covering;
+		// Minimized for this task: only the line with its name, however many sections it has.
+		object key = TaskPopupFold.Current;
+		bool minimized = !CsStationWindow.Covering && TaskPopupFold.IsMinimized(key);
 		bool any = false;
+		bool has = false;
 		foreach (SectionView view in _sections)
 		{
 			// A building's own window (research station, market) stands in the popup's place.
-			bool visible = !CsStationWindow.Covering && view.Section.IsVisible();
+			bool shows = !CsStationWindow.Covering && view.Section.IsVisible();
+			has |= shows;
+			bool visible = shows && !minimized;
 			if (view.Holder.gameObject.activeSelf != visible)
 			{
 				view.Holder.gameObject.SetActive(visible);
@@ -945,8 +1023,27 @@ internal class CsPopupView : MonoBehaviour
 			}
 			any |= visible;
 		}
+		bool folded = minimized && has;
+		Minimized = folded;
+		if (_folded.activeSelf != folded)
+		{
+			_folded.SetActive(folded);
+		}
+		if (folded)
+		{
+			string name = (GameUiState.Station != null) ? GameTaskList.WorkshopName(GameUiState.Station) : GameMenuTexts.TaskName(GameUiState.Selected);
+			name = (name ?? string.Empty).ToUpperInvariant();
+			if (_foldedName.text != name)
+			{
+				_foldedName.text = name;
+			}
+		}
+		if (_foldTab.activeSelf != any)
+		{
+			_foldTab.SetActive(any);
+		}
 		Image background = GetComponent<Image>();
-		background.enabled = any;
+		background.enabled = any || folded;
 		if (any)
 		{
 			CsItemViews.MarkAll();

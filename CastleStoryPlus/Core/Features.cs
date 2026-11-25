@@ -235,6 +235,10 @@ internal static class Features
 
 	public const string WardRangeFadeInfo = "The ward range spheres (shown while a ward is hovered or placed) are drawn fainter, so the ground under them can be seen ([WardRange] Strength).";
 
+	public const string WardAnimations = "WardAnimations";
+
+	public const string WardAnimationsInfo = "Settings > Castle Story Plus settings > Wards, all off by default (the game's look): sentinel wards without their defense animation (no spin-up, glow or recoil when they shoot; shots, sounds and overheat smoke stay), healing wards with a quarter of their particles, and the lines between wards and pylons without their sway ([WardAnimations] NoDefenseAnimation, FewerHealParticles, StillLinks). Only this player's view changes.";
+
 	public const string FasterTaskSearch = "FasterTaskSearch";
 
 	public const string FasterTaskSearchInfo = "Workers find their next task faster in big task areas (mining, digging, many trees): the search uses a real-time budget per frame instead of pausing every few tasks.";
