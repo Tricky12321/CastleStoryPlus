@@ -72,7 +72,7 @@ internal static class PlaceEndpoints
 		});
 		routes.Add(new Route("POST", "/api/blueprints/complete", "Cheat: finishes the player's buildable blueprints at once (and demolitions), without workers or materials; repeats so pieces resting on finished ones follow", Complete)
 		{
-			Parameters = "project (build project id; default: every project)"
+			Parameters = "project (build project id; default: every project), everyone (true: also the other players' placed blueprints, not their demolitions)"
 		});
 		routes.Add(new Route("GET", "/api/blueprints/keys", "The blueprints the build menu offers (stone, wood, structures: stockpile, workshops, doors, ...) with their footprint (size x, y, z at turn 0 and the offset of its first voxel from 'at') when a game is running", Keys)
 		{
@@ -314,7 +314,12 @@ internal static class PlaceEndpoints
 		NeedGame();
 		int id = request.Int("project", 0);
 		Project project = (id != 0) ? ProjectEndpoints.Find(id) : null;
-		InstantBuild.Outcome outcome = InstantBuild.Complete(InstantBuild.Of(User.LocalUser.faction, project));
+		List<Blueprint> blueprints = InstantBuild.Of(User.LocalUser.faction, project);
+		if (request.Bool("everyone", false))
+		{
+			blueprints.AddRange(InstantBuild.OfOthers(User.LocalUser.faction, project));
+		}
+		InstantBuild.Outcome outcome = InstantBuild.Complete(blueprints);
 		return Obj("built", outcome.Built, "notBuilt", outcome.Left);
 	}
 

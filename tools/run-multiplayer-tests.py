@@ -14,6 +14,9 @@ game. The checks compare what the client has with what the host has, through the
                           client's bricktrons put on its own task all join its crew there and on the host (issue #88)
     VanishedTask          a bricktron the client puts on its task, deleted right after, is with the free workers on
                           both players, not frozen in the deleted task (issue #199)
+    Demolition            the demolition task (#200): the host refuses a client's demolition of the host's building, the
+                          host's demolition blueprint reaches the client, and the client's demolition of its own building
+                          (and its cancel) is done by the host
     SavedTeams            three players (host, client and a third player) in a Conquest Versus lobby, two of
                           them in one team, are allied in the game; the game saved and loaded again in a new lobby puts both
                           back in the same team, and they are allied again
@@ -254,6 +257,73 @@ def check_weather(host, client):
     return True, "client had the host's rain (boost %s) and its end" % answer["grassBoost"]
 
 
+def ground_spots(host, offsets):
+    """The empty voxels on the ground at the offsets from the home crystal (x, y, z)."""
+    home = host.call("GET", "/api/ground?radius=0&heights=false")["center"]
+    for dx, dz in offsets:
+        ground = host.call("GET", "/api/ground?radius=0&heights=false&x=%d&z=%d" % (home[0] + dx, home[1] + dz))
+        if ground.get("min") is None or ground["min"] < 0:
+            continue
+        yield (home[0] + dx, ground["min"] + 1, home[1] + dz)
+
+
+def near(entries, at, distance=3):
+    return [e for e in entries or [] if abs(e["position"][0] - at[0]) <= distance and abs(e["position"][2] - at[2]) <= distance]
+
+
+def demolition_marks(player, own=False):
+    return player.call("GET", "/api/demolish/marks", own="true" if own else "false")
+
+
+def own_pallet(player, host, offsets, instant):
+    """Places a stockpile of the player near the home crystal and has it built at once; its position."""
+    for at in ground_spots(host, offsets):
+        spot = "%d,%d,%d" % at
+        if instant:
+            answer = player.call("POST", "/api/blueprints/place", key="Pallet", at=spot, instant="true")
+        else:
+            answer = player.call("POST", "/api/blueprints/place", key="Pallet", at=spot)
+        if not answer.get("placed"):
+            continue
+        if not instant:
+            # The client's blueprint reaches the host a moment later; the host finishes it.
+            host.wait_for("the client's stockpile blueprint", lambda: host.call("POST", "/api/blueprints/complete", everyone="true")["built"] > 0, 30)
+        player.wait_for("its stockpile", lambda: len(near(demolition_marks(player, True)["own"], at)) > 0, 30)
+        return near(demolition_marks(player, True)["own"], at)[0]["position"]
+    raise RuntimeError("found no place for a stockpile round the home crystal")
+
+
+def check_demolition(host, client):
+    hosts = own_pallet(host, host, ((-9, 6), (9, 6), (-6, -9), (6, -9), (0, 12)), True)
+    spot = "%g,%g,%g" % tuple(hosts)
+    # Another player's building: the client sends the request (the API skips the client's own check), the host refuses.
+    client.call("POST", "/api/demolish/mark", at=spot)
+    time.sleep(3)
+    if near(demolition_marks(host)["marks"], hosts):
+        return False, "the host marked its own stockpile for the client's request"
+    host.call("POST", "/api/demolish/mark", at=spot)
+    try:
+        client.wait_for("the host's demolition blueprint", lambda: len(near(demolition_marks(client)["marks"], hosts)) > 0, 15)
+    except RuntimeError:
+        return False, "the host's demolition blueprint did not reach the client: %s" % demolition_marks(client)
+    host.call("POST", "/api/demolish/mark", at=spot, mark="false")
+    client.wait_for("the host's cancel", lambda: not near(demolition_marks(client)["marks"], hosts), 15)
+    clients = own_pallet(client, host, ((-12, -4), (12, -4), (-4, 15), (4, -15), (15, 4)), False)
+    spot = "%g,%g,%g" % tuple(clients)
+    client.call("POST", "/api/demolish/mark", at=spot)
+    try:
+        host.wait_for("the client's demolition in the task", lambda: any(m["task"] for m in near(demolition_marks(host)["marks"], clients)), 15)
+        client.wait_for("its demolition blueprint", lambda: len(near(demolition_marks(client)["marks"], clients)) > 0, 15)
+    except RuntimeError:
+        return False, "the client's own demolition: host %s, client %s" % (demolition_marks(host), demolition_marks(client))
+    client.call("POST", "/api/demolish/mark", at=spot, mark="false")
+    try:
+        host.wait_for("the client's cancel", lambda: not near(demolition_marks(host)["marks"], clients), 15)
+    except RuntimeError:
+        return False, "the client's cancel did not reach the host: %s" % demolition_marks(host)
+    return True, "host refused the client's demolition of its stockpile; host's and client's demolitions and cancels reached both"
+
+
 TASK_CREW = 12
 
 TASK_CREW_BEFORE = []
@@ -485,6 +555,7 @@ CHECKS = [
     ("Weather", check_weather),
     ("TaskCrew", check_task_crew),
     ("VanishedTask", check_vanished_task),
+    ("Demolition", check_demolition),
     ("SavedTeams", check_saved_teams),
 ]
 

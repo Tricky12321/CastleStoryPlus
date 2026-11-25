@@ -141,6 +141,7 @@ switched off on the host no edition is sent either.
 | `DarkCrystals` | Out | A new resource |
 | `DebugMenu` | In (borderline) | Diagnostics (debug mode only, cheats guarded in multiplayer); the in-game tests use it |
 | `DeconstructColour` | In (borderline) | Fixes the deconstruct colour the game loses when the task is not selected |
+| `Demolish` | Out | A new building task (demolition with the materials given back) |
 | `DesyncProtection` | In | Multiplayer fix: worlds that drift apart are corrected |
 | `DirectTask` | Out (borderline) | A new order (select bricktrons and right-click a task) |
 | `DoorRepair` | In (borderline) | Bug fix: repair zones skipped damaged doors |

@@ -9,6 +9,7 @@ The first start creates `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Ed
 | `[Saving] AutosaveMinutes` | `2` | minutes of play between autosaves, `0` = off |
 | `[Building] MoveStructureKey`, `CopyKey`, `PasteKey` | M, Ctrl+C, Ctrl+V | keys for moving buildings and copy/paste |
 | `[RouteOverlay] Shown`, `Key` | off, 8 | the route overlay of the selected bricktrons, and the key that shows and hides it |
+| `[Building] DemolishKey` | Delete | hold it and click one of your buildings to have it demolished (again to cancel) |
 | `[Debug] DebugMode` | off | opens the debug windows (F7, F8, F9) |
 | `[Debug] XRayKey` | F6 | turns the semi x-ray on and off, also without debug mode |
 
