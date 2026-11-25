@@ -60,12 +60,19 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 
 	internal const float StockpileCost = 3f;
 
-	// Ground a door stands on, one area per faction owning doors (9 to 31): a door lets its own and allied or neutral
+	// Ground a door stands on, one area per faction owning doors (9 to 27): a door lets its own and allied or neutral
 	// factions through (Porte.CanPassThrough), so a query takes the areas of the factions that are friends of the unit.
 	// Doors of more factions than that are left out as building ground.
 	internal const int AreaDoor = 9;
 
-	internal const int DoorAreas = 23;
+	internal const int DoorAreas = 19;
+
+	// No-go zones (NoGoZones, 28 to 31): the zones of a faction are an area of their own (factions after the fourth
+	// share one), walkable for every unit and dear for the units of the zone's team (NoGoRules.MeshCost). Marked by
+	// modifier boxes over the chunk meshes, so a zone changes no mesh, only the tiles under it.
+	internal const int AreaZone = AreaDoor + DoorAreas;
+
+	internal const int ZoneAreas = 4;
 
 	// Mesh layers of a chunk: plain ground, forest, building ground (left out), stockpile, then one per door area, and
 	// last the road.
@@ -291,6 +298,9 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 	{
 		Enabled = Plugin.Cfg.Bind("Pathfinding", "NavMeshExperiment", true, "Unity 6 port only: builds Unity's navigation mesh from the route graph next to it and keeps it up to date; NavMeshRoutes routes the player's units over it (DevTools: /api/navmesh).");
 		GameSession.OnLeave(Leave);
+#if !ESSENTIALS
+		NoGoZones.Changed += OnZonesChanged;
+#endif
 		Plugin.Root.AddComponent<NavMeshExperiment>();
 		Active = Enabled.Value;
 	}
@@ -654,6 +664,9 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 				});
 			}
 		}
+#if !ESSENTIALS
+		AddZoneSources(reach, all);
+#endif
 		bounds.Expand(new Vector3(1f, 1f, 1f));
 		_op = NavMeshBuilder.UpdateNavMeshDataAsync(_data, Settings, Sources, bounds);
 		_opStart = Stopwatch.GetTimestamp();
@@ -775,6 +788,73 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		Measured.MarkMs += Since(start);
 	}
 
+#if !ESSENTIALS
+	// The no-go zones as modifier boxes over the columns of each rectangle (every height), with their faction's area.
+	private static void AddZoneSources(Bounds reach, bool all)
+	{
+		if (!NoGoZones.Any || !NoGoZones.Active)
+		{
+			return;
+		}
+		foreach (KeyValuePair<Faction, List<NoGoRect>> entry in NoGoZones.All)
+		{
+			int area = AreaZone + NoGoZones.Slot(entry.Key, ZoneAreas);
+			foreach (NoGoRect rect in entry.Value)
+			{
+				Vector3 min = new Vector3(rect.MinX - 0.5f, -ZoneHeight, rect.MinZ - 0.5f);
+				Vector3 max = new Vector3(rect.MaxX + 0.5f, ZoneHeight, rect.MaxZ + 0.5f);
+				Bounds box = new Bounds();
+				box.SetMinMax(min, max);
+				if (!all && !reach.Intersects(box))
+				{
+					continue;
+				}
+				Sources.Add(new NavMeshBuildSource
+				{
+					shape = NavMeshBuildSourceShape.ModifierBox,
+					transform = Matrix4x4.Translate(box.center),
+					size = box.size,
+					area = area
+				});
+			}
+		}
+	}
+
+	// How far up and down a zone's box reaches (it is every height of its columns).
+	private const float ZoneHeight = 1024f;
+
+	// A zone drawn, erased or loaded: the chunks under it are built again (their meshes stay, the tiles take the
+	// zone's area in or out).
+	private static void OnZonesChanged(NoGoRect rect)
+	{
+		if (!Active || _graph == null)
+		{
+			return;
+		}
+		long start = Stopwatch.GetTimestamp();
+		foreach (KeyValuePair<long, ChunkData> entry in Chunks)
+		{
+			ChunkData chunk = entry.Value;
+			if (chunk.X * Chunk > rect.MaxX || (chunk.X + 1) * Chunk - 1 < rect.MinX || chunk.Z * Chunk > rect.MaxZ || (chunk.Z + 1) * Chunk - 1 < rect.MinZ)
+			{
+				continue;
+			}
+			if (Dirty.Count == 0)
+			{
+				_dirtySince = start;
+			}
+			if (_initial)
+			{
+				Queue(entry.Key);
+			}
+			else
+			{
+				Dirty.Add(entry.Key);
+			}
+		}
+	}
+
+#endif
 	// A building, door or other obstacle was registered or removed (placed, built, torn down): the graph is not
 	// rebuilt for it (only its places' obstacle counts change), but the ground under it changes area.
 	internal static void OnVolumeChanged(IVolume volume)
@@ -1196,6 +1276,11 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 		{
 			mask |= AllDoorsMask();
 		}
+		// No-go zones are ground every unit may walk (at a price for their team's units, the faction's filter).
+		for (int i = 0; i < ZoneAreas; i++)
+		{
+			mask |= 1 << (AreaZone + i);
+		}
 		filter.areaMask = mask;
 		// Every area but the road costs the speed factor (the pallets' extra on top), the road costs 1.
 #if !ESSENTIALS
@@ -1221,6 +1306,20 @@ internal sealed class NavMeshExperiment : MonoBehaviour
 	{
 		NavMeshQueryFilter filter = Filter(canClimb, forest, false, false);
 		filter.areaMask |= DoorMask(faction);
+#if !ESSENTIALS
+		// The zones of the unit's team cost it more per metre (NoGoZones).
+		if (NoGoZones.Any && NoGoZones.Active)
+		{
+			float cost = NoGoRules.MeshCost(NoGoZones.CurrentStrength, Roads.Factor);
+			for (int i = 0; i < ZoneAreas; i++)
+			{
+				if (NoGoZones.HeedsSlot(faction, i, ZoneAreas))
+				{
+					filter.SetAreaCost(AreaZone + i, cost);
+				}
+			}
+		}
+#endif
 		return filter;
 	}
 

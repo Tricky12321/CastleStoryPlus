@@ -17,6 +17,8 @@ game. The checks compare what the client has with what the host has, through the
     Demolition            the demolition task (#200): the host refuses a client's demolition of the host's building, the
                           host's demolition blueprint reaches the client, and the client's demolition of its own building
                           (and its cancel) is done by the host
+    NoGoZones             a no-go zone drawn on the client reaches the host as the client's faction's, and one drawn
+                          on the host reaches the client (issue #200)
     SavedTeams            three players (host, client and a third player) in a Conquest Versus lobby, two of
                           them in one team, are allied in the game; the game saved and loaded again in a new lobby puts both
                           back in the same team, and they are allied again
@@ -324,6 +326,45 @@ def check_demolition(host, client):
     return True, "host refused the client's demolition of its stockpile; host's and client's demolitions and cancels reached both"
 
 
+def zones_of(player, faction):
+    for zone in player.call("GET", "/api/nogo")["zones"]:
+        if zone["faction"] == faction:
+            return zone["rects"]
+    return []
+
+
+def check_no_go_zones(host, client):
+    client_faction = client.call("GET", "/api/nogo")["localFaction"]
+    host_faction = host.call("GET", "/api/nogo")["localFaction"]
+    if not client_faction or not host_faction or client_faction == host_faction:
+        return False, "factions: host %s, client %s" % (host_faction, client_faction)
+    try:
+        client.call("POST", "/api/nogo", op="add", x0=10, z0=10, x1=14, z1=12)
+        try:
+            host.wait_for("the client's zone", lambda: [10, 10, 14, 12] in zones_of(host, client_faction), 15)
+        except RuntimeError:
+            return False, "the host has %s for the client's faction %s" % (zones_of(host, client_faction), client_faction)
+        host.call("POST", "/api/nogo", op="add", x0=20, z0=20, x1=22, z1=23)
+        try:
+            client.wait_for("the host's zone", lambda: [20, 20, 22, 23] in zones_of(client, host_faction), 15)
+        except RuntimeError:
+            return False, "the client has %s for the host's faction %s" % (zones_of(client, host_faction), host_faction)
+        # The client's erasing goes through the host too, and comes back.
+        client.call("POST", "/api/nogo", op="erase", x0=10, z0=10, x1=14, z1=12)
+        try:
+            host.wait_for("the client's zone erased", lambda: not zones_of(host, client_faction), 15)
+            client.wait_for("the erase back from the host", lambda: not zones_of(client, client_faction), 15)
+        except RuntimeError:
+            return False, "after erasing: host %s, client %s" % (zones_of(host, client_faction), zones_of(client, client_faction))
+        return True, "client's zone on the host, host's zone on the client, erase synced"
+    finally:
+        for player in (host, client):
+            try:
+                player.call("POST", "/api/nogo", op="clear")
+            except RuntimeError:
+                pass
+
+
 TASK_CREW = 12
 
 TASK_CREW_BEFORE = []
@@ -556,6 +597,7 @@ CHECKS = [
     ("TaskCrew", check_task_crew),
     ("VanishedTask", check_vanished_task),
     ("Demolition", check_demolition),
+    ("NoGoZones", check_no_go_zones),
     ("SavedTeams", check_saved_teams),
 ]
 

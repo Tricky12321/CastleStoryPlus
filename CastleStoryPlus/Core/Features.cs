@@ -363,6 +363,10 @@ internal static class Features
 
 	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
 
+	public const string NoGoZones = "NoGoZones";
+
+	public const string NoGoZonesInfo = "No-go zones for routes (#200): drag rectangles on the ground (the \"No-go zones\" button on the right-hand bar, or Ctrl+N; Shift+drag erases, right-click or Esc ends) that your team's units route round without any wall being built. A zone only makes a route dear, it never closes it: a unit walks right beside it, and one whose goal or start is inside, or that has no other way, still goes in ([NoGoZones] Strength: about how many blocks longer a route may get to keep out). Per team, saved with the world and synced in multiplayer (the host decides). Unity 6 port: the game's route search and the navigation mesh both weigh it.";
+
 	public const string Sprint = "Sprint";
 
 	public const string SprintInfo = "Research > Sprint (research station, needs Upgrades): bricktrons can sprint, +50% walking and running speed for 5 seconds, then a cooldown of 60 seconds (higher tiers: longer sprint, shorter cooldown; [Sprint] settings). Soldiers sprint by themselves when sent at an enemy from afar, fighters when they run to safety (Retreat), and the selected bricktrons on a key ([Sprint] Key, 7); in multiplayer the host decides. Multiplies with Light Boots and roads; enemies never sprint. A trail of dust shows it.";

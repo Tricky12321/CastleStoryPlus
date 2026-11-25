@@ -23,14 +23,15 @@ Code: `CastleStoryPlus/Pathfinding/NavMeshExperiment.cs`, `CastleStoryPlus/Pathf
 - "Stands on" means: a walk other than breaking leads out of it, and its voxel is not full. A full voxel's place is a
   block, kept by the graph only for breaking into it and for walking off it; its top as a floor let routes onto
   blocks under a low ceiling (the place to stand on a block is the empty voxel above it).
-- **Areas** (Unity has 32 per agent): 0 ground, 3 near trees (the game's `Forest` branches), 4 climb, 5 step down, 6
-  ladder, 8 a stockpile's pallets, 9 to 31 ground under a door, one area per faction that owns doors.
+- **Areas** (Unity has 32 per agent): 0 ground, 2 a stone road, 3 near trees (the game's `Forest` branches), 4 climb, 5
+  step down, 6 ladder, 8 a stockpile's pallets, 9 to 27 ground under a door, one area per faction that owns doors, 28
+  to 31 no-go zones (`NoGoZones`, #200), one area per faction with zones (the fifth and later share).
   - Ground under a building (an obstacle with the null pass-through, which no unit's search crosses) is left out of
     the mesh. As an area of its own (7) it bordered the walkable ground with no agent radius in between, so routes
     ran along a building's very edge and, on the voxels, through its first row.
   - Doors (`Porte`): the game lets a unit through a door that is open, or not locked and of an allied or neutral
     faction (`Porte.CanPassThrough`; enemies that break their way may search through any). The mesh keeps one area
-    per door-owning faction (given out as doors are met, 23 at most; more are left out like buildings), and a
+    per door-owning faction (given out as doors are met, 19 at most; more are left out like buildings), and a
     unit's filter takes the door areas of the factions that are its friends (`Affiliation.IsAlliedOrNeutral`).
     Whether a door is locked or held shut is not in the mesh: the route's voxels are checked against the door by the
     unit's own branch evaluator, which asks the door, and a route through a door it may not pass is left to the A\*.
@@ -38,6 +39,13 @@ Code: `CastleStoryPlus/Pathfinding/NavMeshExperiment.cs`, `CastleStoryPlus/Pathf
     are an area with cost 3 (routes keep off them where they can) and a route over a full one is mended on the graph
     or left to the A\*.
   - Other obstacles everybody passes (a plain `PassThroughObstacle`) are ground.
+  - No-go zones (`NoGoZones`) are not in the chunk meshes: each zone rectangle is a modifier box over its columns (every
+    height) with its faction's zone area, added to the sources of every build and update, and a zone drawn or erased
+    marks the chunks under it, so only their tiles are built again. Every filter lets every unit walk the zone areas;
+    a unit of the zone's team (its faction or an ally) pays `NoGoRules.MeshCost` per metre there (1 + Strength / 5
+    times the ground, 13 by default), as Detour has no price for entering an area. A modifier box takes the area of
+    whatever lies under it (a road, a door, a pallet, forest); what the unit may not cross is still refused at the
+    voxels by its branch evaluator, and mended or left to the A\*.
 - **Links** for the graph's `Climbing`, `StepDown` and `Ladder` branches, one-way between the two places' top
   centres, cost = the game's weight / 10 per metre (a flat step is 10). A ladder block's place (a 1 x 1 floor 1 block
   above the next) is dropped by Recast as a ledge on every side, so a run of ladder places becomes one link from each
