@@ -362,10 +362,12 @@ internal static class Demolish
 		provider.AddObject(go);
 		// Committed at once, whether or not the build task is selected: it is worked on right away.
 		GlobalBuildJob.Commit(anti);
+		// The task itself must be committed too, or its builders are never given the demolition.
+		bool committedTask = GlobalBuildJob.CommitProject(team);
 		PauseTasks.ResumeForNewWork(team);
 		Marked[building] = new Mark { Anti = anti, Cost = cost };
 		ByAnti[anti] = building;
-		Plugin.Log.LogInfo("Demolish: " + building.name + " marked for demolition in " + team.name + " (" + team.CrewCount() + " workers)");
+		Plugin.Log.LogInfo("Demolish: " + building.name + " marked for demolition in " + team.name + " (" + team.CrewCount() + " workers, task " + team.Commited + (committedTask ? ", committed now" : string.Empty) + (team.Editing() ? ", being edited: no work until the player leaves it" : string.Empty) + ")");
 		return null;
 	}
 

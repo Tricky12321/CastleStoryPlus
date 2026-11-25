@@ -304,6 +304,7 @@ internal static class MoveStructure
 		// worked on right away.
 		GlobalBuildJob.Commit(blueprint);
 		GlobalBuildJob.Commit(anti.GetComponent<Blueprint>());
+		GlobalBuildJob.CommitProject(team);
 		Pending[building] = new PendingMove { Cost = cost, Target = blueprint };
 		Plugin.Log.LogInfo("MoveStructure: " + building.name + " moves to " + position + " in " + buildProject.name + " (" + team.CrewCount() + " workers)");
 	}
