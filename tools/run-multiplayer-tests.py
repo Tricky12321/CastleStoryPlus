@@ -12,6 +12,8 @@ game. The checks compare what the client has with what the host has, through the
     Weather               the host's rain reaches the client (state, boost and what it shows), and its end too
     TaskCrew              the host's max of 12 bricktrons per task, chosen in the lobby, reach the client, and twelve of the
                           client's bricktrons put on its own task all join its crew there and on the host (issue #88)
+    VanishedTask          a bricktron the client puts on its task, deleted right after, is with the free workers on
+                          both players, not frozen in the deleted task (issue #199)
     SavedTeams            three players (host, client and a third player) in a Conquest Versus lobby, two of
                           them in one team, are allied in the game; the game saved and loaded again in a new lobby puts both
                           back in the same team, and they are allied again
@@ -300,6 +302,38 @@ def check_task_crew(host, client):
     return True, "the client's task holds %d on both players" % TASK_CREW
 
 
+def check_vanished_task(host, client):
+    # Issue #199: a bricktron the client puts on its task at the moment the task ends (here: deleted right after,
+    # as the client deletes an emptied build task) must not go into the game's pool with the task, frozen.
+    have = builders(client)
+    if not have:
+        client.call("POST", "/api/net/cheatprobe", kind="spawn")
+        client.wait_for("a builder", lambda: len(builders(client)) > 0, 30)
+        have = builders(client)
+    before = set(p["id"] for p in own_projects(client, "Build"))
+    client.call("POST", "/api/projects/create", type="build")
+    client.wait_for("its new build task", lambda: len([p for p in own_projects(client, "Build") if p["id"] not in before]) > 0, 30)
+    project = [p for p in own_projects(client, "Build") if p["id"] not in before][0]
+    worker = have[0]
+    client.call("POST", "/api/projects/hire", id=project["id"], units=str(worker["id"]))
+    client.call("POST", "/api/projects/delete", id=project["id"])
+
+    def find(player):
+        # Only bricktrons that are switched on are listed: one in the pool with the task is missing.
+        return [b for b in player.call("GET", "/api/bricktrons", all="true")["bricktrons"] if b["name"] == worker["name"]]
+
+    def freed(player):
+        found = find(player)
+        return len(found) == 1 and found[0]["project"] == "IdleProject"
+
+    try:
+        host.wait_for("%s with the free workers on the host" % worker["name"], lambda: freed(host), 20)
+        client.wait_for("%s with the free workers on the client" % worker["name"], lambda: freed(client), 20)
+    except RuntimeError:
+        return False, "%s on the host: %s, on the client: %s" % (worker["name"], find(host), find(client))
+    return True, "%s, put on a task deleted at once, is with the free workers on both players" % worker["name"]
+
+
 # Checks that read what is drawn (a screenshot, a camera, a light): left out of a --headless run.
 NEEDS_GRAPHICS = set()
 VERSUS = "conquest_versus_f283061f-051c-4e70-8dd7-0edcf13bd3be"
@@ -450,6 +484,7 @@ CHECKS = [
     ("WaveRows", check_wave_rows),
     ("Weather", check_weather),
     ("TaskCrew", check_task_crew),
+    ("VanishedTask", check_vanished_task),
     ("SavedTeams", check_saved_teams),
 ]
 
