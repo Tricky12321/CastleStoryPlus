@@ -10,6 +10,7 @@ using CastleStoryPlus.Market;
 using CastleStoryPlus.Menus;
 using CastleStoryPlus.Nature;
 using CastleStoryPlus.Pathfinding;
+using CastleStoryPlus.Rendering;
 using CastleStoryPlus.Saving;
 using CastleStoryPlus.WorkerAI;
 using UnityEngine;
@@ -408,6 +409,14 @@ end
 		{
 			AddSection("GRAPHICS");
 			AddRendererRows();
+		}
+
+		if (WardAnimations.NoDefenseAnimation != null)
+		{
+			AddSection("WARDS (YOUR VIEW ONLY, APPLY AT ONCE)");
+			AddToggleRow("No sentinel defense animation (spin-up, glow, recoil)", WardAnimations.NoDefenseAnimation);
+			AddToggleRow("Fewer healing ward particles (a quarter)", WardAnimations.FewerHealParticles);
+			AddToggleRow("Ward and pylon lines do not sway", WardAnimations.StillLinks);
 		}
 
 #if !ESSENTIALS
