@@ -117,6 +117,20 @@ internal static class GlobalBuildJob
 		}
 	}
 
+	// A build task hands out work only once it is committed itself (Project.ReadyToAssignGoals), not only its
+	// blueprints: a task never selected and deselected (a new one, or one made for a move or a demolition) stayed
+	// uncommitted, so its builders were never given the work put into it. Only the task's own flag is set, so blueprints
+	// the player is still placing in it are not committed with it. True when it was not committed before.
+	internal static bool CommitProject(BuildProject project)
+	{
+		if (project == null || !project.IsStillAlive || project.Commited != Project.CommitStatus.uncommited)
+		{
+			return false;
+		}
+		project.commited = true;
+		return true;
+	}
+
 	// The team's build task for work ordered without a build task in hand (moving a building): the one with the most
 	// workers (then the most blueprints), not a new empty one, with the others merged into it.
 	internal static BuildProject TeamProject(User user)
