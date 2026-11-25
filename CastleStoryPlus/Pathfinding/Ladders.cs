@@ -44,7 +44,7 @@ internal static class Ladders
 	private static void Enable()
 	{
 		Speed = Plugin.Cfg.Bind("Ladders", "ClimbSpeed", 3f, "How fast bricktrons climb a ladder, in blocks per second (walking is about 3).");
-		Weight = Plugin.Cfg.Bind("Ladders", "RouteCost", 60, "Route search cost of one block of ladder (a step of stairs is about 10, climbing a ledge 250): the higher, the more bricktrons prefer stairs.");
+		Weight = Plugin.Cfg.Bind("Ladders", "RouteCost", 60, "Route search cost of one block of ladder (a step of stairs is about 10, climbing a ledge 70 with the default [Pathfinding] ClimbCost): the higher, the more bricktrons prefer stairs.");
 		// The old type sorted below climbing, so every unit refused it; between climbing (8) and stepping down (16) it
 		// is taken by units that may climb (and the reachability maps), as climbing a ledge is.
 		PathBranch.BranchType.Ladder = new PathBranch.BranchType("Ladder", 9, 9);

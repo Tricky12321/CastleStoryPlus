@@ -21,7 +21,7 @@
     <!-- Army: call to arms, posts, guard, kits. -->
     <Compile Remove="Army/KitBundles.cs;Army/CallToArms.cs;Army/CallToArmsHooks.cs;Army/CallToArmsNetwork.cs;Army/CallToArmsPanel.cs;Army/CallToArmsSettings.cs;Army/RackEquipDrop.cs;Army/RangedGuard.cs;Army/SoldierOrders.cs;Army/SoldierPosts.cs" />
     <!-- Building: new blocks, buildings, storage and building tools. -->
-    <Compile Remove="Building/BlockAnchor.cs;Building/BlueprintVisibilityPatch.cs;Building/BuildBlocked.cs;Building/BuildNeeds.cs;Building/BuildNeedsMenu.cs;Building/BuildPriority.cs;Building/BuildShortage.cs;Building/CopyPaste.cs;Building/CustomBlocks.cs;Building/EmptyStockpile.cs;Building/Eyedropper.cs;Building/EyedropperPatch.cs;Building/LadderSupport.cs;Building/LargeStockpile.cs;Building/LargeStockpileVisual.cs;Building/LongStoneTexture.cs;Building/MixedRacks.cs;Building/MixedStockpiles.cs;Building/MoveStructure.cs;Building/RackFilter.cs;Building/RoofItems.cs;Building/SidePlanks.cs;Building/SlabOnPlanks.cs;Building/StockpileHeadroom.cs;Building/StockpileSpill.cs;Building/Warehouse.cs;Building/WarehouseModel.cs;Building/WoodOverhang.cs" />
+    <Compile Remove="Building/BlockAnchor.cs;Building/BlueprintVisibilityPatch.cs;Building/BuildBlocked.cs;Building/BuildNeeds.cs;Building/BuildNeedsMenu.cs;Building/BuildPriority.cs;Building/BuildShortage.cs;Building/CopyPaste.cs;Building/CustomBlocks.cs;Building/Demolish.cs;Building/EmptyStockpile.cs;Building/Eyedropper.cs;Building/EyedropperPatch.cs;Building/LadderSupport.cs;Building/LargeStockpile.cs;Building/LargeStockpileVisual.cs;Building/LongStoneTexture.cs;Building/MixedRacks.cs;Building/MixedStockpiles.cs;Building/MoveStructure.cs;Building/RackFilter.cs;Building/RoofItems.cs;Building/SidePlanks.cs;Building/SlabOnPlanks.cs;Building/StockpileHeadroom.cs;Building/StockpileSpill.cs;Building/Warehouse.cs;Building/WarehouseModel.cs;Building/WoodOverhang.cs" />
     <!-- Combat: new abilities, enemies and balance. -->
     <Compile Remove="Combat/ArcherAccuracyPatch.cs;Combat/GlowTint.cs;Combat/ArtificerHealing.cs;Combat/CriticalHits.cs;Combat/Healtron.cs;Combat/HealtronPatches.cs;Combat/Retreat.cs;Combat/WallLean.cs" />
     <!-- Economy: new workshop and quarry controls, dark crystals, the energy multiplier. -->
@@ -30,7 +30,7 @@
     <Compile Remove="Menus/AutoContinue.cs;Menus/ContinueButtonPatch.cs;Menus/DialogButtonsPatch.cs;Menus/SpeedKeys.cs;Menus/WaveInterval.cs" />
     <Compile Remove="Multiplayer/GameChat.cs;Multiplayer/MaxPlayers.cs" />
     <Compile Remove="Nature/SaplingArea.cs;Nature/Saplings.cs;Nature/TreeFarm.cs;Nature/TreeStumps.cs;Nature/WildPlants.cs;Nature/WornPaths.cs;Nature/WiderVision.cs" />
-    <Compile Remove="Pathfinding/Ladders.cs;Pathfinding/Roads.cs;Pathfinding/RoadsSync.cs" />
+    <Compile Remove="Pathfinding/Ladders.cs;Pathfinding/NoGoZones.cs;Pathfinding/NoGoZonesSearch.cs;Pathfinding/NoGoZonesTool.cs;Pathfinding/Roads.cs;Pathfinding/RoadsSync.cs" />
     <Compile Remove="Saving/AutoSave.cs" />
     <Compile Remove="Diagnostics/SpawnView.cs" />
     <Compile Remove="UI/CameraZoomOut.cs;UI/TextureRecolour.cs;UI/EnergyHint.cs;UI/ItemHint.cs;UI/MinimapTerrain.cs;UI/MinimapZoom.cs;UI/ResourceList.cs;UI/ResourceSeen.cs;UI/StockpileTooltip.cs;UI/TaskCrewSizeLobby.cs;UI/WardRangeFade.cs;UI/WaveDirection.cs;UI/WaveWarning.cs;UI/WorldSearch.cs" />
@@ -51,8 +51,8 @@
 
   <!-- The developer tools: the in-game tests, endpoints and test worlds of Out features. -->
   <ItemGroup Condition="'$(Edition)' == 'Essentials' And '$(MSBuildProjectName)' == 'CastleStoryPlus.DevTools'">
-    <Compile Remove="Tests/AchievementTests.cs;Tests/CoalStockpileTests.cs;Tests/ConsolidationTests.cs;Tests/DirectTaskTests.cs;Tests/GuardianSoundTests.cs;Tests/KitBundleTests.cs;Tests/ResourcePriorityTests.cs;Tests/RoadTests.cs;Tests/RoofItemTests.cs;Tests/SavedContentTests.cs;Tests/SprintTests.cs;Tests/TreasureTests.cs;Tests/WeatherTests.cs" />
-    <Compile Remove="Endpoints/AchievementEndpoints.cs;Endpoints/RandomWorldEndpoints.cs;Endpoints/SpawnEndpoints.cs;Endpoints/TreasureEndpoints.cs;Endpoints/WeatherEndpoints.cs;Worlds/PhotoStudio.cs" />
+    <Compile Remove="Tests/AchievementTests.cs;Tests/CoalStockpileTests.cs;Tests/ConsolidationTests.cs;Tests/DemolishTests.cs;Tests/DirectTaskTests.cs;Tests/GuardianSoundTests.cs;Tests/KitBundleTests.cs;Tests/NoGoZoneTests.cs;Tests/ResourcePriorityTests.cs;Tests/RoadTests.cs;Tests/RoofItemTests.cs;Tests/SavedContentTests.cs;Tests/SprintTests.cs;Tests/TreasureTests.cs;Tests/WeatherTests.cs" />
+    <Compile Remove="Endpoints/AchievementEndpoints.cs;Endpoints/NoGoEndpoints.cs;Endpoints/RandomWorldEndpoints.cs;Endpoints/SpawnEndpoints.cs;Endpoints/TreasureEndpoints.cs;Endpoints/WeatherEndpoints.cs;Worlds/PhotoStudio.cs" />
   </ItemGroup>
 
   <!-- The local tests with the game's assemblies: the tests of Out features. -->

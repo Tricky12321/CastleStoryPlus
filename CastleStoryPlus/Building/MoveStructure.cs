@@ -219,6 +219,12 @@ internal static class MoveStructure
 		Move((UNetBlueprint)obj, building, key, reader.ReadVector3(), reader.ReadQuaternion(), reader.ReadGameObject());
 	}
 
+	// Server: the building's move is ordered and its old one not yet demolished.
+	internal static bool IsMoving(GameObject building)
+	{
+		return building != null && Pending.ContainsKey(building);
+	}
+
 	// Host, for the developer tools: the same move as the player's, of a building of the local player to a new
 	// position into a build project. Null when ordered, else why not.
 	internal static string MoveTo(GameObject building, Vector3 position, Quaternion rotation, GameObject buildProject)
@@ -253,6 +259,12 @@ internal static class MoveStructure
 		if (building.IsNullOrReleased() || Pending.ContainsKey(building) || !user.faction.IsSame(building))
 		{
 			Plugin.Log.LogInfo("MoveStructure: move refused (" + (building.IsNullOrReleased() ? "the building is gone" : Pending.ContainsKey(building) ? "already being moved" : "not the player's building") + ")");
+			return;
+		}
+		// A building marked for demolition (Demolish) is not moved: cancel the demolition first.
+		if (Demolish.IsMarked(building))
+		{
+			Plugin.Log.LogInfo("MoveStructure: move of " + building.name + " refused (it is marked for demolition)");
 			return;
 		}
 		FactoryImprint imprint = building.GetComponent<FactoryImprint>();
@@ -292,6 +304,7 @@ internal static class MoveStructure
 		// worked on right away.
 		GlobalBuildJob.Commit(blueprint);
 		GlobalBuildJob.Commit(anti.GetComponent<Blueprint>());
+		GlobalBuildJob.CommitProject(team);
 		Pending[building] = new PendingMove { Cost = cost, Target = blueprint };
 		Plugin.Log.LogInfo("MoveStructure: " + building.name + " moves to " + position + " in " + buildProject.name + " (" + team.CrewCount() + " workers)");
 	}

@@ -60,6 +60,27 @@ internal static class Live<T> where T : Component
 			Items.RemoveWhere(IsGone);
 		}
 	}
+
+	// Fills the list (cleared first) with every one not destroyed, switched off ones too (those in the pool and those
+	// under a switched-off parent).
+	internal static void All(List<T> into)
+	{
+		into.Clear();
+		bool gone = false;
+		foreach (T item in Items)
+		{
+			if (item == null)
+			{
+				gone = true;
+				continue;
+			}
+			into.Add(item);
+		}
+		if (gone)
+		{
+			Items.RemoveWhere(IsGone);
+		}
+	}
 }
 
 [Feature]

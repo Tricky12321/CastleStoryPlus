@@ -54,6 +54,7 @@ internal static class Routes
 		WeatherEndpoints.Add(routes);
 		AchievementEndpoints.Add(routes);
 		SpawnEndpoints.Add(routes);
+		NoGoEndpoints.Add(routes);
 #endif
 		VolumeDumpEndpoints.Add(routes);
 		TemplateEndpoints.Add(routes);

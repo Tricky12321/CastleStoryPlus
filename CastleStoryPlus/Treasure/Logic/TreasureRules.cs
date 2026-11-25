@@ -40,4 +40,13 @@ internal static class TreasureRules
 	{
 		return !opened && guarded;
 	}
+
+	// Whether a walk of a player's bricktron is turned away (#197): one into the keep-out of a guarded chest, from
+	// outside it, of the bricktron's own accord. A player's order still sends it there, a bricktron already inside
+	// (sent there by the player) may move about, and fighting is no errand: a soldier, a member of the player's raid
+	// (sent to kill the guardians) and a walk after a unit are never held up.
+	public static bool TurnsWalkAway(bool destinationKeptOut, bool walkerKeptOut, bool playerOrder, bool fighting)
+	{
+		return destinationKeptOut && !walkerKeptOut && !playerOrder && !fighting;
+	}
 }

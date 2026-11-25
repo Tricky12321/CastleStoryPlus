@@ -752,12 +752,11 @@ internal static int RoadEases;
 	}
 
 	// The mesh is the voxels' top surfaces, so a step up or down most of a block costs it little more than flat ground,
-	// where the graph weighs it 130 to 250 against 10 (the game's A* goes round such a step when it can). A route over
-	// a hillside then took the steep steps the game's own search leaves out (seen at 1.4 times the cost of the shortest
-	// route). Each steep walking step of the route is looked at once: the cheapest way over the graph from the voxel
-	// before it to one of the route's next voxels, near by and by the unit's own rules, replaces the stretch when it
-	// costs less.
-	private const int SteepWeight = 100;
+	// where the graph weighs it more (130 to 250 against 10 at the game's penalties, 40 to 70 at the mod's defaults,
+	// StepCosts; the game's A* goes round such a step when that is cheaper). A route over a hillside then took the steep
+	// steps the game's own search leaves out (seen at 1.4 times the cost of the shortest route). Each steep walking step
+	// of the route (StepCostRules.SteepWeight) is looked at once: the cheapest way over the graph from the voxel before
+	// it to one of the route's next voxels, near by and by the unit's own rules, replaces the stretch when it costs less.
 
 	// Route voxels after the steep step a way round may come back to, how far it may go and how many places it looks at.
 	private const int EaseAhead = 8;
@@ -859,13 +858,14 @@ internal static int RoadEases;
 	private static void Ease(PathBranchEvaluator evaluator)
 	{
 		int roadLooks = 0;
+		int steepWeight = StepCostRules.SteepWeight(StepCosts.ClimbPenalty());
 		for (int i = 1; i < Route.Count; i++)
 		{
 			if (!IsWalk(Route[i].Type) || !(Route[i - 1].Node is TerrainPathNode start) || start.siblings == null)
 			{
 				continue;
 			}
-			bool steep = Route[i].Weight >= SteepWeight;
+			bool steep = Route[i].Weight >= steepWeight;
 			// Not a route that only crosses a road: two route voxels in a row lie beside it.
 #if !ESSENTIALS
 			if (!steep && (roadLooks >= RoadLooks || !Roads.Any || !BesideRoad(start.position) || !(Route[i].Node is TerrainPathNode along) || !BesideRoad(along.position)))

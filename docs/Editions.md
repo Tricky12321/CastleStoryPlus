@@ -141,6 +141,7 @@ switched off on the host no edition is sent either.
 | `DarkCrystals` | Out | A new resource |
 | `DebugMenu` | In (borderline) | Diagnostics (debug mode only, cheats guarded in multiplayer); the in-game tests use it |
 | `DeconstructColour` | In (borderline) | Fixes the deconstruct colour the game loses when the task is not selected |
+| `Demolish` | Out | A new building task (demolition with the materials given back) |
 | `DesyncProtection` | In | Multiplayer fix: worlds that drift apart are corrected |
 | `DirectTask` | Out (borderline) | A new order (select bricktrons and right-click a task) |
 | `DoorRepair` | In (borderline) | Bug fix: repair zones skipped damaged doors |
@@ -190,6 +191,7 @@ switched off on the host no edition is sent either.
 | `MixedRacks` | Out | Changes how weapon stands work |
 | `MixedStockpiles` | Out | Changes how storage works |
 | `MoveStructure` | Out | A new building tool |
+| `NoGoZones` | Out | A new player control: zones drawn for routes to keep out of (#200) |
 | `OreMine` | Out | A new task |
 | `PassThroughAllies` | In | Pathfinding: allies no longer block routes or doorways |
 | `Pathfinding` | In | Route search fixes and budgets: units find the routes the game already looks for |
@@ -218,6 +220,7 @@ switched off on the host no edition is sent either.
 | `RichIron` | Out | Balance |
 | `Roads` | Out | A new building |
 | `RoofItems` | Out | Only for the mod's own buildings |
+| `RouteOverlay` | In (borderline) | Diagnostics of pathfinding and getting unstuck: where a selected unit walks, climbs or is stuck (off until shown) |
 | `Saplings` | Out | A new building and task |
 | `SaveAndLeave` | Out | New dialog buttons (convenience) |
 | `SavedTeams` | In (borderline) | Multiplayer fix: allies no longer start as enemies in a loaded save |
@@ -250,6 +253,7 @@ switched off on the host no edition is sent either.
 | `UpdateCheck` | In | Infrastructure: the updater (Essentials updates to the Essentials zips) |
 | `Upgrades` | Out | New buildings and research |
 | `WallLean` | Out (borderline) | Changes what archers can reach |
+| `WardAnimations` | In (borderline) | Less on screen: optional switches (all off by default) that calm or thin out the wards' animations and particles, like RenderTuning's lighter picture |
 | `WardRangeFade` | Out | A visual preference |
 | `Warehouse` | Out | A new building |
 | `WarlockSummons` | In (borderline) | Bug fix (#161): a wave is over only when its summons are dead |
@@ -268,4 +272,4 @@ switched off on the host no edition is sent either.
 | `WorldSearch` | Out | A new tool |
 | `WornPaths` | Out | New world behaviour |
 
-In: 62 features. Out: 96 features.
+In: 65 features. Out: 100 features.

@@ -9,7 +9,7 @@ internal static class Features
 
 	public const string Pathfinding = "Pathfinding";
 
-	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it, and, in the Unity 6 port, bricktrons walk straight lines across flat open ground instead of a staircase ([Pathfinding] StraightPaths) and the player's own units get their routes from Unity's navigation mesh, the game's search staying for enemies and as the fallback ([Pathfinding] NavMeshExperiment, NavMeshRoutes).";
+	public const string PathfindingInfo = "Shorter routes, nearby stairs found from walls, bigger search budgets, no pause after picking something up, stairs usable under walkways, route searches limited to a time budget per frame, long bricks and slabs update the route graph over their whole length, allies walk past rope bridge posts, a route node left inside ground that has become solid is rebuilt when a bricktron is pushed out of it, and, in the Unity 6 port, climbing a ledge or stepping down costs a route about what it takes, so steps the player built are used ([Pathfinding] ClimbCost, StepDownCost), bricktrons walk straight lines across flat open ground instead of a staircase ([Pathfinding] StraightPaths) and the player's own units get their routes from Unity's navigation mesh, the game's search staying for enemies and as the fallback ([Pathfinding] NavMeshExperiment, NavMeshRoutes).";
 
 	public const string StockpileChoice = "StockpileChoice";
 
@@ -118,6 +118,10 @@ internal static class Features
 	public const string MoveStructure = "MoveStructure";
 
 	public const string MoveStructureInfo = "Move buildings (workshops, stockpiles, racks...): hold the move key and click a building, then place it. Workers demolish the old one (materials and contents are dropped for re-use) and build the new one.";
+
+	public const string Demolish = "Demolish";
+
+	public const string DemolishInfo = "Demolition as a task (#200): hold the demolish key (Delete) and click one of your buildings (workshop, stockpile, weapon stand, door...) to mark it; a builder of the build task takes it down, the materials it cost come back as items and are carried to storage, with what it held. The same click again (or the remove tool) cancels it. Host decides in multiplayer; saved with the game.";
 
 	public const string CopyPaste = "CopyPaste";
 
@@ -234,6 +238,10 @@ internal static class Features
 	public const string WardRangeFade = "WardRangeFade";
 
 	public const string WardRangeFadeInfo = "The ward range spheres (shown while a ward is hovered or placed) are drawn fainter, so the ground under them can be seen ([WardRange] Strength).";
+
+	public const string WardAnimations = "WardAnimations";
+
+	public const string WardAnimationsInfo = "Settings > Castle Story Plus settings > Wards, all off by default (the game's look): sentinel wards without their defense animation (no spin-up, glow or recoil when they shoot; shots, sounds and overheat smoke stay), healing wards with a quarter of their particles, and the lines between wards and pylons without their sway ([WardAnimations] NoDefenseAnimation, FewerHealParticles, StillLinks). Only this player's view changes.";
 
 	public const string FasterTaskSearch = "FasterTaskSearch";
 
@@ -354,6 +362,10 @@ internal static class Features
 	public const string Roads = "Roads";
 
 	public const string RoadsInfo = "Stone road in the build menu (stone group, needs CustomBlocks): a flat stone piece on the ground for one stone block, dragged out along a line; every unit, enemies too, walks and runs faster on it ([Roads] SpeedBonus, the host's value in multiplayer), and in the Unity 6 port route searches count road steps as cheaper so roads are often taken when quicker. Grass does not grow over a road and steps do not wear it.";
+
+	public const string NoGoZones = "NoGoZones";
+
+	public const string NoGoZonesInfo = "No-go zones for routes (#200): drag rectangles on the ground (the \"No-go zones\" button on the right-hand bar, or Ctrl+N; Shift+drag erases, right-click or Esc ends) that your team's units route round without any wall being built. A zone only makes a route dear, it never closes it: a unit walks right beside it, and one whose goal or start is inside, or that has no other way, still goes in ([NoGoZones] Strength: about how many blocks longer a route may get to keep out). Per team, saved with the world and synced in multiplayer (the host decides). Unity 6 port: the game's route search and the navigation mesh both weigh it.";
 
 	public const string Sprint = "Sprint";
 
@@ -566,6 +578,10 @@ internal static class Features
 	public const string StuckEscape = "StuckEscape";
 
 	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes, also while it keeps trying tasks it cannot reach from there: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
+
+	public const string RouteOverlay = "RouteOverlay";
+
+	public const string RouteOverlayInfo = "Route overlay: a line along the rest of the route of each selected bricktron, light blue where it walks, amber where it climbs (a ledge, a step down, a ladder) and red while it is stuck (has not moved for 3 s on its way, or digs its way out of a pit). Off until shown with the key ([RouteOverlay] Key, 8) or in the settings ([RouteOverlay] Shown). Only on this computer; the routes are known to the host and single player.";
 
 	public const string Treasure = "Treasure";
 

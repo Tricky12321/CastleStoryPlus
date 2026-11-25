@@ -120,8 +120,13 @@ internal static class FreeBlueprintsMatchPatch
 [HarmonyPatch(typeof(Project), nameof(Project.VerifyWorkFor))]
 internal static class FreeBlueprintsVerifyPatch
 {
-	private static bool Prefix(Project __instance, Labor labor, ref Node __result)
+	private static bool Prefix(Project __instance, Labor labor, ref Node __result, bool __runOriginal)
 	{
+		// Another prefix (DemolishVerifyPatch) may have passed the worker already.
+		if (!__runOriginal)
+		{
+			return false;
+		}
 		if (!(__instance is BuildProject) || labor.IsNullOrReleased())
 		{
 			return true;

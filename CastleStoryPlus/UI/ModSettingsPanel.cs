@@ -10,6 +10,7 @@ using CastleStoryPlus.Market;
 using CastleStoryPlus.Menus;
 using CastleStoryPlus.Nature;
 using CastleStoryPlus.Pathfinding;
+using CastleStoryPlus.Rendering;
 using CastleStoryPlus.Saving;
 using CastleStoryPlus.WorkerAI;
 using UnityEngine;
@@ -410,6 +411,14 @@ end
 			AddRendererRows();
 		}
 
+		if (WardAnimations.NoDefenseAnimation != null)
+		{
+			AddSection("WARDS (YOUR VIEW ONLY, APPLY AT ONCE)");
+			AddToggleRow("No sentinel defense animation (spin-up, glow, recoil)", WardAnimations.NoDefenseAnimation);
+			AddToggleRow("Fewer healing ward particles (a quarter)", WardAnimations.FewerHealParticles);
+			AddToggleRow("Ward and pylon lines do not sway", WardAnimations.StillLinks);
+		}
+
 #if !ESSENTIALS
 		if (BuildShortage.Icons != null)
 		{
@@ -418,16 +427,24 @@ end
 		}
 #endif
 
+		if (RouteOverlay.Shown != null)
+		{
+			AddSection("ROUTES");
+			AddToggleRow("Routes of the selected bricktrons (blue walk, amber climb, red stuck)", RouteOverlay.Shown);
+		}
+
 		AddSection("DEBUG");
 		AddToggleRow("Debug mode (F7, F8 and F9 windows)", DebugMode.Entry);
 
 		AddSection("KEYS");
 		AddKeyRow("Move a building (hold + click)", "Building", "MoveStructureKey", string.Empty);
+		AddKeyRow("Demolish a building (hold + click)", "Building", "DemolishKey", string.Empty);
 		AddKeyRow("Copy an area", "Building", "CopyKey", "Ctrl+");
 		AddKeyRow("Paste the copy", "Building", "PasteKey", "Ctrl+");
 		AddKeyRow("Normal game speed", "GameSpeed", "NormalSpeedKey", string.Empty);
 		AddKeyRow("Second game speed", "GameSpeed", "Speed2Key", string.Empty);
 		AddKeyRow("Third game speed", "GameSpeed", "Speed3Key", string.Empty);
+		AddKeyRow("Show or hide the routes of the selected bricktrons", "RouteOverlay", "Key", string.Empty);
 
 		AddSection("FEATURES (APPLY AFTER A RESTART)");
 		List<ConfigEntry<bool>> switches = new List<ConfigEntry<bool>>(Plugin.FeatureSwitches);
