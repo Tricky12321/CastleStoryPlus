@@ -190,6 +190,7 @@ switched off on the host no edition is sent either.
 | `MixedRacks` | Out | Changes how weapon stands work |
 | `MixedStockpiles` | Out | Changes how storage works |
 | `MoveStructure` | Out | A new building tool |
+| `NoGoZones` | Out | A new player control: zones drawn for routes to keep out of (#200) |
 | `OreMine` | Out | A new task |
 | `PassThroughAllies` | In | Pathfinding: allies no longer block routes or doorways |
 | `Pathfinding` | In | Route search fixes and budgets: units find the routes the game already looks for |
@@ -268,4 +269,4 @@ switched off on the host no edition is sent either.
 | `WorldSearch` | Out | A new tool |
 | `WornPaths` | Out | New world behaviour |
 
-In: 62 features. Out: 96 features.
+In: 62 features. Out: 97 features.

@@ -79,6 +79,8 @@ Answers are JSON. `GET /api` lists every endpoint with its parameters.
 | `GET /api/path/node?at=x,y,z` | The navigation node at a voxel and its links (kind, weight) |
 | `GET /api/path/ground?x=&z=` | The highest voxel a bricktron can stand on in a column |
 | `GET /api/path/straight?from=x,y,z&to=x,y,z&unit=` | Whether a bricktron may walk straight from one voxel to another (the `StraightPaths` line test), and where and why not; with the kinds of the steps of the route search's own route between them |
+| `GET /api/nogo` | The no-go zones (`NoGoZones`): every faction's rectangles, the local faction, the strength routes use, how many route searches paid for zones |
+| `POST /api/nogo?op=&x0=&z0=&x1=&z1=` | Draws (`add`), erases (`erase`) or clears (`clear`) a no-go zone of the local player's faction as the tool does (a client sends it to the host) |
 | `GET /api/path/stats?enemy=&top=&recent=` | Measurements of the route searches the game ran since the last reset |
 | `POST /api/path/stats/reset` | Starts the route search measurements again from zero |
 | `GET /api/navmesh`, `POST /api/navmesh/start`, `POST /api/navmesh/stop`, `GET /api/navmesh/path`, `GET /api/navmesh/bench` | Unity 6 port: the navigation mesh experiment, its build and update times, and routes over it against the game's A\* (see [NavMesh](NavMesh.md)) |

@@ -150,6 +150,9 @@ internal static class StraightPaths
 	internal static bool Pull(List<PathBranch> branches, TestTerrainLod lod, Func<XYZ, bool> presenceTest, GameObject walker)
 	{
 		_walker = walker;
+#if !ESSENTIALS
+		_zones = NoGoZonesOf(walker);
+#endif
 		Pulled.Clear();
 		PulledLines.Clear();
 		int count = branches.Count;
@@ -276,6 +279,14 @@ internal static class StraightPaths
 			{
 				return Fail(cell, "the route's presence test refuses it (a unit or blocker)");
 			}
+#if !ESSENTIALS
+			// A line between two voxels outside the walker's no-go zones does not cut into one (NoGoZones): the
+			// route kept out of it. A run that starts or ends in a zone was in it anyway.
+			if (_zones != null && _zones.Contains(cell.x, cell.z) && !_zones.Contains(from.x, from.z) && !_zones.Contains(to.x, to.z))
+			{
+				return Fail(cell, "in a no-go zone of the walker's team");
+			}
+#endif
 			previous = node;
 		}
 		// The voxels beside the line the body brushes (the corners it passes): flat ground at the same height, no
@@ -345,6 +356,21 @@ internal static class StraightPaths
 	// The bricktron whose route is pulled: obstacles the route search lets it through do not stop a line either.
 	private static GameObject _walker;
 
+#if !ESSENTIALS
+	// The no-go zones of the walker's team (NoGoZones), or null.
+	private static NoGoMap _zones;
+
+	private static NoGoMap NoGoZonesOf(GameObject walker)
+	{
+		if (walker == null || !NoGoZones.Any)
+		{
+			return null;
+		}
+		Navigation navigation = walker.GetComponent<Navigation>();
+		return (navigation != null) ? NoGoZones.MapFor(navigation.faction) : null;
+	}
+#endif
+
 	private static readonly Func<IVolume, bool> BlocksLine = (IVolume volume) =>
 	{
 		IPassThrough passThrough = volume.PassThrough;
@@ -375,6 +401,9 @@ internal static class StraightPaths
 	internal static string Explain(XYZ from, XYZ to, Func<XYZ, bool> presenceTest, GameObject walker)
 	{
 		_walker = walker;
+#if !ESSENTIALS
+		_zones = NoGoZonesOf(walker);
+#endif
 		TestTerrainLod lod = (TestPathfinding.Instance != null) ? TestPathfinding.Instance.terrainLod : null;
 		if (lod == null)
 		{
