@@ -110,4 +110,19 @@ public class DemolishRulesTests
 		Assert.That(DemolishRules.Cancelled(false, true, 10f, 10f - DemolishRules.CancelGraceSeconds), Is.True);
 		Assert.That(DemolishRules.Cancelled(false, false, 10f, 0f), Is.False);
 	}
+
+	[Test]
+	public void AHitByAnotherFactionForfeitsTheRefund()
+	{
+		Assert.That(DemolishRules.HitByOther(true, false), Is.True);
+		Assert.That(DemolishRules.GivesBack(DemolishRules.HitByOther(true, false)), Is.False);
+	}
+
+	[Test]
+	public void OwnAndUnknownHitsKeepTheRefund()
+	{
+		Assert.That(DemolishRules.HitByOther(true, true), Is.False);
+		Assert.That(DemolishRules.HitByOther(false, false), Is.False);
+		Assert.That(DemolishRules.GivesBack(false), Is.True);
+	}
 }

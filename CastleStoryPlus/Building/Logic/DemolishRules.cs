@@ -95,4 +95,19 @@ internal static class DemolishRules
 	{
 		return !antiAlive && buildingAlive && antiGoneSince >= 0f && now - antiGoneSince >= CancelGraceSeconds;
 	}
+
+	// A hit on a marked building by a unit of another faction (an enemy, or another team) means it may be falling to
+	// them, not to the demolition: from then on it gives nothing back, so marking a building under attack cannot turn
+	// its loss into a refund. Hits with no known attacker (fire, falling, the demolition's own breaking) and hits by the
+	// building's own faction do not count.
+	internal static bool HitByOther(bool attackerKnown, bool sameFaction)
+	{
+		return attackerKnown && !sameFaction;
+	}
+
+	// Whether a demolished building gives its cost back.
+	internal static bool GivesBack(bool hitByOther)
+	{
+		return !hitByOther;
+	}
 }

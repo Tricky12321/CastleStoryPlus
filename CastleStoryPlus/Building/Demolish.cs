@@ -66,6 +66,9 @@ internal static class Demolish
 
 		// What the building held when it was knocked down (dropped by StockpileSpill or here): carried away too.
 		public List<GameObject> Contents;
+
+		// A unit of another faction hit it after it was marked: it gives nothing back (DemolishRules.HitByOther).
+		public bool HitByOther;
 	}
 
 	private static readonly Dictionary<GameObject, Mark> Marked = new Dictionary<GameObject, Mark>();
@@ -462,6 +465,24 @@ internal static class Demolish
 		}
 	}
 
+	// Server: a marked building is hit; a hit by a unit of another faction forfeits its refund.
+	internal static void OnAttack(GameObject building, GameObject attacker)
+	{
+		if (!NetworkServer.active || building == null || !Marked.TryGetValue(building, out Mark mark) || mark.HitByOther)
+		{
+			return;
+		}
+		bool known = !attacker.IsNullOrReleased();
+		GameComponent own = building.GetComponent<GameComponent>();
+		GameComponent other = known ? attacker.GetComponent<GameComponent>() : null;
+		bool same = own != null && other != null && own.faction == other.faction;
+		if (DemolishRules.HitByOther(known && other != null, same))
+		{
+			mark.HitByOther = true;
+			Plugin.Log.LogInfo("Demolish: " + building.name + " was hit by " + attacker.name + " of another faction; it gives nothing back when it falls");
+		}
+	}
+
 	// Server: a marked building is knocked down; what it holds is noted before StockpileSpill drops it.
 	internal static void OnKill(GameObject building)
 	{
@@ -514,7 +535,8 @@ internal static class Demolish
 		}
 		int contents = leftovers.Count;
 		List<GameObject> refunded = new List<GameObject>();
-		foreach (KeyValuePair<Factory.AssetKey, int> entry in Refund(mark.Cost))
+		List<KeyValuePair<Factory.AssetKey, int>> refund = DemolishRules.GivesBack(mark.HitByOther) ? Refund(mark.Cost) : new List<KeyValuePair<Factory.AssetKey, int>>();
+		foreach (KeyValuePair<Factory.AssetKey, int> entry in refund)
 		{
 			for (int i = 0; i < entry.Value; i++)
 			{
@@ -1011,6 +1033,20 @@ internal static class DemolishWorkPatch
 	private static void Postfix(BuildGoal __instance, Labor labor)
 	{
 		Demolish.OnWork(__instance, labor);
+	}
+}
+
+// A hit on a marked building: one by another faction forfeits its refund.
+[Feature(Features.Demolish, Features.DemolishInfo)]
+[HarmonyPatch(typeof(ObjectDamageReceiver), nameof(ObjectDamageReceiver.ReceiveAttack))]
+internal static class DemolishAttackPatch
+{
+	private static void Prefix(ObjectDamageReceiver __instance, GameObject attacker)
+	{
+		if (__instance != null)
+		{
+			Demolish.OnAttack(__instance.gameObject, attacker);
+		}
 	}
 }
 
