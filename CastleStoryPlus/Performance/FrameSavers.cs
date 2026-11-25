@@ -78,7 +78,7 @@ internal static class FrameSavers
 			{
 				continue;
 			}
-			if (animator.GetComponentInParent<Labor>() != null || IsHealthCircle(animator))
+			if (animator.GetComponentInParent<Labor>() != null)
 			{
 				continue;
 			}
@@ -93,15 +93,6 @@ internal static class FrameSavers
 			}
 			animator.cullingMode = AnimatorCullingMode.CullCompletely;
 		}
-	}
-
-	// The rings under units and things (SelectionCircle: health, stamina, the side's colour) are no decoration: their
-	// animator draws what the game tells it. Their pool keeps them active, so a ring waiting in the pool (or the one
-	// under a crystal or a building) was taken for decoration and stopped off the screen, also once it was under a
-	// unit again (#196). They keep animating, as in the game.
-	internal static bool IsHealthCircle(Animator animator)
-	{
-		return animator.GetComponent<SelectionCircle>() != null;
 	}
 
 	// Each stockpile's overhead icon (some 300 in a base) has an animator with Show and Hide triggers that nothing in
