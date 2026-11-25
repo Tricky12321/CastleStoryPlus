@@ -279,12 +279,19 @@ def demolition_marks(player, own=False):
 
 def own_pallet(player, host, offsets, instant):
     """Places a stockpile of the player near the home crystal and has it built at once; its position."""
+    project = None
+    if not instant:
+        # A client places blueprints into a build task of its own, made first.
+        before = set(p["id"] for p in own_projects(player, "Build"))
+        player.call("POST", "/api/projects/create", type="build")
+        player.wait_for("its new build task", lambda: len([p for p in own_projects(player, "Build") if p["id"] not in before]) > 0, 30)
+        project = [p for p in own_projects(player, "Build") if p["id"] not in before][0]["id"]
     for at in ground_spots(host, offsets):
         spot = "%d,%d,%d" % at
         if instant:
             answer = player.call("POST", "/api/blueprints/place", key="Pallet", at=spot, instant="true")
         else:
-            answer = player.call("POST", "/api/blueprints/place", key="Pallet", at=spot)
+            answer = player.call("POST", "/api/blueprints/place", key="Pallet", at=spot, project=project)
         if not answer.get("placed"):
             continue
         if not instant:
