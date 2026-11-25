@@ -119,6 +119,10 @@ internal static class Features
 
 	public const string MoveStructureInfo = "Move buildings (workshops, stockpiles, racks...): hold the move key and click a building, then place it. Workers demolish the old one (materials and contents are dropped for re-use) and build the new one.";
 
+	public const string Demolish = "Demolish";
+
+	public const string DemolishInfo = "Demolition as a task (#200): hold the demolish key (Delete) and click one of your buildings (workshop, stockpile, weapon stand, door...) to mark it; a builder of the build task takes it down, the materials it cost come back as items and are carried to storage, with what it held. The same click again (or the remove tool) cancels it. Host decides in multiplayer; saved with the game.";
+
 	public const string CopyPaste = "CopyPaste";
 
 	public const string CopyPasteInfo = "Ctrl+C, then drag an area to copy its blocks, buildings and blueprints. Ctrl+V pastes the copy as blueprints into the selected build project (right-click rotates).";

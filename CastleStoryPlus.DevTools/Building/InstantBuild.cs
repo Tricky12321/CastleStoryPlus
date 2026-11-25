@@ -102,6 +102,25 @@ internal class InstantBuild : MonoBehaviour
 	}
 
 	// The player's blueprints, optionally of one project.
+	// The placed blueprints of every other player (not their demolitions), as Of.
+	internal static List<Blueprint> OfOthers(Faction faction, Project project)
+	{
+		List<Blueprint> result = new List<Blueprint>();
+		foreach (Blueprint blueprint in Object.FindObjectsOfType<Blueprint>())
+		{
+			if (blueprint == null || blueprint.Released || blueprint.faction == faction || blueprint.faction == null || blueprint.IsAnti || !blueprint.isPlaced)
+			{
+				continue;
+			}
+			if (project != null && blueprint.Project != project)
+			{
+				continue;
+			}
+			result.Add(blueprint);
+		}
+		return result;
+	}
+
 	internal static List<Blueprint> Of(Faction faction, Project project)
 	{
 		List<Blueprint> result = new List<Blueprint>();

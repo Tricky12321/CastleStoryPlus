@@ -423,6 +423,7 @@ end
 
 		AddSection("KEYS");
 		AddKeyRow("Move a building (hold + click)", "Building", "MoveStructureKey", string.Empty);
+		AddKeyRow("Demolish a building (hold + click)", "Building", "DemolishKey", string.Empty);
 		AddKeyRow("Copy an area", "Building", "CopyKey", "Ctrl+");
 		AddKeyRow("Paste the copy", "Building", "PasteKey", "Ctrl+");
 		AddKeyRow("Normal game speed", "GameSpeed", "NormalSpeedKey", string.Empty);
