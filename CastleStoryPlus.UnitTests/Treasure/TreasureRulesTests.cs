@@ -65,4 +65,36 @@ public class TreasureRulesTests
 		Assert.That(TreasureRules.KeepsOut(opened: true, guarded: true), Is.False);
 		Assert.That(TreasureRules.KeepsOut(opened: true, guarded: false), Is.False);
 	}
+
+	[Test]
+	public void AnOwnWalkIntoAGuardedRuinIsTurnedAway()
+	{
+		Assert.That(TreasureRules.TurnsWalkAway(destinationKeptOut: true, walkerKeptOut: false, playerOrder: false, fighting: false), Is.True);
+	}
+
+	[Test]
+	public void AWalkElsewhereIsNotTurnedAway()
+	{
+		Assert.That(TreasureRules.TurnsWalkAway(destinationKeptOut: false, walkerKeptOut: false, playerOrder: false, fighting: false), Is.False);
+		// Walking out of a ruin, or on past it, is never held up.
+		Assert.That(TreasureRules.TurnsWalkAway(destinationKeptOut: false, walkerKeptOut: true, playerOrder: false, fighting: false), Is.False);
+	}
+
+	[Test]
+	public void APlayersOrderStillSendsABricktronIn()
+	{
+		Assert.That(TreasureRules.TurnsWalkAway(destinationKeptOut: true, walkerKeptOut: false, playerOrder: true, fighting: false), Is.False);
+	}
+
+	[Test]
+	public void ABricktronAlreadyInTheRuinMovesAbout()
+	{
+		Assert.That(TreasureRules.TurnsWalkAway(destinationKeptOut: true, walkerKeptOut: true, playerOrder: false, fighting: false), Is.False);
+	}
+
+	[Test]
+	public void FightingIsNoErrand()
+	{
+		Assert.That(TreasureRules.TurnsWalkAway(destinationKeptOut: true, walkerKeptOut: false, playerOrder: false, fighting: true), Is.False);
+	}
 }

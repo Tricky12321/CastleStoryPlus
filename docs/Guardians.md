@@ -73,7 +73,10 @@ defines each kind, `BeastMesh` loads the model, `BeastBody` animates it and `Bea
   other (`BeastTemper`).
 - While a living guardian is within 22 blocks of its chest, the ruin (12 blocks round the chest) is out of bounds for
   the players' workers' own work: no material no player owns is fetched from it, and the idle cleanup and repair leave
-  it alone (`TreasureChests.InGuardedRuin`, `TreasureRules`). A player's order still sends a bricktron there.
+  it alone (`TreasureChests.InGuardedRuin`, `TreasureRules`), and no walk of a bricktron's own goes into it at all,
+  whatever chose the place (`TreasureKeepOut`, on the game's `Navigation.NavigateTo`). A player's order still sends a
+  bricktron there, a bricktron already inside may move about, and soldiers, the player's raids and walks after a unit
+  (a fight) are not held up.
 - A ruin's block that loses its support is taken away instead of falling as a loose (fetchable) block, also in a world
   loaded from a save (a neutral block within 10 blocks of a chest).
 
