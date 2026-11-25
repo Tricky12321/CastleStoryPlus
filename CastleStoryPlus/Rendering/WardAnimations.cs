@@ -195,7 +195,9 @@ internal static class WardAnimations
 
 	private static void AddLinkMaterial(Material material)
 	{
-		if (material == null || LinkMaterials.ContainsKey(material) || !material.HasProperty(Amplitude))
+		// Not asked whether the shader has _Amplitude: without graphics (a headless player) no shader is loaded and the
+		// material says it has none; setting it there does no harm.
+		if (material == null || LinkMaterials.ContainsKey(material))
 		{
 			return;
 		}
