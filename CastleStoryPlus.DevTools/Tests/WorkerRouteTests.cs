@@ -309,6 +309,125 @@ internal static class WorkerRouteTests
 #endif
 
 #if !ESSENTIALS
+	[GameTest("Tasks", "No walk of a bricktron's own goes into the ruin of a guarded chest, whatever sent it; a player's order still does, and once the guardians are gone the bricktron's own walks go there again (#197)", TimeoutSeconds = 240f)]
+	private static IEnumerator GuardedRuinTurnsOwnWalksAway(TestContext t)
+	{
+		if (!Plugin.IsEnabled(Features.Treasure) || !TreasureChests.Active)
+		{
+			t.Skip("Treasure chests are off in this game");
+		}
+		Faction enemy = Scenario.EnemyFaction();
+		if (enemy == null)
+		{
+			t.Skip("No enemy faction in this game");
+		}
+		// As GuardedChestIsNoErrand: along x from the home crystal's side out, the builder, 18 blocks of open ground,
+		// the chest, the guardians just beyond it.
+		XYZ site = Scenario.Site(t, 31, 9, 4, away: 30);
+		int home = (Scenario.Home().x >= site.x) ? 1 : -1;
+		XYZ chestAt = new XYZ(site.x - home * 9, site.y, site.z);
+		GameObject chest = Brix.Transactions.Transactor.SpawnUNet(ObjetsDynamiques.Chest, Faction.DefaultNeutral, chestAt.ToVector3(), Quaternion.identity);
+		t.NotNull(chest, "The chest");
+		Vector3 chestPos = chest.transform.position;
+		TreasureChests.Watch(chest, 2);
+		t.Cleanup(() =>
+		{
+			TreasureChests.Forget(chestPos);
+			Scenario.Release(chest);
+		});
+		List<Labor> guardians = new List<Labor>();
+		for (int i = 0; i < 2; i++)
+		{
+			XYZ at = Scenario.Walkable(new XYZ(chestAt.x - home * 4, chestAt.y, chestAt.z + ((i == 0) ? -3 : 3)));
+			Labor beast = Beasts.Spawn(BeastKind.Boulderback, enemy, at.ToVector3(), 1);
+			t.NotNull(beast, "Guardian " + (i + 1));
+			Scenario.Adopt(t, beast);
+			beast.Autonomy = AutonomyStatus.HoldingPosition;
+			guardians.Add(beast);
+		}
+		XYZ start = Scenario.Walkable(new XYZ(site.x + home * 9, site.y, site.z));
+		Labor builder = Scenario.Bricktron(t, Occupation.Type.Builder, start);
+		builder.Autonomy = AutonomyStatus.HoldingPosition;
+		// A spot in the ruin beside the chest (2 blocks from it, on the builder's side).
+		XYZ inRuin = Scenario.Walkable(new XYZ(chestAt.x + home * 2, chestAt.y, chestAt.z + 2));
+		yield return TestWorld.WaitForGraph(t);
+		// The chests are looked at every second.
+		yield return t.Seconds(2f);
+		t.True(TreasureChests.InGuardedRuin(chestPos), "The chest's ruin is not kept out although its guardians stand by it");
+		t.True(TreasureChests.InGuardedRuin(inRuin.ToVector3()), "The spot beside the guarded chest is not in its ruin");
+		t.False(TreasureChests.InGuardedRuin(builder.transform.position), "The builder 18 blocks away is in the chest's ruin");
+
+		// A walk the bricktron's work gives it (as a task's, the idle round's, a store's): turned away at once.
+		int before = TreasureKeepOut.TurnedAway;
+		Order.Package.OfLocation(Order.Move.WalkToward, Location.Of(inRuin), Labor.DecisionSource.Project).Send(builder);
+		float closest = float.MaxValue;
+		float until = Time.time + 12f;
+		while (Time.time < until)
+		{
+			closest = Mathf.Min(closest, Vector3.Distance(builder.transform.position, chestPos));
+			if (TreasureChests.InGuardedRuin(builder.transform.position))
+			{
+				break;
+			}
+			yield return t.Seconds(0.5f);
+		}
+		t.Record("closest own walk", closest.ToString("F1"));
+		t.Log("Own walk: closest " + closest.ToString("F1") + " from the chest, " + (TreasureKeepOut.TurnedAway - before) + " walks turned away, " + Doing(builder));
+		t.False(TreasureChests.InGuardedRuin(builder.transform.position), "The bricktron's own walk took it into the guarded ruin (to " + closest.ToString("F1") + " blocks from the chest): " + Doing(builder));
+		t.True(TreasureKeepOut.TurnedAway > before, "The bricktron's own walk into the guarded ruin was not turned away");
+
+		// The player's order still sends it there.
+		Order.Package.OfLocation(Order.Move.WalkToward, Location.Of(inRuin), Labor.DecisionSource.User).Send(builder);
+		bool arrived = false;
+		until = Time.time + 40f;
+		while (Time.time < until)
+		{
+			if (Vector3.Distance(builder.transform.position, inRuin.ToVector3()) <= 2f)
+			{
+				arrived = true;
+				break;
+			}
+			yield return t.Seconds(0.5f);
+		}
+		t.Log("Player's order: " + Vector3.Distance(builder.transform.position, inRuin.ToVector3()).ToString("F1") + " from the spot, " + Doing(builder));
+		t.True(arrived, "The player's order did not take the bricktron into the guarded ruin: " + Doing(builder));
+		t.True(chest.activeInHierarchy && !chest.IsNullOrReleased(), "The guarded chest was opened");
+
+		// Back out by the player's order (a walk out of the ruin is never held up), then the guardians go.
+		Order.Package.OfLocation(Order.Move.WalkToward, Location.Of(start), Labor.DecisionSource.User).Send(builder);
+		until = Time.time + 40f;
+		while (Time.time < until && TreasureChests.InGuardedRuin(builder.transform.position))
+		{
+			yield return t.Seconds(0.5f);
+		}
+		t.False(TreasureChests.InGuardedRuin(builder.transform.position), "The bricktron did not walk out of the guarded ruin: " + Doing(builder));
+		yield return t.Seconds(2f);
+		foreach (Labor guardian in guardians)
+		{
+			Scenario.Discard(guardian.gameObject);
+		}
+		yield return t.Seconds(2f);
+		t.False(TreasureChests.InGuardedRuin(chestPos), "The chest's ruin is still kept out with its guardians gone");
+
+		// The ruin open again, the bricktron's own walk goes there.
+		Order.Package.OfLocation(Order.Move.WalkToward, Location.Of(inRuin), Labor.DecisionSource.Project).Send(builder);
+		closest = float.MaxValue;
+		until = Time.time + 40f;
+		while (Time.time < until)
+		{
+			closest = Mathf.Min(closest, Vector3.Distance(builder.transform.position, inRuin.ToVector3()));
+			if (closest <= 2f)
+			{
+				break;
+			}
+			yield return t.Seconds(0.5f);
+		}
+		t.Log("Own walk with the guardians gone: closest " + closest.ToString("F1") + " from the spot, " + Doing(builder));
+		t.True(closest <= 2f, "The bricktron's own walk did not go into the open ruin: " + Doing(builder));
+	}
+#endif
+
+#if !ESSENTIALS
 	// Why the idle cleanup would leave the item alone (null: it would pick it up; "not considered": out of its reach).
 	private static string CleanupReason(Labor labor, GameObject item)
 	{

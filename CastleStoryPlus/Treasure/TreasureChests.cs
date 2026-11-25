@@ -98,6 +98,7 @@ internal class TreasureChests : MonoBehaviour
 		{
 			Chests.Clear();
 			GuardedNow.Clear();
+			TreasureKeepOut.Clear();
 			BeastTemper.Clear();
 			SentBackAt.Clear();
 			TreasureRuins.Clear();
@@ -772,7 +773,7 @@ internal class TreasureChests : MonoBehaviour
 	// Whether the place lies in the ruin of a chest its guardians still guard (TreasureRules.KeepOutRadius round it).
 	// The players' workers take no work there of their own accord: a loose item there is not fetched as material nor
 	// picked up by the idle cleanup, and the idle repair leaves its blocks alone, so no worker walks out to a guarded
-	// chest and back (#58). A player's order still
+	// chest and back (#58), and no walk of their own goes in there at all (TreasureKeepOut, #197). A player's order still
 	// sends them, and once the guardians are dead or lured away the ruin is open again (within a second). Host only:
 	// a client's list is empty, as the host decides the workers' work.
 	internal static bool InGuardedRuin(Vector3 at)
