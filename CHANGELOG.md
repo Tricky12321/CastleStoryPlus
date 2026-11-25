@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [FIX] **Health rings keep animating (#196):** the rings under units, the crystal and buildings (health, stamina, the side's colour) were taken for decoration by the off-screen animator saver (`FrameSavers`), because their pool keeps them active: a ring set to stop off the screen there stayed that way under every unit it went to later. They now always animate, as in the original game. DevTools: in-game tests that read what a ring draws (its fill, whether it shows, the enemy red) and the ring under a hurt unit.
+
 ## 0.10.0 — 2026-11-23
 
 - [FIX] **Stockpile: accept only coal (#176):** the stockpile wheel's "accept only" ring had no button for coal, so a stockpile could not be kept for it; it now has one, next to raw iron, with the coal icon. It works as the game's own buttons do: the host makes the stockpile take only coal (also for a client's stockpile in multiplayer), workers bring coal to it and nothing else, the setting is saved with the stockpile, and the large stockpile and the warehouse have the button too. Only while Metallurgy is on (`[Features] Metallurgy`). DevTools: an in-game test (a coal-only stockpile gets a builder's coal and has no room for stone, logs or raw iron).
