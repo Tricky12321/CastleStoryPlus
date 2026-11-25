@@ -5,6 +5,8 @@ All changes compared to the original Castle Story game. Every entry has one tag:
 
 ## Unreleased
 
+- [ADD] **Route overlay (#200):** a line along the rest of the route of each selected bricktron shows where it is going and how: light blue where it walks, amber where it climbs (a ledge up, a step down, a ladder) and red while it is stuck (it has a route but has not moved for 3 seconds, or it is digging its way out of a pit). It is off by default so it does not get in the way: the `8` key shows and hides it (`[RouteOverlay] Key`), and it can be switched in Castle Story Plus settings under Routes (`[RouteOverlay] Shown`). It only draws on your own screen and sends nothing. The routes are walked on the host, so it shows them in single player and for the host, not for a multiplayer client. The lines are rebuilt only when a route changes. In both editions (feature `RouteOverlay`).
+
 ## 0.10.0 — 2026-11-23
 
 - [FIX] **Stockpile: accept only coal (#176):** the stockpile wheel's "accept only" ring had no button for coal, so a stockpile could not be kept for it; it now has one, next to raw iron, with the coal icon. It works as the game's own buttons do: the host makes the stockpile take only coal (also for a client's stockpile in multiplayer), workers bring coal to it and nothing else, the setting is saved with the stockpile, and the large stockpile and the warehouse have the button too. Only while Metallurgy is on (`[Features] Metallurgy`). DevTools: an in-game test (a coal-only stockpile gets a builder's coal and has no room for stone, logs or raw iron).

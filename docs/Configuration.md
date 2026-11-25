@@ -8,6 +8,7 @@ The first start creates `BepInEx/config/com.tricky12321.castlestoryplus.cfg`. Ed
 | `[Economy] EnergyMultiplier` | `1.3` | energy per brewed firefly, relative to the blue crystal it costs |
 | `[Saving] AutosaveMinutes` | `2` | minutes of play between autosaves, `0` = off |
 | `[Building] MoveStructureKey`, `CopyKey`, `PasteKey` | M, Ctrl+C, Ctrl+V | keys for moving buildings and copy/paste |
+| `[RouteOverlay] Shown`, `Key` | off, 8 | the route overlay of the selected bricktrons, and the key that shows and hides it |
 | `[Debug] DebugMode` | off | opens the debug windows (F7, F8, F9) |
 | `[Debug] XRayKey` | F6 | turns the semi x-ray on and off, also without debug mode |
 

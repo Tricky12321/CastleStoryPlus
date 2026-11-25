@@ -567,6 +567,10 @@ internal static class Features
 
 	public const string StuckEscapeInfo = "A bricktron shut in a hole (a pit dug too deep, a closed-off pocket) digs its own way out to the nearest place on its team's routes, also while it keeps trying tasks it cannot reach from there: steps one block up or down at most, terrain only, without drops (needs UnreachableTasks for the route map).";
 
+	public const string RouteOverlay = "RouteOverlay";
+
+	public const string RouteOverlayInfo = "Route overlay: a line along the rest of the route of each selected bricktron, light blue where it walks, amber where it climbs (a ledge, a step down, a ladder) and red while it is stuck (has not moved for 3 s on its way, or digs its way out of a pit). Off until shown with the key ([RouteOverlay] Key, 8) or in the settings ([RouteOverlay] Shown). Only on this computer; the routes are known to the host and single player.";
+
 	public const string Treasure = "Treasure";
 
 	public const string TreasureInfo = "Treasure chests in every new world (3-4 small, 5-7 medium, 8-10 large map), away from the starting points, each in a small castle ruin (TreasureRuins) and guarded by a pack of 2 to 10 beasts (TreasureGuardians; the bigger the pack, the better the loot): Spirestalker (giraffe), Cindermane (lion), Boulderback (gorilla) and Ironhorn (rhino), voxel models over enemy units with their own health, damage and speed. The guards are peaceful until attacked, then the whole pack fights back. Kill them (or lure them away) and walk a bricktron up to the chest to open it (while the guards are near, workers take no work of their own in its ruin): iron ingots, crystals, cogs, purified brimstone, dark crystals, soldier kits, bombs and explosive barrels spill out. Off: new worlds get no chests, no ruins and no guardians, and in a saved world that has them the host takes the guardians away when it loads (the ruins stay, ordinary blocks you can dig). Applies from the next game you start or load; the host's switch decides in multiplayer.";

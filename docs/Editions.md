@@ -218,6 +218,7 @@ switched off on the host no edition is sent either.
 | `RichIron` | Out | Balance |
 | `Roads` | Out | A new building |
 | `RoofItems` | Out | Only for the mod's own buildings |
+| `RouteOverlay` | In (borderline) | Diagnostics of pathfinding and getting unstuck: where a selected unit walks, climbs or is stuck (off until shown) |
 | `Saplings` | Out | A new building and task |
 | `SaveAndLeave` | Out | New dialog buttons (convenience) |
 | `SavedTeams` | In (borderline) | Multiplayer fix: allies no longer start as enemies in a loaded save |
@@ -268,4 +269,4 @@ switched off on the host no edition is sent either.
 | `WorldSearch` | Out | A new tool |
 | `WornPaths` | Out | New world behaviour |
 
-In: 62 features. Out: 96 features.
+In: 64 features. Out: 98 features.

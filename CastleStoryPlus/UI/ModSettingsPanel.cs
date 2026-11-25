@@ -418,6 +418,12 @@ end
 		}
 #endif
 
+		if (RouteOverlay.Shown != null)
+		{
+			AddSection("ROUTES");
+			AddToggleRow("Routes of the selected bricktrons (blue walk, amber climb, red stuck)", RouteOverlay.Shown);
+		}
+
 		AddSection("DEBUG");
 		AddToggleRow("Debug mode (F7, F8 and F9 windows)", DebugMode.Entry);
 
@@ -428,6 +434,7 @@ end
 		AddKeyRow("Normal game speed", "GameSpeed", "NormalSpeedKey", string.Empty);
 		AddKeyRow("Second game speed", "GameSpeed", "Speed2Key", string.Empty);
 		AddKeyRow("Third game speed", "GameSpeed", "Speed3Key", string.Empty);
+		AddKeyRow("Show or hide the routes of the selected bricktrons", "RouteOverlay", "Key", string.Empty);
 
 		AddSection("FEATURES (APPLY AFTER A RESTART)");
 		List<ConfigEntry<bool>> switches = new List<ConfigEntry<bool>>(Plugin.FeatureSwitches);
