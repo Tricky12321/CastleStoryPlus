@@ -1050,6 +1050,44 @@ internal static class DemolishAttackPatch
 	}
 }
 
+// Before a worker of a task is given its work, the game checks that it can find one of the things the task's
+// blueprints need (Project.VerifyWorkFor). A demolition blueprint needs nothing, but the game counts its building's
+// whole cost among those things (BuildGoalProvider.UniqueItemsNeeded reads every blueprint's base capacity), so with
+// none of those materials to be had the builders of the task were never given the demolition: they stood idle in
+// the task. A builder that can break things passes the check when a demolition blueprint of the task is ready and no
+// other builder is on it (as FreeBlueprintsVerifyPatch does for free blueprints).
+[Feature(Features.Demolish, Features.DemolishInfo)]
+[HarmonyPatch(typeof(Project), nameof(Project.VerifyWorkFor))]
+internal static class DemolishVerifyPatch
+{
+	private static bool Prefix(Project __instance, Labor labor, ref Node __result, bool __runOriginal)
+	{
+		if (!__runOriginal || !(__instance is BuildProject) || labor.IsNullOrReleased() || labor.Profession == null || !labor.Profession.CanBreakVoxels())
+		{
+			return __runOriginal;
+		}
+		BuildGoalProvider provider = __instance.GetComponent<BuildGoalProvider>();
+		if (provider == null)
+		{
+			return true;
+		}
+		foreach (Blueprint blueprint in provider.TrackedBlueprints)
+		{
+			if (blueprint == null || blueprint.Released || !blueprint.IsAnti || !blueprint.State.HasFlag(PlacementFlags.valid) || !blueprint.State.HasFlag(PlacementFlags.buildable))
+			{
+				continue;
+			}
+			BuildGoal goal = blueprint.GetComponent<BuildGoal>();
+			if (goal != null && goal.Commited && !goal.HasOtherWorkerAssigned(labor))
+			{
+				__result = Node.Empty;
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
 // What a marked building holds, noted before StockpileSpill (or the game) drops it.
 [Feature(Features.Demolish, Features.DemolishInfo)]
 [HarmonyPatch(typeof(ObjectDamageReceiver), nameof(ObjectDamageReceiver.Kill))]
