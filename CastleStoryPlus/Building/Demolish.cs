@@ -72,7 +72,9 @@ internal static class Demolish
 
 	private static readonly Dictionary<Blueprint, GameObject> ByAnti = new Dictionary<Blueprint, GameObject>();
 
-	// Server: demolishers to send to their leftovers a moment after the building fell (not inside its release).
+	// Server: demolishers to send to their leftovers a moment after the building fell (not inside its release). The
+	// game learns where new items lie only when it next maps what workers can reach (KnowledgeUpdater, every 200 ticks),
+	// so the first tries find the leftovers out of reach; the demolisher is tried again until they can be reached.
 	private class PendingHaul
 	{
 		public Labor Labor;
@@ -80,7 +82,16 @@ internal static class Demolish
 		public Vector3 Site;
 
 		public float At;
+
+		public float Until;
+
+		public bool Told;
 	}
+
+	// How long a demolisher is tried for its leftovers, and how often.
+	private const float HaulRetrySeconds = 120f;
+
+	private const float HaulRetryInterval = 1f;
 
 	private static readonly List<PendingHaul> PendingHauls = new List<PendingHaul>();
 
@@ -410,8 +421,25 @@ internal static class Demolish
 			{
 				continue;
 			}
-			PendingHauls.RemoveAt(i);
-			DemolishHaul.Start(pending.Labor, pending.Site);
+			string why = DemolishHaul.Start(pending.Labor, pending.Site);
+			if (why == null)
+			{
+				PendingHauls.RemoveAt(i);
+				continue;
+			}
+			bool gone = pending.Labor == null || pending.Labor.IsNullOrReleased() || DemolishHaul.Count == 0;
+			if (gone || now >= pending.Until)
+			{
+				PendingHauls.RemoveAt(i);
+				Plugin.Log.LogInfo("Demolish: " + ((pending.Labor != null) ? pending.Labor.name : "the demolisher") + " does not carry the leftovers of its demolition (" + why + ")" + (gone ? string.Empty : " after " + HaulRetrySeconds + " s of tries") + "; " + DemolishHaul.Count + " leftovers are left for idle workers");
+				continue;
+			}
+			if (!pending.Told)
+			{
+				pending.Told = true;
+				Plugin.Log.LogInfo("Demolish: " + pending.Labor.name + " cannot carry the leftovers of its demolition yet (" + why + "); tried again every " + HaulRetryInterval + " s");
+			}
+			pending.At = now + HaulRetryInterval;
 		}
 		if (now < _nextCheck || Marked.Count == 0)
 		{
@@ -536,7 +564,7 @@ internal static class Demolish
 		Labor demolisher = mark.Demolisher;
 		if (demolisher != null && !demolisher.IsNullOrReleased() && leftovers.Count > 0)
 		{
-			PendingHauls.Add(new PendingHaul { Labor = demolisher, Site = center, At = Time.time + 0.5f });
+			PendingHauls.Add(new PendingHaul { Labor = demolisher, Site = center, At = Time.time + 0.5f, Until = Time.time + HaulRetrySeconds });
 		}
 		Plugin.Log.LogInfo("Demolish: " + building.name + " demolished: " + refunded.Count + " material items given back, " + contents + " items of its contents dropped" + ((demolisher != null) ? ", " + demolisher.name + " carries them to storage" : string.Empty));
 	}
@@ -775,28 +803,41 @@ internal static class DemolishHaul
 		return false;
 	}
 
-	// Server: the demolisher goes for the leftovers of its demolition at once.
-	internal static void Start(Labor labor, Vector3 site)
+	// Server: the demolisher goes for the leftovers of its demolition at once. Null when it went, else why not (the
+	// caller tries again later: new items are out of reach until the game maps them).
+	internal static string Start(Labor labor, Vector3 site)
 	{
 		if (labor == null || labor.IsNullOrReleased() || !labor.gameObject.activeInHierarchy)
 		{
-			return;
+			return "the demolisher is gone";
 		}
-		GameObject item = TryPlan(labor, site);
+		GameObject item = TryPlan(labor, site, out string why);
 		if (item == null)
 		{
-			return;
+			return why;
 		}
 		Carry.Send(labor, item, Labor.DecisionSource.Project);
-		Plugin.Log.LogInfo("Demolish: " + labor.name + " carries the leftovers of its demolition to storage");
+		Plugin.Log.LogInfo("Demolish: " + labor.name + " carries the leftovers of its demolition to storage, first " + item.name + " (" + Leftovers.Count + " leftovers)");
+		return null;
 	}
 
 	// An unclaimed leftover of the worker's team it can reach, carry and store, nearest to the place first; null when
-	// there is none. The worker's hands must be empty. Claims it for the worker.
-	internal static GameObject TryPlan(Labor labor, Vector3 near)
+	// there is none, with why not. The worker's hands must be empty. Claims it for the worker.
+	internal static GameObject TryPlan(Labor labor, Vector3 near, out string why)
 	{
-		if (!NetworkServer.active || labor == null || labor.recepteur == null || !labor.recepteur.IsEmpty() || Leftovers.Count == 0)
+		if (!NetworkServer.active || labor == null || labor.recepteur == null)
 		{
+			why = "not the host, or no worker";
+			return null;
+		}
+		if (!labor.recepteur.IsEmpty())
+		{
+			why = "its hands are full";
+			return null;
+		}
+		if (Leftovers.Count == 0)
+		{
+			why = "no leftovers";
 			return null;
 		}
 		Prune();
@@ -810,10 +851,14 @@ internal static class DemolishHaul
 		}
 		if (Candidates.Count == 0)
 		{
+			why = (Leftovers.Count == 0) ? "the leftovers were picked up or are gone" : "none of the " + Leftovers.Count + " leftovers is the worker's team's and unclaimed";
 			return null;
 		}
 		Candidates.Sort((GameObject a, GameObject b) => (a.transform.position - near).sqrMagnitude.CompareTo((b.transform.position - near).sqrMagnitude));
 		int tries = 0;
+		int noRoom = 0;
+		int unreachable = 0;
+		int noStorage = 0;
 		foreach (GameObject item in Candidates)
 		{
 			if (tries++ >= MaxTries)
@@ -821,13 +866,26 @@ internal static class DemolishHaul
 				break;
 			}
 			GameComponent component = item.GetComponent<GameComponent>();
-			if (component == null || !labor.recepteur.HasRoomFor(item) || !Knowledge.Instance.CanReach(labor, component) || labor.BestRecepteurToStore(item) == null)
+			if (component == null || !labor.recepteur.HasRoomFor(item))
 			{
+				noRoom++;
+				continue;
+			}
+			if (!Knowledge.Instance.CanReach(labor, component))
+			{
+				unreachable++;
+				continue;
+			}
+			if (labor.BestRecepteurToStore(item) == null)
+			{
+				noStorage++;
 				continue;
 			}
 			Claims[item] = new Claim { Labor = labor, At = Time.time };
+			why = null;
 			return item;
 		}
+		why = "of " + Candidates.Count + " leftovers " + noRoom + " do not fit in its hands, " + unreachable + " are out of its reach (not yet mapped), " + noStorage + " have no stockpile with room";
 		return null;
 	}
 
@@ -899,18 +957,25 @@ internal static class DemolishHaul
 		Release(labor);
 		if (load >= MaxLoads || labor == null || labor.IsNullOrReleased() || labor.Project is IdleProject || labor.Project == null)
 		{
+			if (labor != null && !(labor.Project is IdleProject))
+			{
+				Plugin.Log.LogInfo("Demolish: " + labor.name + " goes back to its task after load " + load + " of demolition leftovers; " + Leftovers.Count + " leftovers left");
+			}
 			// An idle worker asks the idle task again for its next chore.
 			return Node.Empty;
 		}
-		GameObject item = TryPlan(labor, site);
+		GameObject item = TryPlan(labor, site, out string why);
 		if (item == null || (item.transform.position - site).sqrMagnitude > LoadRadius * LoadRadius * 4f)
 		{
 			if (item != null)
 			{
 				Claims.Remove(item);
+				why = "the next leftover lies too far from the demolition";
 			}
+			Plugin.Log.LogInfo("Demolish: " + labor.name + " stops carrying demolition leftovers after load " + load + " (" + why + "); " + Leftovers.Count + " leftovers left");
 			return Node.Empty;
 		}
+		Plugin.Log.LogInfo("Demolish: " + labor.name + " carries load " + (load + 1) + " of demolition leftovers");
 		return HaulNode(labor, item, load + 1);
 	}
 
@@ -1108,11 +1173,12 @@ internal static class DemolishIdlePatch
 		{
 			return true;
 		}
-		GameObject item = DemolishHaul.TryPlan(labor, labor.transform.position);
+		GameObject item = DemolishHaul.TryPlan(labor, labor.transform.position, out string _);
 		if (item == null)
 		{
 			return true;
 		}
+		Plugin.Log.LogInfo("Demolish: idle " + labor.name + " carries demolition leftovers to storage, first " + item.name);
 		OrderPackage<Labor> package = Order.Package.OfGameObject(DemolishHaul.Carry, item, Labor.DecisionSource.Project);
 		// Interruptible until the worker picks something up, so real work always wins.
 		package.SetPrepare((BaseLabor worker) => __instance.Prepare(worker as Labor, false, Activity.Chilling));
