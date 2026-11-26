@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using BepInEx.Configuration;
 using Brix.Engine;
 using Brix.Game;
 using Brix.Game.AI;
 using Brix.Game.Components;
 using Brix.Legacy;
+using Brix.Pathfinding;
 using CastleStoryPlus.Core;
 using HarmonyLib;
 using UnityEngine;
@@ -19,6 +23,11 @@ namespace CastleStoryPlus.Nature;
 // route step is struck every StrikeSeconds for StrikeDamage, as a bricktron's axe strikes it (a tree has 180), so it
 // falls and drops its logs like any felled tree. An enemy walking past trees, fighting, breaking blocks or waiting
 // leaves them standing. Host only; the tree's fall is the game's own and reaches every player.
+// A forest no longer costs a route what open ground does (#209): the game weighs a step beside a tree as a flat step,
+// so the enemies' routes ran straight into a strip of forest in their way and they hacked through it (and stood stuck
+// in it) though an open path ran beside it. A forest step of their route search now weighs [Pathfinding]
+// EnemyForestCost more (EnemyForestRules), and an enemy that stands still on its route in a forest with no tree in
+// its way to fell, or that the strikes did not get on, searches its route again from where it stands.
 [Feature(Features.EnemyTreeClearing, Features.EnemyTreeClearingInfo)]
 internal class EnemyTreeClearing : MonoBehaviour
 {
@@ -30,9 +39,6 @@ internal class EnemyTreeClearing : MonoBehaviour
 
 	// Moved less than this in a check: not getting on.
 	private const float StuckDistance = 0.2f;
-
-	// Checks in a row without getting on before a tree in the way is struck (1 s).
-	private const int StuckChecks = 2;
 
 	// How nearly towards the next route step a tree must lie (cosine of the angle).
 	private const float AheadCosine = 0.5f;
@@ -52,10 +58,23 @@ internal class EnemyTreeClearing : MonoBehaviour
 
 	private float _nextCheck;
 
+	internal static ConfigEntry<int> ForestCost;
+
+	// For the DevTools: trees struck and routes searched again by an enemy stuck in a forest.
+	internal static int Strikes;
+
+	internal static int Repaths;
+
 	private static void Enable()
 	{
+		ForestCost = Plugin.Cfg.Bind("Pathfinding", "EnemyForestCost", EnemyForestRules.DefaultStepPenalty, new ConfigDescription("Route cost of a step beside a tree for enemies that fell trees in their way, on top of a flat step's 10 (the game weighs it as a flat step, so enemy waves cut straight through a forest though open ground ran beside it). 0: as the game.", new AcceptableValueRange<int>(EnemyForestRules.MinStepPenalty, EnemyForestRules.MaxStepPenalty)));
 		GameSession.OnLeave(() => Watched.Clear());
 		Plugin.Root.AddComponent<EnemyTreeClearing>();
+	}
+
+	internal static int ForestPenalty()
+	{
+		return (ForestCost != null) ? EnemyForestRules.Clamp(ForestCost.Value) : EnemyForestRules.DefaultStepPenalty;
 	}
 
 	// An enemy wave unit that breaks its way.
@@ -97,27 +116,28 @@ internal class EnemyTreeClearing : MonoBehaviour
 			bool still = (position - watch.Last).sqrMagnitude < StuckDistance * StuckDistance;
 			watch.Last = position;
 			// Only on its way somewhere: not while it fights, breaks a block or waits.
-			if (!still || !NextStep(labor, position, out Vector3 heading))
+			if (!still || labor.Activity == Activity.Fighting || !NextStep(labor, position, out Vector3 heading, out Vector3 next))
 			{
 				watch.Stuck = 0;
 				continue;
 			}
 			watch.Stuck++;
-			if (watch.Stuck < StuckChecks || now < watch.NextStrike)
-			{
-				continue;
-			}
 			XYZ cell = XYZ.FromVector3(position);
-			if (!registry.IsNearATree(cell))
+			bool inForest = registry.IsNearATree(cell);
+			XYZ tree = XYZ.zero;
+			bool treeAhead = inForest && watch.Stuck >= EnemyForestRules.StrikeChecks && FindTree(registry, cell, position, heading, out tree);
+			switch (EnemyForestRules.Decide(watch.Stuck, inForest, treeAhead, now >= watch.NextStrike))
 			{
-				continue;
+				case EnemyForestRules.StuckAction.Strike:
+					watch.NextStrike = now + StrikeSeconds;
+					Strike(labor, tree);
+					Strikes++;
+					break;
+				case EnemyForestRules.StuckAction.Repath:
+					watch.Stuck = 0;
+					Repath(labor, next);
+					break;
 			}
-			if (!FindTree(registry, cell, position, heading, out XYZ tree))
-			{
-				continue;
-			}
-			watch.NextStrike = now + StrikeSeconds;
-			Strike(labor, tree);
 		}
 		foreach (KeyValuePair<Labor, Watch> entry in Watched)
 		{
@@ -133,10 +153,12 @@ internal class EnemyTreeClearing : MonoBehaviour
 		Gone.Clear();
 	}
 
-	// The direction to the next step of the route the unit follows; false when it follows none.
-	private static bool NextStep(Labor labor, Vector3 position, out Vector3 heading)
+	// The direction to the next step of the route the unit follows and that step; false when it follows none, or when
+	// its next steps break a block (it is breaking its way, not stuck).
+	private static bool NextStep(Labor labor, Vector3 position, out Vector3 heading, out Vector3 next)
 	{
 		heading = Vector3.zero;
+		next = position;
 		DestinationIterator path = (labor.navigation != null && labor.navigation.Locomotion != null) ? labor.navigation.Locomotion.PathIterator : null;
 		if (path == null || !path.HasCurrent)
 		{
@@ -149,15 +171,33 @@ internal class EnemyTreeClearing : MonoBehaviour
 			{
 				break;
 			}
+			if (node.IsBlockBreaking())
+			{
+				return false;
+			}
 			Vector3 to = node.Position - position;
 			to.y = 0f;
 			if (to.sqrMagnitude > 0.25f)
 			{
 				heading = to;
+				next = node.Position;
 				return true;
 			}
 		}
 		return false;
+	}
+
+	// The unit's walk is blocked: it halts and searches its route again from where it stands (the game's own repath on
+	// a blocked walk), and with the forest's cost that route takes the shortest way out of the forest.
+	private static void Repath(Labor labor, Vector3 next)
+	{
+		Locomotion4 locomotion = (labor.navigation != null) ? labor.navigation.Locomotion : null;
+		if (locomotion == null)
+		{
+			return;
+		}
+		locomotion.PathBlockedAt(next);
+		Repaths++;
 	}
 
 	// The tree beside the unit most nearly towards its next route step.
@@ -224,3 +264,100 @@ internal static class EnemyTreeClearingRoutePatch
 		}
 	}
 }
+
+#if UNITY6
+// The forest's cost in a clearer's route search (#209). The game's route search lets a weight function add to every
+// step's weight (SearchPathRequest.LodBuilder.GetWeightFunc; NoGoZonesSearch sets one for the player's teams): for a
+// clearer it is wrapped in one that adds EnemyForestRules.StepWeight to each forest step. Set after the other
+// patches on the request's direct search and its finer search (LoopImprovePath). One function per pooled request.
+[Feature(Features.EnemyTreeClearing, Features.EnemyTreeClearingInfo)]
+[HarmonyPatch]
+internal static class EnemyForestCostPatch
+{
+	internal sealed class Cost
+	{
+		public Func<PathBranch, PathLink, int, int> Inner;
+
+		public int Penalty;
+
+		public readonly Func<PathBranch, PathLink, int, int> Weight;
+
+		public Cost()
+		{
+			Weight = Add;
+		}
+
+		private int Add(PathBranch head, PathLink tail, int weight)
+		{
+			if (Inner != null)
+			{
+				weight = Inner(head, tail, weight);
+			}
+			if (head.type != PathBranch.BranchType.Forest)
+			{
+				return weight;
+			}
+			PathNode node = head.Node;
+			return EnemyForestRules.StepWeight(weight, true, (node != null) ? node.Lod : 0, Penalty);
+		}
+	}
+
+	private static readonly ConditionalWeakTable<SearchPathRequest, Cost> Costs = new ConditionalWeakTable<SearchPathRequest, Cost>();
+
+	// For the DevTools: clearers' searches that paid for forest steps.
+	internal static int Searches;
+
+	[HarmonyPatch(typeof(SearchPathRequest), "InitSearch")]
+	[HarmonyPostfix]
+	[HarmonyPriority(Priority.Last)]
+	private static void InitSearch(SearchPathRequest __instance)
+	{
+		if (__instance.SearchAway || __instance.DirectBuilder == null)
+		{
+			return;
+		}
+		SearchPathRequest.LodBuilder builder = __instance.DirectBuilder;
+		Costs.TryGetValue(__instance, out Cost cost);
+		Func<PathBranch, PathLink, int, int> current = builder.GetWeightFunc;
+		// Its own function from the request's last search, which nothing has replaced since: nothing else is set.
+		if (cost != null && current == cost.Weight)
+		{
+			current = null;
+		}
+		int penalty = EnemyTreeClearing.ForestPenalty();
+		Navigation navigation = __instance.Navigation;
+		if (penalty <= 0 || navigation == null || !EnemyTreeClearing.IsClearer(navigation.Labor))
+		{
+			builder.GetWeightFunc = current;
+		}
+		else
+		{
+			cost = cost ?? Costs.GetValue(__instance, (SearchPathRequest r) => new Cost());
+			cost.Inner = current;
+			cost.Penalty = penalty;
+			builder.GetWeightFunc = cost.Weight;
+			Searches++;
+		}
+		if (__instance.ImproveBuilder != null)
+		{
+			__instance.ImproveBuilder.GetWeightFunc = builder.GetWeightFunc;
+		}
+	}
+
+	// The finer search's builder (made by LoopImprovePath) gets the same function.
+	[HarmonyPatch(typeof(SearchPathRequest), "LoopImprovePath")]
+	[HarmonyPostfix]
+	[HarmonyPriority(Priority.Last)]
+	private static void Improve(SearchPathRequest __instance)
+	{
+		if (__instance.ImproveBuilder == null || __instance.SearchAway || __instance.DirectBuilder == null)
+		{
+			return;
+		}
+		if (Costs.TryGetValue(__instance, out Cost cost) && __instance.DirectBuilder.GetWeightFunc == cost.Weight)
+		{
+			__instance.ImproveBuilder.GetWeightFunc = cost.Weight;
+		}
+	}
+}
+#endif
