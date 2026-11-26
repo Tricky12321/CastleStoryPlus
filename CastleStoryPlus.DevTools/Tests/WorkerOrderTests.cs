@@ -303,7 +303,22 @@ internal static class WorkerOrderTests
 		Scenario.Hire(quarry, crew[12]);
 		yield return t.Frames(2);
 		t.Equal(12, quarry.CrewCount(), "Crew after putting a thirteenth on it");
-		t.True(crew[12].Project != quarry, "The thirteenth joined a full crew of 12");
+		// The crew is never more than 12. The thirteenth may only be in it when one of the twelve has left meanwhile (a
+		// worker of the crew can be let go by the game's own task handling in those frames); then it took a free place.
+		List<string> left = new List<string>();
+		foreach (Labor worker in twelve)
+		{
+			if (worker.Project != quarry)
+			{
+				left.Add(worker.name);
+			}
+		}
+		t.Record("leftBeforeThirteenth", left.Count);
+		if (crew[12].Project == quarry)
+		{
+			t.Log("The thirteenth took the place of " + string.Join(", ", left.ToArray()));
+			t.True(left.Count > 0, "The thirteenth joined a full crew of 12");
+		}
 		int most = 0;
 		yield return t.UntilGame(() =>
 		{
