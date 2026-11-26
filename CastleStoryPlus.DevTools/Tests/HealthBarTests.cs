@@ -122,6 +122,50 @@ internal static class HealthBarTests
 		t.True(Ring(renderer, "_Ring1Thickness") > 0.5f, "The hurt knight's ring shows no health");
 	}
 
+	// A unit destroyed instead of given back to its pool (a multiplayer client does so with what the host takes away)
+	// handed its ring back to the ring pool with the ring's animator switched off; the next unit or crystal that got the
+	// ring showed the material's own values and never followed its health (#196).
+	[GameTest("Combat", "A ring that was under a destroyed unit still draws the health it is given when it is used again (#196)", TimeoutSeconds = 40f)]
+	private static IEnumerator RingOfDestroyedUnitStillDraws(TestContext t)
+	{
+		XYZ site = Scenario.Site(t, 6, 6);
+		Labor knight = Scenario.Bricktron(t, Occupation.Type.Knight, new XYZ(site.x, site.y, site.z));
+		yield return t.Frames(5);
+		DamageReceiver receiver = knight.GetComponent<DamageReceiver>();
+		t.NotNull(receiver, "The knight's damage receiver");
+		receiver.ApplyDamage(receiver.MaxHP * 0.5f);
+		yield return t.Frames(5);
+		SelectionCircle used = knight.GetComponentInChildren<SelectionCircle>();
+		if (used == null)
+		{
+			t.Skip("The hurt knight got no ring (not seen by the local side here)");
+			yield break;
+		}
+		GameObject ring = used.gameObject;
+		Scenario.Discard(knight.gameObject);
+		yield return t.Frames(3);
+		t.True(ring != null, "The knight's ring was destroyed with it instead of going back to its pool");
+		t.True(ring.GetComponent<Animator>().enabled, "The ring went back to its pool with its animator switched off");
+
+		// The pool hands the last ring given back out first.
+		Vector3 at = new Vector3(site.x + 0.37f, site.y, site.z + 0.37f);
+		SelectionCircle circle = SelectionCircleDispenser.Instance.AddOrGet(at);
+		t.Cleanup(() =>
+		{
+			if (SelectionCircleDispenser.Instance != null)
+			{
+				SelectionCircleDispenser.Instance.Remove(at);
+			}
+		});
+		t.Record("same ring", circle.gameObject == ring);
+		Renderer renderer = circle.GetComponent<Renderer>();
+		circle.ShowHp(true);
+		circle.Hp(0.3f);
+		yield return t.Seconds(1.5f);
+		t.True(circle.GetComponent<Animator>().enabled, "The ring taken from the pool has its animator switched off");
+		t.True(Mathf.Abs(Ring(renderer, "_Ring1Progress") - 0.3f) < 0.02f, "The reused ring's fill is not the 30 % it was given: " + Ring(renderer, "_Ring1Progress"));
+	}
+
 	private static float Ring(Renderer renderer, string property)
 	{
 		MaterialPropertyBlock block = new MaterialPropertyBlock();
